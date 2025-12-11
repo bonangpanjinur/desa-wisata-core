@@ -2,10 +2,10 @@
 /**
  * File Name:   access-control.php
  * File Folder: includes/
- * Description: Menangani pembatasan akses dashboard WP, redirect user, dan kustomisasi login URL.
- * * UPDATE PERBAIKAN:
- * - Mengizinkan akses publik ke Frontend (Home, Produk, Cart).
- * - Hanya memblokir akses ke /wp-admin bagi non-admin.
+ * Description: Menangani pembatasan akses dashboard WP.
+ * * UPDATE: 
+ * - Memastikan halaman depan (Frontend) TIDAK PERNAH di-redirect.
+ * - Redirect hanya berlaku untuk URL /wp-admin.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * 1. Sembunyikan Admin Bar untuk semua kecuali Administrator dan Admin Kabupaten.
+ * 1. Sembunyikan Admin Bar untuk user non-admin.
  */
 function dw_disable_admin_bar() {
     $allowed_roles = array( 'administrator', 'admin_kabupaten', 'admin_desa' );
@@ -37,59 +37,54 @@ add_action( 'after_setup_theme', 'dw_disable_admin_bar' );
 
 /**
  * 2. Redirect User Non-Admin dari /wp-admin ke Halaman Custom.
- * PERBAIKAN: Fungsi ini hanya jalan saat is_admin() bernilai true.
- * Artinya, halaman depan (Frontend) TIDAK AKAN terkena redirect ini.
+ * KUNCI PERBAIKAN: Fungsi ini hanya jalan di hook 'admin_init'.
+ * Artinya, fungsi ini TIDAK AKAN berjalan saat user membuka halaman depan.
  */
 function dw_redirect_non_admin_users() {
-    // KONDISI UTAMA: Hanya jalankan jika user mencoba akses area ADMIN (/wp-admin)
-    // DAN bukan proses AJAX (karena AJAX butuh akses admin-ajax.php)
-    if ( is_admin() && ! defined( 'DOING_AJAX' ) ) {
+    // Double check: Pastikan kita benar-benar di area admin
+    if ( ! is_admin() || defined( 'DOING_AJAX' ) ) {
+        return; // Jangan lakukan apa-apa di frontend!
+    }
         
-        $user = wp_get_current_user();
-        
-        // Daftar role yang BOLEH akses wp-admin
-        $admin_access_roles = array( 'administrator', 'admin_kabupaten', 'admin_desa' );
-        
-        $can_access = false;
-        if ( isset( $user->roles ) && is_array( $user->roles ) ) {
-            foreach ( $admin_access_roles as $role ) {
-                if ( in_array( $role, $user->roles ) ) {
-                    $can_access = true;
-                    break;
-                }
-            }
-        }
-
-        // Jika user SUDAH login tapi TIDAK punya akses admin (misal: Pedagang/Pembeli)
-        // Maka tendang mereka keluar dari /wp-admin
-        if ( ! $can_access ) {
-            
-            if ( in_array( 'pedagang', (array) $user->roles ) ) {
-                wp_redirect( home_url( '/dashboard-toko/' ) ); 
-                exit;
-            } 
-            elseif ( in_array( 'pembeli', (array) $user->roles ) ) {
-                wp_redirect( home_url( '/akun-saya/' ) );
-                exit;
-            }
-            else {
-                // Role lain atau user aneh, lempar ke home
-                wp_redirect( home_url() );
-                exit;
+    $user = wp_get_current_user();
+    
+    // Daftar role yang BOLEH akses wp-admin
+    $admin_access_roles = array( 'administrator', 'admin_kabupaten', 'admin_desa' );
+    
+    $can_access = false;
+    if ( isset( $user->roles ) && is_array( $user->roles ) ) {
+        foreach ( $admin_access_roles as $role ) {
+            if ( in_array( $role, $user->roles ) ) {
+                $can_access = true;
+                break;
             }
         }
     }
-    // Jika tidak masuk blok if (is_admin), berarti user sedang di Frontend.
-    // Biarkan mereka mengakses halaman apapun.
+
+    // Jika user mencoba masuk /wp-admin TAPI tidak punya hak akses:
+    if ( ! $can_access ) {
+        if ( in_array( 'pedagang', (array) $user->roles ) ) {
+            wp_redirect( home_url( '/dashboard-toko/' ) ); 
+            exit;
+        } 
+        elseif ( in_array( 'pembeli', (array) $user->roles ) ) {
+            wp_redirect( home_url( '/akun-saya/' ) );
+            exit;
+        }
+        else {
+            wp_redirect( home_url() );
+            exit;
+        }
+    }
 }
+// PENTING: Gunakan 'admin_init', bukan 'init'.
 add_action( 'admin_init', 'dw_redirect_non_admin_users' );
 
 /**
- * 3. Redirect Login: Setelah login sukses, arahkan ke dashboard yang sesuai.
+ * 3. Redirect Login: Setelah login sukses.
  */
 function dw_login_redirect( $redirect_to, $request, $user ) {
     if ( ! is_wp_error( $user ) && isset( $user->roles ) && is_array( $user->roles ) ) {
-        
         if ( in_array( 'administrator', $user->roles ) || in_array( 'admin_kabupaten', $user->roles ) ) {
             return admin_url(); 
         } 
@@ -100,7 +95,7 @@ function dw_login_redirect( $redirect_to, $request, $user ) {
             return home_url( '/dashboard-toko/' );
         } 
         elseif ( in_array( 'pembeli', $user->roles ) ) {
-            // Jika ada parameter redirect_to di URL (misal dari tombol Beli), prioritaskan itu
+            // Prioritaskan redirect dari URL jika ada (misal: habis klik Beli)
             if ( isset( $_REQUEST['redirect_to'] ) ) {
                 return $_REQUEST['redirect_to'];
             }
@@ -112,7 +107,7 @@ function dw_login_redirect( $redirect_to, $request, $user ) {
 add_filter( 'login_redirect', 'dw_login_redirect', 10, 3 );
 
 /**
- * 4. Mengubah URL Login Default WordPress
+ * 4. Mengubah URL Login Default
  */
 function dw_change_login_url( $login_url, $redirect, $force_reauth ) {
     $login_page = home_url( '/login/' );
