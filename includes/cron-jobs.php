@@ -5,10 +5,10 @@
  * File Path:   includes/cron-jobs.php
  *
  * Menangani tugas terjadwal (Cron Jobs) untuk pemeliharaan sistem.
- * --- FITUR TAMBAHAN ---
- * - Membersihkan Refresh Token & Revoked Token yang expired.
- * - Membersihkan Log aktivitas lama.
- * - Membersihkan Keranjang belanja usang.
+ * --- PERBAIKAN ---
+ * - Memperbaiki error undefined constant DW_CORE_FILE.
+ * - Hook register_deactivation_hook sebaiknya dijalankan di file utama, 
+ * tapi di sini kita beri pengecekan agar tidak error.
  *
  * @package DesaWisataCore
  */
@@ -37,13 +37,9 @@ function dw_cleanup_refresh_tokens() {
     global $wpdb;
     $table_name = $wpdb->prefix . 'dw_refresh_tokens';
     
-    // Pastikan tabel ada sebelum query
     if ($wpdb->get_var("SHOW TABLES LIKE '$table_name'") != $table_name) return;
 
-    // Hapus token yang expires_at < sekarang
-    $wpdb->query(
-        "DELETE FROM $table_name WHERE expires_at < NOW()"
-    );
+    $wpdb->query("DELETE FROM $table_name WHERE expires_at < NOW()");
 }
 
 /**
@@ -55,13 +51,11 @@ function dw_cleanup_revoked_tokens() {
     
     if ($wpdb->get_var("SHOW TABLES LIKE '$table_name'") != $table_name) return;
 
-    $wpdb->query(
-        "DELETE FROM $table_name WHERE expires_at < NOW()"
-    );
+    $wpdb->query("DELETE FROM $table_name WHERE expires_at < NOW()");
 }
 
 /**
- * Hapus log aktivitas yang lebih tua dari 30 hari untuk menghemat space DB.
+ * Hapus log aktivitas yang lebih tua dari 30 hari.
  */
 function dw_cleanup_old_logs() {
     global $wpdb;
@@ -69,10 +63,7 @@ function dw_cleanup_old_logs() {
     
     if ($wpdb->get_var("SHOW TABLES LIKE '$table_name'") != $table_name) return;
 
-    // Hapus log > 30 hari
-    $wpdb->query(
-        "DELETE FROM $table_name WHERE created_at < DATE_SUB(NOW(), INTERVAL 30 DAY)"
-    );
+    $wpdb->query("DELETE FROM $table_name WHERE created_at < DATE_SUB(NOW(), INTERVAL 30 DAY)");
 }
 
 /**
@@ -84,16 +75,17 @@ function dw_cleanup_abandoned_carts() {
     
     if ($wpdb->get_var("SHOW TABLES LIKE '$table_name'") != $table_name) return;
 
-    // Hapus cart > 7 hari
-    $wpdb->query(
-        "DELETE FROM $table_name WHERE updated_at < DATE_SUB(NOW(), INTERVAL 7 DAY)"
-    );
+    $wpdb->query("DELETE FROM $table_name WHERE updated_at < DATE_SUB(NOW(), INTERVAL 7 DAY)");
 }
 
-// Register cron saat aktivasi (sudah ada di activation.php)
-// Hapus cron saat deaktivasi plugin
-register_deactivation_hook( DW_CORE_FILE, 'dw_deactivate_cron' );
+// --- PERBAIKAN: Pindahkan register_deactivation_hook ke file utama plugin ---
+// Namun, jika Anda ingin fungsi ini dipanggil saat deaktivasi, kita definisikan saja fungsinya di sini.
+// Hook-nya sendiri sebaiknya dipindahkan ke desa-wisata-core.php:
+// register_deactivation_hook( __FILE__, 'dw_deactivate_cron' );
 
+/**
+ * Fungsi ini harus dipanggil oleh hook deaktivasi di file utama plugin.
+ */
 function dw_deactivate_cron() {
     $timestamp = wp_next_scheduled( 'dw_daily_cleanup_event' );
     if ($timestamp) {

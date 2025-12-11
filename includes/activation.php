@@ -7,10 +7,9 @@
  * Fungsi utama untuk aktivasi plugin.
  * Membuat atau memperbarui semua tabel database yang diperlukan.
  *
- * --- PERBAIKAN & INTEGRITAS ---
- * - Mempertahankan SEMUA kolom dari versi asli Anda (termasuk api_..._id, shipping_profiles, url_gmaps).
- * - Menambahkan KEY (Index) tambahan pada foreign key dan kolom status untuk performa.
- * - Memastikan tabel pendukung (cart, refresh_tokens, revoked_tokens) dibuat.
+ * --- PERBAIKAN NAMA FUNGSI ---
+ * - Mengubah nama fungsi menjadi dw_core_activate_plugin() agar sesuai dengan
+ * panggilan di desa-wisata-core.php.
  *
  * @package DesaWisataCore
  */
@@ -19,7 +18,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-function dw_activate_plugin() {
+// PERBAIKAN: Nama fungsi disesuaikan dengan yang dipanggil di register_activation_hook
+function dw_core_activate_plugin() {
     global $wpdb;
     $charset_collate = $wpdb->get_charset_collate();
     $table_prefix = $wpdb->prefix . 'dw_';
@@ -51,7 +51,7 @@ function dw_activate_plugin() {
         api_kabupaten_id VARCHAR(20) DEFAULT NULL,
         api_kecamatan_id VARCHAR(20) DEFAULT NULL,
         api_kelurahan_id VARCHAR(20) DEFAULT NULL,
-        alamat_lengkap TEXT, -- Kolom tambahan agar sesuai original
+        alamat_lengkap TEXT, 
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY  (id),
         KEY id_user_desa (id_user_desa),
@@ -73,17 +73,17 @@ function dw_activate_plugin() {
         url_gmaps TEXT DEFAULT NULL,
         url_ktp VARCHAR(255),
         deskripsi_toko TEXT,
-        foto_profil VARCHAR(255), -- Tambahan dari original
-        nik VARCHAR(50), -- Tambahan dari original
-        foto_ktp VARCHAR(255), -- Tambahan dari original
+        foto_profil VARCHAR(255), 
+        nik VARCHAR(50), 
+        foto_ktp VARCHAR(255), 
         no_rekening VARCHAR(50) DEFAULT NULL,
         nama_bank VARCHAR(100) DEFAULT NULL,
         atas_nama_rekening VARCHAR(100) DEFAULT NULL,
         qris_image_url VARCHAR(255) DEFAULT NULL,
         status_pendaftaran ENUM('menunggu','disetujui','ditolak','menunggu_desa') DEFAULT 'menunggu_desa',
         status_akun ENUM('aktif','nonaktif','nonaktif_habis_kuota') DEFAULT 'nonaktif',
-        status_verifikasi VARCHAR(20) DEFAULT 'pending', -- Kompatibilitas
-        kuota_transaksi INT(11) DEFAULT 0, -- Kompatibilitas
+        status_verifikasi VARCHAR(20) DEFAULT 'pending', 
+        kuota_transaksi INT(11) DEFAULT 0, 
         sisa_transaksi INT(11) NOT NULL DEFAULT 0,
         shipping_ojek_lokal_aktif TINYINT(1) DEFAULT 0,
         shipping_ojek_lokal_zona JSON DEFAULT NULL,
@@ -92,7 +92,6 @@ function dw_activate_plugin() {
         shipping_profiles JSON DEFAULT NULL,
         allow_pesan_di_tempat TINYINT(1) DEFAULT 0,
         
-        -- KOLOM ALAMAT API --
         api_provinsi_id VARCHAR(20) DEFAULT NULL,
         api_kabupaten_id VARCHAR(20) DEFAULT NULL,
         api_kecamatan_id VARCHAR(20) DEFAULT NULL,
@@ -116,9 +115,9 @@ function dw_activate_plugin() {
     $sql_variasi = "CREATE TABLE {$table_prefix}produk_variasi (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_produk BIGINT(20) NOT NULL,
-        post_id BIGINT(20) DEFAULT NULL, -- Kompatibilitas
+        post_id BIGINT(20) DEFAULT NULL, 
         deskripsi_variasi VARCHAR(255) NOT NULL,
-        nama_variasi VARCHAR(255) DEFAULT '', -- Kompatibilitas
+        nama_variasi VARCHAR(255) DEFAULT '', 
         harga_variasi DECIMAL(10,2) NOT NULL,
         stok_variasi INT DEFAULT NULL,
         sku_variasi VARCHAR(100),
@@ -131,29 +130,28 @@ function dw_activate_plugin() {
     $sql_transaksi = "CREATE TABLE {$table_prefix}transaksi (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_pembeli BIGINT(20) UNSIGNED NOT NULL,
-        id_pedagang BIGINT(20) DEFAULT 0, -- Kompatibilitas (jika single vendor)
+        id_pedagang BIGINT(20) DEFAULT 0, 
         kode_unik VARCHAR(50) NOT NULL,
         total_harga_produk DECIMAL(15,2) DEFAULT 0,
         estimasi_ongkir DECIMAL(10,2) DEFAULT NULL,
         biaya_ongkir_final DECIMAL(10,2) DEFAULT NULL,
         total_akhir DECIMAL(15,2) DEFAULT NULL,
-        total_produk DECIMAL(15,2) DEFAULT 0, -- Kompatibilitas
-        total_ongkir DECIMAL(15,2) DEFAULT 0, -- Kompatibilitas
-        total_transaksi DECIMAL(15,2) DEFAULT 0, -- Kompatibilitas
+        total_produk DECIMAL(15,2) DEFAULT 0, 
+        total_ongkir DECIMAL(15,2) DEFAULT 0, 
+        total_transaksi DECIMAL(15,2) DEFAULT 0, 
         metode_pengiriman ENUM('ojek_lokal','ekspedisi','nasional','nasional_profil','di_tempat','belum_dipilih') DEFAULT 'belum_dipilih',
-        metode_pembayaran VARCHAR(50), -- Kompatibilitas
+        metode_pembayaran VARCHAR(50), 
         alamat_pengiriman TEXT,
         url_bukti_bayar VARCHAR(255) DEFAULT NULL,
-        bukti_pembayaran VARCHAR(255) DEFAULT NULL, -- Kompatibilitas
+        bukti_pembayaran VARCHAR(255) DEFAULT NULL, 
         status_pesanan ENUM('menunggu_konfirmasi', 'menunggu_pembayaran', 'lunas', 'diproses', 'diantar_ojek', 'dikirim_ekspedisi', 'selesai', 'dibatalkan') DEFAULT 'menunggu_pembayaran',
-        status_transaksi VARCHAR(50) DEFAULT 'menunggu_pembayaran', -- Kompatibilitas
+        status_transaksi VARCHAR(50) DEFAULT 'menunggu_pembayaran', 
         nomor_resi VARCHAR(100) DEFAULT NULL,
         catatan_pembeli TEXT DEFAULT NULL,
         catatan_penjual TEXT DEFAULT NULL,
         tanggal_transaksi DATETIME DEFAULT CURRENT_TIMESTAMP,
         tanggal_pembayaran DATETIME DEFAULT NULL,
         
-        -- Data Snapshot Alamat (Untuk Kompatibilitas & Sejarah) --
         nama_penerima VARCHAR(255),
         no_hp VARCHAR(20),
         alamat_lengkap_snapshot TEXT,
@@ -177,7 +175,7 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_transaksi );
 
-    // 5. Tabel Transaksi Sub (Per Pedagang - Fitur Multi Vendor)
+    // 5. Tabel Transaksi Sub
     $sql_transaksi_sub = "CREATE TABLE {$table_prefix}transaksi_sub (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_transaksi BIGINT(20) NOT NULL,
@@ -198,21 +196,21 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_transaksi_sub );
 
-    // 6. Tabel Transaksi Items (Gabungan dari versi lama dan baru)
+    // 6. Tabel Transaksi Items
     $sql_transaksi_items = "CREATE TABLE {$table_prefix}transaksi_items (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
-        id_transaksi BIGINT(20) DEFAULT 0, -- Kompatibilitas
-        id_sub_transaksi BIGINT(20) DEFAULT 0, -- Untuk Multi Vendor
+        id_transaksi BIGINT(20) DEFAULT 0, 
+        id_sub_transaksi BIGINT(20) DEFAULT 0, 
         id_produk BIGINT(20) NOT NULL,
         id_variasi BIGINT(20) DEFAULT 0,
-        nama_produk_snapshot VARCHAR(255), -- Versi lama
-        nama_produk VARCHAR(255), -- Versi baru
+        nama_produk_snapshot VARCHAR(255), 
+        nama_produk VARCHAR(255), 
         deskripsi_variasi_snapshot VARCHAR(255) DEFAULT NULL,
         nama_variasi VARCHAR(255) DEFAULT NULL,
         harga_snapshot DECIMAL(10,2) DEFAULT 0,
         harga_satuan DECIMAL(15,2) DEFAULT 0,
         kuantitas INT DEFAULT 0,
-        jumlah INT DEFAULT 0, -- Alias kuantitas
+        jumlah INT DEFAULT 0, 
         total_harga DECIMAL(15,2) DEFAULT 0,
         PRIMARY KEY (id),
         KEY id_transaksi (id_transaksi),
@@ -240,7 +238,7 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_promosi );
 
-    // 8. Tabel Ulasan / Reviews
+    // 8. Tabel Ulasan
     $sql_ulasan = "CREATE TABLE {$table_prefix}reviews (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         target_id BIGINT(20) NOT NULL,
@@ -261,9 +259,9 @@ function dw_activate_plugin() {
     $sql_logs = "CREATE TABLE {$table_prefix}logs (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         user_id BIGINT(20) UNSIGNED DEFAULT NULL,
-        aksi VARCHAR(255) NOT NULL, -- Kompatibilitas 'action'
+        aksi VARCHAR(255) NOT NULL, 
         action VARCHAR(100) DEFAULT NULL, 
-        keterangan TEXT DEFAULT NULL, -- Kompatibilitas 'details'
+        keterangan TEXT DEFAULT NULL, 
         details TEXT DEFAULT NULL,
         ip_address VARCHAR(50),
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -288,7 +286,7 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_banner );
 
-    // 11. Tabel Chat Message
+    // 11. Tabel Chat
     $sql_chat = "CREATE TABLE {$table_prefix}chat_message (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         produk_id BIGINT(20) NOT NULL,
@@ -304,7 +302,7 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_chat );
 
-    // 12. Tabel Refresh Tokens & Revoked Tokens (Security JWT)
+    // 12. Tabel Refresh Tokens & Revoked Tokens
     $sql_revoked = "CREATE TABLE {$table_prefix}revoked_tokens (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         token_hash VARCHAR(64) NOT NULL,
@@ -330,7 +328,7 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_refresh );
 
-    // 13. Tabel Carts (Keranjang) - Mengganti nama table 'carts' di file lama jadi 'cart' atau sesuaikan
+    // 13. Tabel Cart
     $sql_cart = "CREATE TABLE {$table_prefix}cart ( 
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         user_id BIGINT(20) UNSIGNED NULL,
@@ -338,7 +336,7 @@ function dw_activate_plugin() {
         product_id BIGINT(20) NOT NULL,
         quantity INT NOT NULL DEFAULT 1,
         variation_id BIGINT(20) NULL,
-        cart_data LONGTEXT, -- Simpan JSON lengkap untuk kompatibilitas cart.php baru
+        cart_data LONGTEXT, 
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         PRIMARY KEY (id),
@@ -349,7 +347,7 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_cart );
 
-    // 14. Tabel Payout Ledger (Keuangan)
+    // 14. Tabel Payout
     $sql_payout = "CREATE TABLE {$table_prefix}payout_ledger (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         order_id BIGINT(20) NOT NULL,
@@ -365,7 +363,7 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_payout );
 
-    // 15. Tabel Paket Transaksi
+    // 15. Tabel Paket
     $sql_paket = "CREATE TABLE {$table_prefix}paket_transaksi (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         nama_paket VARCHAR(255) NOT NULL,
@@ -400,7 +398,7 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_beli_paket );
 
-    // 17. Tabel Alamat User (dw_user_alamat) - Penting untuk checkout
+    // 17. Tabel Alamat User
     $sql_user_alamat = "CREATE TABLE {$table_prefix}user_alamat (
         id mediumint(9) NOT NULL AUTO_INCREMENT,
         user_id mediumint(9) NOT NULL,
@@ -423,11 +421,6 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_user_alamat );
 
-    // Tabel Arsip (Tetap dipertahankan dari kode asli)
-    $sql_transaksi_arsip = "CREATE TABLE {$table_prefix}transaksi_arsip LIKE {$table_prefix}transaksi;";
-    // Note: dbDelta tidak mendukung CREATE TABLE LIKE, jadi kita skip atau buat manual structurenya jika diperlukan.
-    // Untuk simplifikasi dan karena dbDelta rewel dengan LIKE, kita biarkan saja dulu jika belum ada logic arsip aktif.
-    
     // Summary Pedagang
     $sql_pedagang_summary = "CREATE TABLE {$table_prefix}pedagang_summary (
         id_pedagang BIGINT(20) NOT NULL,
@@ -437,7 +430,7 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_pedagang_summary );
 
-    // Role & Capabilities
+    // Role
     if (function_exists('dw_create_roles_and_caps')) {
         dw_create_roles_and_caps();
     } else {
@@ -460,7 +453,7 @@ function dw_activate_plugin() {
         add_option('dw_settings', $default_settings);
     }
 
-    // Schedule Cron Jobs (Original + Cleanup)
+    // Schedule Cron Jobs
     if (!wp_next_scheduled('dw_hourly_cron_hook')) {
         wp_schedule_event(time() + 300, 'hourly', 'dw_hourly_cron_hook');
     }
@@ -471,7 +464,7 @@ function dw_activate_plugin() {
         wp_schedule_event(time() + 900, 'monthly', 'dw_monthly_cron_hook');
     }
     
-    // Cron job baru untuk pembersihan data (Security/Maintenance)
+    // Cron job baru untuk pembersihan data
     if (!wp_next_scheduled('dw_daily_cleanup_event')) {
         wp_schedule_event(time(), 'daily', 'dw_daily_cleanup_event');
     }
@@ -482,3 +475,4 @@ function dw_activate_plugin() {
         dw_log_activity('PLUGIN_ACTIVATED', 'Plugin Desa Wisata Core versi ' . DW_CORE_VERSION . ' diaktifkan.', 0);
     }
 }
+?>
