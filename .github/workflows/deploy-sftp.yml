@@ -1,0 +1,65 @@
+name: Deploy Plugin to WordPress via SFTP
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      # 1. Ambil kode dari repository
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # 2. Setup PHP & Install Composer Dependencies (KRUSIAL - TAMBAHAN BARU)
+      # Kita perlu menginstall library PHP (folder vendor) agar plugin jalan
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '7.4' # Sesuaikan dengan versi PHP di hosting Anda (7.4/8.0/8.1/8.2)
+      
+      - name: Install PHP Dependencies
+        run: composer install --no-dev --optimize-autoloader
+
+      # 3. Setup Node.js untuk build React/Assets
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      # 4. Install & Build Assets (JS/CSS)
+      - name: Install & Build Assets
+        run: |
+          npm ci --legacy-peer-deps
+          npm run build
+        env:
+          CI: false
+
+      # 5. Hapus file sampah sebelum upload
+      # Hapus node_modules (JS libs tidak perlu diupload), src (mentahan React), dan file git
+      - name: Cleanup before deploy
+        run: |
+          rm -rf node_modules src
+          rm -rf .git .github .gitignore
+          rm -rf webpack.config.js tailwind.config.js package.json package-lock.json
+
+      # 6. Upload ke Shared Hosting via FTP/FTPS
+      - name: FTP Deploy
+        uses: SamKirkland/FTP-Deploy-Action@4.3.3
+        with:
+          server: ${{ secrets.FTP_HOST }}
+          username: ${{ secrets.FTP_USER }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          
+          # Coba 'ftps' dulu. Jika gagal (timeout/handshake error), ubah jadi 'ftp'.
+          protocol: ftps 
+          port: 21
+          
+          # Upload folder saat ini (yang sudah dibuild dan dibersihkan)
+          local-dir: ./
+          
+          # Path tujuan di hosting (Pastikan path ini benar-benar ada atau folder parentnya ada)
+          server-dir: /public_html/admin.bonang.my.id/wp-content/plugins/desa-wisata-core/
