@@ -1,0 +1,200 @@
+/**
+ * File Name:   admin-styles.css
+ * File Folder: assets/css/
+ * File Path:   assets/css/admin-styles.css
+ *
+ * PERBAIKAN (FINAL):
+ * - Menambahkan aturan CSS !important untuk secara paksa memastikan
+ * kolom judul (#titlediv) dan editor (#postdivrich) selalu terlihat.
+ * - Ini akan mengatasi kemungkinan konflik dengan plugin atau tema lain.
+ *
+ * PENYEMPURNAAN (v2):
+ * - Menambahkan style `:focus` untuk aksesibilitas keyboard.
+ * - Mengorganisir ulang kode ke dalam beberapa bagian bernomor untuk kemudahan baca.
+ * - Menambahkan media query untuk meningkatkan responsivitas form di layar kecil (tablet/ponsel).
+ */
+
+/* ==========================================================================
+   1. Perbaikan Kritis Editor WordPress
+   ========================================================================== */
+#titlediv, #postdivrich {
+    display: block !important;
+    visibility: visible !important;
+    height: auto !important;
+    overflow: visible !important;
+}
+
+/* ==========================================================================
+   2. Layout & Wrapper Umum Admin
+   ========================================================================== */
+.dw-wrap .dw-header {
+    background-color: #ffffff;
+    padding: 15px 20px;
+    border-bottom: 1px solid #dcdcde;
+    margin: -20px -20px 20px -20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 1px 1px rgba(0,0,0,.04);
+}
+.dw-wrap .dw-header h1 {
+    margin: 0;
+    font-size: 20px;
+}
+
+/* ==========================================================================
+   3. Komponen Dashboard
+   ========================================================================== */
+.dw-dashboard-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+}
+.dw-card {
+    background: #fff; border: 1px solid #dcdcde; padding: 20px;
+    display: flex; align-items: center; gap: 20px; border-radius: 4px;
+    box-shadow: 0 1px 1px rgba(0,0,0,.04);
+}
+.dw-card-icon .dashicons { font-size: 36px; width: 36px; height: 36px; color: #50575e; }
+.dw-card-content h3 { margin: 0 0 5px; font-size: 14px; color: #50575e; }
+.dw-card-content .dw-card-number { margin: 0 0 10px; font-size: 28px; font-weight: 600; line-height: 1.2; color: #1d2327; }
+.dw-card.warning .dw-card-number { color: #d63638; }
+
+/* ==========================================================================
+   4. Forms & Input Fields
+   ========================================================================== */
+.dw-form-card { background: #fff; padding: 1px 20px 20px; border: 1px solid #dcdcde; border-radius: 4px; margin-top: 20px; }
+.dw-form-table th { width: 200px; padding-left: 0 !important; }
+.dw-form-table .description { font-style: italic; color: #64748b; font-size: 13px; }
+.dw-address-wrapper select, .dw-form-table select, .dw-form-table input, .dw-form-table textarea { width: 100%; max-width: 450px; }
+.dw-form-footer { padding-top: 20px; margin-top: 20px; border-top: 1px solid #dcdcde; display: flex; gap: 10px; align-items: center; }
+
+/* SARAN: Peningkatan Aksesibilitas dengan :focus style */
+.dw-form-table input:focus,
+.dw-form-table select:focus,
+.dw-form-table textarea:focus {
+    border-color: #2271b1;
+    box-shadow: 0 0 0 1px #2271b1;
+    outline: 2px solid transparent;
+}
+
+/* Styling untuk display alamat otomatis */
+.dw-address-display-box {
+    background-color: #f0f0f1;
+    border: 1px solid #dcdcde;
+    padding: 10px 12px;
+    border-radius: 4px;
+    color: #50575e;
+    font-style: normal;
+    min-height: 40px;
+}
+
+/* ==========================================================================
+   5. Layout Editor CPT (Produk & Wisata)
+   ========================================================================== */
+.postbox-custom .hndle { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif; cursor: default; border-bottom: 1px solid #dcdcde; padding: 8px 12px; margin: 0; font-size: 14px; font-weight: 600; display: flex; align-items: center; }
+.postbox-custom .hndle .dashicons { margin-right: 8px; color: #50575e; }
+.postbox-custom .inside { padding: 12px; margin: 0; }
+.dw-form-card-inner { padding: 1px 12px 12px; }
+.dw-form-card-inner hr { border: none; border-top: 1px solid #eee; margin: 25px 0; }
+.dw-form-card-inner h3 { font-size: 16px; margin: 20px 0 15px; padding-bottom: 10px; border-bottom: 1px solid #eee; display: flex; align-items: center; }
+.dw-form-card-inner h3 .dashicons { margin-right: 8px; color: #50575e; }
+
+/* ==========================================================================
+   6. Komponen Spesifik (Galeri, Variasi, dll.)
+   ========================================================================== */
+/* Galeri Uploader */
+.dw-gallery-wrapper .dw-gallery-preview {
+    display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px;
+    background-color: #f8f9fa; padding: 10px; border: 1px solid #dcdcde;
+    border-radius: 4px; min-height: 90px;
+}
+.dw-gallery-wrapper .gallery-item {
+    width: 80px; height: 80px; position: relative;
+    overflow: hidden; border-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+.dw-gallery-wrapper .gallery-item img { width: 100%; height: 100%; object-fit: cover; }
+.dw-gallery-wrapper .dw-remove-gallery-item {
+    position: absolute; top: 2px; right: 2px; background: rgba(0,0,0,0.6);
+    color: white; border-radius: 50%; width: 20px; height: 20px;
+    text-align: center; line-height: 20px; text-decoration: none;
+    font-weight: bold; font-size: 14px;
+    opacity: 0; transition: opacity 0.2s ease;
+    cursor: pointer;
+}
+.dw-gallery-wrapper .gallery-item:hover .dw-remove-gallery-item { opacity: 1; }
+
+/* Tabel Variasi */
+#dw-variations-wrapper .wp-list-table { margin-top: 10px; }
+#dw-variations-wrapper .wp-list-table input[type="text"],
+#dw-variations-wrapper .wp-list-table input[type="number"] { width: 100%; }
+#dw-variations-wrapper .dw-remove-variation .dashicons { font-size: 20px; }
+#dw-variations-wrapper .dw-remove-variation { color: #d63638; }
+
+/* ==========================================================================
+   7. Komponen List Table
+   ========================================================================== */
+/* Badge Status */
+.column-status span, .column-pendaftaran span, .column-status_akun span {
+    display: inline-block;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+.menunggu_konfirmasi, .pending, .menunggu { background-color: #fff8e1; color: #6d4c41; }
+.diproses { background-color: #e3f2fd; color: #0d47a1; }
+.diantar_ojek, .dikirim_ekspedisi { background-color: #e8eaf6; color: #1a237e; }
+.selesai, .aktif, .disetujui, .lunas { background-color: #e8f5e9; color: #1b5e20; }
+.dibatalkan, .ditolak, .gagal { background-color: #ffebee; color: #b71c1c; }
+.nonaktif, .pending_pembayaran { background-color: #f5f5f5; color: #424242; }
+
+/* Inline Form (Update Pesanan) */
+.dw-inline-form {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+.dw-inline-form select,
+.dw-inline-form input[type="text"] {
+    width: auto;
+    min-width: 140px;
+    max-width: 160px;
+    padding: 4px 8px;
+    height: auto;
+}
+.dw-inline-form .button {
+    height: auto;
+    line-height: 1.5;
+    padding: 4px 10px;
+}
+
+/* ==========================================================================
+   8. Responsivitas (Media Queries)
+   ========================================================================== */
+/* SARAN: Aturan untuk layar kecil seperti tablet dan ponsel */
+@media (max-width: 782px) {
+    /* Membuat form admin menjadi satu kolom agar tidak sempit */
+    .dw-form-table th,
+    .dw-form-table td {
+        display: block;
+        width: 100%;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+    }
+
+    .dw-form-table th {
+        padding-bottom: 5px !important;
+    }
+
+    .dw-address-wrapper select, 
+    .dw-form-table select, 
+    .dw-form-table input, 
+    .dw-form-table textarea {
+        max-width: none; /* Lebar penuh di layar kecil */
+    }
+}
+
