@@ -9,28 +9,23 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      # 1. Ambil kode dari repository
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # 2. Setup PHP & Install Composer Dependencies
-      # Wajib karena ada file composer.json di repo Anda
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '7.4' # Sesuaikan: 7.4, 8.0, 8.1, atau 8.2
+          php-version: '7.4'
       
       - name: Install PHP Dependencies
         run: composer install --no-dev --optimize-autoloader
 
-      # 3. Hapus file sampah sebelum upload
-      # Kita hapus file git dan composer cache agar hemat space hosting
       - name: Cleanup before deploy
         run: |
           rm -rf .git .github .gitignore
           rm -rf composer.json composer.lock
 
-      # 4. Upload ke Shared Hosting via FTP/FTPS
+      # PERBAIKAN DI SINI
       - name: FTP Deploy
         uses: SamKirkland/FTP-Deploy-Action@4.3.3
         with:
@@ -38,12 +33,18 @@ jobs:
           username: ${{ secrets.FTP_USER }}
           password: ${{ secrets.FTP_PASSWORD }}
           
-          # Coba 'ftps' dulu. Jika gagal (timeout), ubah jadi 'ftp'.
-          protocol: ftps 
+          # 1. Ganti ke 'ftp' biasa (lebih stabil untuk upload banyak file kecil)
+          protocol: ftp 
           port: 21
           
-          # Upload folder saat ini
-          local-dir: ./
+          # 2. Matikan validasi SSL ketat (mengatasi error FIN packet)
+          security: loose
           
-          # Path tujuan di hosting
+          local-dir: ./
           server-dir: /public_html/admin.bonang.my.id/wp-content/plugins/desa-wisata-core/
+          
+          # 3. Exclude file sync agar tidak loop
+          exclude: |
+            **/.git*
+            **/.git*/**
+            .ftp-deploy-sync-state.json
