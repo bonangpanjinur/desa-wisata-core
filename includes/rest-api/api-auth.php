@@ -4,455 +4,262 @@
  * File Folder: includes/rest-api/
  * File Path:   includes/rest-api/api-auth.php
  *
- * --- PERBAIKAN (KRITIS v3.2.4) ---
- * - Mengganti `dw_api_login` agar menggunakan helper JWT terpusat (`dw_encode_jwt`
- * dan `dw_create_refresh_token`) dari `helpers.php`.
- * - Mengganti `dw_api_permission_check_auth_user` (yang tidak ada)
- * menjadi `dw_permission_check_logged_in` pada endpoint `/auth/validate-token`.
- * - MENAMBAHKAN endpoint `/auth/refresh` untuk memperbarui access token.
- * - MENAMBAHKAN endpoint `/auth/logout` untuk menghapus token.
- *
- * --- PENAMBAHAN (LENGKAP) ---
- * - Menambahkan endpoint validasi token (/auth/validate-token).
- * - Menambahkan endpoint lupa password (/auth/forgot-password).
- * - Menambahkan endpoint reset password (/auth/reset-password).
+ * Endpoint API untuk Login, Register, dan Refresh Token.
+ * --- PENINGKATAN KEAMANAN ---
+ * 1. Menggunakan helper JWT & Refresh Token baru.
+ * 2. Rate Limiting sederhana (berbasis transient) untuk mencegah Brute Force.
+ * 3. Sanitasi input yang ketat.
+ * 4. Error message yang tidak membocorkan informasi sensitif (misal: "User tidak ditemukan" vs "Password salah").
  *
  * @package DesaWisataCore
  */
 
-if ( ! defined( 'ABSPATH' ) ) exit;
-
-// Pastikan variabel $namespace sudah didefinisikan di file pemanggil (rest-api.php)
-if ( ! isset( $namespace ) ) {
-    return;
-}
-// Pastikan Firebase JWT library sudah di-load
-if ( ! class_exists( 'Firebase\\JWT\\JWT' ) ) {
-    return;
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
 }
 
-use Firebase\JWT\JWT;
-use Firebase\JWT\Key;
-
-// =========================================================================
-// ENDPOINT OTENTIKASI (PUBLIK)
-// =========================================================================
-
-register_rest_route($namespace, '/auth/register', [
-    'methods' => WP_REST_Server::CREATABLE,
-    'callback' => 'dw_api_register_user',
-    'permission_callback' => '__return_true', // Siapapun bisa mendaftar
-    'args' => [
-        'username' => ['required' => true, 'sanitize_callback' => 'sanitize_user'],
-        'email' => ['required' => true, 'sanitize_callback' => 'sanitize_email', 'validate_callback' => 'is_email'],
-        'password' => ['required' => true, 'sanitize_callback' => 'sanitize_text_field'],
-        'nama_lengkap' => ['required' => true, 'sanitize_callback' => 'sanitize_text_field'],
-    ],
-]);
-
-register_rest_route($namespace, '/auth/login', [
-    'methods' => WP_REST_Server::CREATABLE,
-    'callback' => 'dw_api_login',
-    'permission_callback' => '__return_true', // Siapapun bisa coba login
-    'args' => [
-        'username' => ['required' => true, 'sanitize_callback' => 'sanitize_text_field'], // Bisa username atau email
-        'password' => ['required' => true, 'sanitize_callback' => 'sanitize_text_field'],
-    ],
-]);
-
-// --- BARU: REFRESH TOKEN ---
-register_rest_route($namespace, '/auth/refresh', [
-    'methods' => WP_REST_Server::CREATABLE,
-    'callback' => 'dw_api_refresh_token',
-    'permission_callback' => '__return_true', // Publik, tapi butuh refresh token valid
-    'args' => [
-        'refresh_token' => ['required' => true, 'sanitize_callback' => 'sanitize_text_field'],
-    ],
-]);
-
-// --- BARU: LOGOUT ---
-register_rest_route($namespace, '/auth/logout', [
-    'methods' => WP_REST_Server::CREATABLE,
-    'callback' => 'dw_api_logout',
-    'permission_callback' => 'dw_permission_check_logged_in', // Harus login untuk logout
-    'args' => [
-        'refresh_token' => ['required' => true, 'sanitize_callback' => 'sanitize_text_field'],
-    ],
-]);
-
-
-// --- VALIDASI TOKEN ---
-register_rest_route($namespace, '/auth/validate-token', [
-    'methods' => WP_REST_Server::READABLE,
-    'callback' => 'dw_api_validate_token',
-    // --- PERBAIKAN: Menggunakan permission callback yang benar ---
-    'permission_callback' => 'dw_permission_check_logged_in', 
-]);
-
-// --- LUPA PASSWORD ---
-register_rest_route($namespace, '/auth/forgot-password', [
-    'methods' => WP_REST_Server::CREATABLE,
-    'callback' => 'dw_api_forgot_password',
-    'permission_callback' => '__return_true', // Publik
-    'args' => [
-        'email' => ['required' => true, 'sanitize_callback' => 'sanitize_email', 'validate_callback' => 'is_email'],
-    ],
-]);
-
-// --- RESET PASSWORD ---
-register_rest_route($namespace, '/auth/reset-password', [
-    'methods' => WP_REST_Server::CREATABLE,
-    'callback' => 'dw_api_reset_password',
-    'permission_callback' => '__return_true', // Publik
-    'args' => [
-        'key' => ['required' => true, 'sanitize_callback' => 'sanitize_text_field'],
-        'login' => ['required' => true, 'sanitize_callback' => 'sanitize_text_field'],
-        'new_password' => ['required' => true, 'sanitize_callback' => 'sanitize_text_field'],
-    ],
-]);
-
-
-// =========================================================================
-// IMPLEMENTASI CALLBACK (OTENTIKASI)
-// =========================================================================
-
-/**
- * Callback untuk registrasi pengguna baru.
- */
-function dw_api_register_user(WP_REST_Request $request) {
-    $username = $request['username'];
-    $email = $request['email'];
-    $password = $request['password'];
-    $nama_lengkap = $request['nama_lengkap']; // Ambil nama lengkap
-
-    if (username_exists($username)) {
-        return new WP_Error('rest_username_exists', __('Username sudah terdaftar.', 'desa-wisata-core'), ['status' => 400]);
-    }
-    if (email_exists($email)) {
-        return new WP_Error('rest_email_exists', __('Email sudah terdaftar.', 'desa-wisata-core'), ['status' => 400]);
-    }
-
-    // Buat pengguna baru
-    $user_id = wp_create_user($username, $password, $email);
-
-    if (is_wp_error($user_id)) {
-        return new WP_Error('rest_registration_failed', __('Gagal membuat pengguna.', 'desa-wisata-core'), ['status' => 500]);
-    }
-
-    // Set peran default sebagai 'pembeli'
-    $user = new WP_User($user_id);
-    $user->set_role('pembeli');
-
-    // Simpan nama lengkap
-    $name_parts = explode(' ', $nama_lengkap, 2);
-    $first_name = $name_parts[0];
-    $last_name = $name_parts[1] ?? ''; // Jika tidak ada nama belakang
-
-    wp_update_user([
-        'ID' => $user_id,
-        'display_name' => $nama_lengkap,
-        'first_name' => $first_name,
-        'last_name' => $last_name,
+// Inisialisasi Route
+add_action('rest_api_init', function () {
+    // POST /dw/v1/auth/login
+    register_rest_route('dw/v1', '/auth/login', [
+        'methods'  => 'POST',
+        'callback' => 'dw_rest_login',
+        'permission_callback' => '__return_true', // Login terbuka untuk publik
     ]);
 
-    wp_send_new_user_notifications($user_id, 'admin');
+    // POST /dw/v1/auth/register
+    register_rest_route('dw/v1', '/auth/register', [
+        'methods'  => 'POST',
+        'callback' => 'dw_rest_register',
+        'permission_callback' => '__return_true',
+    ]);
 
-    return new WP_REST_Response(['message' => __('Registrasi berhasil. Silakan login.', 'desa-wisata-core')], 201);
-}
+    // POST /dw/v1/auth/refresh
+    register_rest_route('dw/v1', '/auth/refresh', [
+        'methods'  => 'POST',
+        'callback' => 'dw_rest_refresh_token',
+        'permission_callback' => '__return_true',
+    ]);
+    
+    // POST /dw/v1/auth/logout
+    register_rest_route('dw/v1', '/auth/logout', [
+        'methods'  => 'POST',
+        'callback' => 'dw_rest_logout',
+        'permission_callback' => function($request) {
+            // Validasi token dulu sebelum logout
+            $token = $request->get_header('Authorization');
+            if (!$token) return false;
+            $token = str_replace('Bearer ', '', $token);
+            $decoded = dw_validate_access_token($token);
+            return !is_wp_error($decoded);
+        },
+    ]);
+});
 
 /**
- * Callback untuk login pengguna.
- * --- PERBAIKAN: Menggunakan helper JWT terpusat ---
+ * Endpoint Login.
  */
-function dw_api_login(WP_REST_Request $request) {
-    $username = $request['username']; // Bisa username atau email
-    $password = $request['password'];
+function dw_rest_login($request) {
+    $params = $request->get_json_params();
+    $username = sanitize_text_field($params['username'] ?? '');
+    $password = $params['password'] ?? ''; // Password jangan disanitasi text_field (karakter khusus boleh)
 
-    $creds = [
-        'user_login'    => $username,
-        'user_password' => $password,
-        'remember'      => false,
-    ];
-
-    if (is_email($username)) {
-        $user = get_user_by('email', $username);
-        if ($user) {
-            $creds['user_login'] = $user->user_login; 
-        }
+    if (empty($username) || empty($password)) {
+        return new WP_Error('missing_credentials', 'Username dan password wajib diisi.', ['status' => 400]);
     }
 
-    $user_signon = wp_signon($creds, false);
+    // 1. Rate Limiting (Cegah Brute Force)
+    // Batasi: 5 percobaan gagal per IP per 10 menit
+    $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    $rate_limit_key = 'dw_login_attempt_' . md5($ip);
+    $attempts = get_transient($rate_limit_key) ?: 0;
 
-    if (is_wp_error($user_signon)) {
-        return new WP_Error('rest_login_failed', __('Username atau password salah.', 'desa-wisata-core'), ['status' => 403]);
+    if ($attempts >= 5) {
+        return new WP_Error('too_many_attempts', 'Terlalu banyak percobaan login gagal. Silakan coba lagi dalam 10 menit.', ['status' => 429]);
     }
 
-    $user_id = $user_signon->ID;
-    $user_data = dw_internal_get_user_data_for_token($user_signon);
+    // 2. Autentikasi User
+    $user = wp_authenticate($username, $password);
 
-    // Dapatkan data pedagang/admin desa
-    $pedagang_data = dw_get_pedagang_data_by_user_id($user_id);
-    $user_data['is_pedagang'] = (bool) $pedagang_data;
-    if ($pedagang_data) $user_data['pedagang_id'] = $pedagang_data->id;
-
-    $desa_data = dw_get_desa_admin_data_by_user_id($user_id);
-    $user_data['is_admin_desa'] = (bool) $desa_data;
-    if ($desa_data) $user_data['admin_desa_id'] = $desa_data->id;
-
-
-    // --- PERBAIKAN: Gunakan helper terpusat ---
-    // 1. Buat Access Token
-    $access_token = dw_encode_jwt(['user_id' => $user_id], DW_JWT_ACCESS_TOKEN_EXPIRATION);
-    if (is_wp_error($access_token)) {
-        return $access_token; // Kembalikan error jika gagal (misal: key tidak diset di production)
+    if (is_wp_error($user)) {
+        // Increment rate limit counter
+        set_transient($rate_limit_key, $attempts + 1, 10 * MINUTE_IN_SECONDS);
+        
+        // Gunakan pesan error umum untuk keamanan (User Enumeration Protection)
+        // Kecuali jika Anda ingin UX lebih baik, bisa gunakan $user->get_error_message()
+        return new WP_Error('invalid_credentials', 'Username atau password salah.', ['status' => 401]);
     }
 
-    // 2. Buat Refresh Token
-    $refresh_token = dw_create_refresh_token($user_id);
-    if ($refresh_token === false) {
-        return new WP_Error('rest_refresh_token_failed', __('Gagal membuat sesi login.', 'desa-wisata-core'), ['status' => 500]);
-    }
-    // --- AKHIR PERBAIKAN ---
+    // Reset rate limit jika berhasil
+    delete_transient($rate_limit_key);
 
-    return new WP_REST_Response([
-        'access_token' => $access_token,
-        'refresh_token' => $refresh_token,
-        'user_data' => $user_data,
-        'expires_in' => DW_JWT_ACCESS_TOKEN_EXPIRATION,
-    ], 200);
-}
-
-/**
- * [BARU] Callback untuk refresh token.
- */
-function dw_api_refresh_token(WP_REST_Request $request) {
-    $refresh_token = $request['refresh_token'];
-    
-    // Validasi refresh token
-    $user_id = dw_validate_refresh_token($refresh_token);
-    if (!$user_id) {
-        return new WP_Error('rest_invalid_refresh_token', __('Refresh token tidak valid atau telah kedaluwarsa.', 'desa-wisata-core'), ['status' => 401]);
-    }
-    
-    // Buat access token baru
-    $access_token = dw_encode_jwt(['user_id' => $user_id], DW_JWT_ACCESS_TOKEN_EXPIRATION);
+    // 3. Generate Token
+    $access_token = dw_encode_jwt(['user_id' => $user->ID]);
     if (is_wp_error($access_token)) {
         return $access_token;
     }
 
-    return new WP_REST_Response([
-        'access_token' => $access_token,
-        'expires_in' => DW_JWT_ACCESS_TOKEN_EXPIRATION,
-    ], 200);
-}
-
-/**
- * [BARU] Callback untuk logout.
- */
-function dw_api_logout(WP_REST_Request $request) {
-    $user_id = dw_get_user_id_from_request($request);
-    $refresh_token = $request['refresh_token'];
-    
-    // 1. Cabut (hapus) refresh token dari database
-    dw_revoke_refresh_token($refresh_token);
-    
-    // 2. Tambahkan access token ke blacklist (JTI - Token ID)
-    // Kita perlu mendapatkan token mentah dari helper
-    $auth_header = $request->get_header('Authorization');
-    preg_match('/^Bearer\s+(.*)$/i', $auth_header, $matches);
-    $access_token = $matches[1] ?? '';
-    
-    if (!empty($access_token)) {
-        // Decode untuk mendapatkan 'exp'
-        $decoded = dw_decode_jwt($access_token);
-        if (!is_wp_error($decoded) && isset($decoded->exp)) {
-            dw_add_token_to_blacklist($access_token, $user_id, $decoded->exp);
-        }
+    $refresh_token = dw_create_refresh_token($user->ID);
+    if (!$refresh_token) {
+        return new WP_Error('token_error', 'Gagal membuat refresh token.', ['status' => 500]);
     }
 
-    return new WP_REST_Response(['message' => __('Logout berhasil.', 'desa-wisata-core')], 200);
-}
-
-
-/**
- * [BARU] Callback untuk validasi token.
- * Mengembalikan data pengguna jika token valid.
- */
-function dw_api_validate_token(WP_REST_Request $request) {
-    // Permission callback 'dw_permission_check_logged_in' sudah memvalidasi token
-    // dan `dw_get_user_id_from_request` sudah mengembalikan ID
-    $user_id = dw_get_user_id_from_request($request); 
-    
-    if (is_wp_error($user_id)) {
-        return $user_id; // Kembalikan error (misal: 401 expired)
-    }
-
-    $user = get_userdata($user_id);
-    if (!$user) {
-        return new WP_Error('rest_user_not_found', __('Pengguna tidak ditemukan.', 'desa-wisata-core'), ['status' => 404]);
-    }
-
-    // Ambil data terbaru pengguna
-    $user_data = dw_internal_get_user_data_for_token($user);
-
-    // Dapatkan data pedagang jika ada
-    $pedagang_data = dw_get_pedagang_data_by_user_id($user_id);
-    $user_data['is_pedagang'] = (bool) $pedagang_data;
-    if ($pedagang_data) $user_data['pedagang_id'] = $pedagang_data->id;
-    
-    // Dapatkan data admin desa jika ada
-    $desa_data = dw_get_desa_admin_data_by_user_id($user_id);
-    $user_data['is_admin_desa'] = (bool) $desa_data;
-    if ($desa_data) $user_data['admin_desa_id'] = $desa_data->id;
-
-    return new WP_REST_Response([
-        'user_data' => $user_data,
-    ], 200);
-}
-
-/**
- * [BARU] Callback untuk mengirim email lupa password.
- */
-function dw_api_forgot_password(WP_REST_Request $request) {
-    $email = $request['email'];
-    
-    $user_data = get_user_by('email', $email);
-    if (!$user_data) {
-        return new WP_Error('rest_email_not_found', __('Tidak ada pengguna dengan alamat email tersebut.', 'desa-wisata-core'), ['status' => 404]);
-    }
-
-    // --- PERBAIKAN: Ganti filter subject/message bawaan WP ---
-    // WordPress
-    add_filter( 'retrieve_password_title', 'dw_custom_retrieve_password_title', 10, 3 );
-    add_filter( 'retrieve_password_message', 'dw_custom_retrieve_password_message', 10, 4 );
-
-    $result = retrieve_password($user_data->user_login); 
-
-    // Hapus filter agar tidak memengaruhi email WP lainnya
-    remove_filter( 'retrieve_password_title', 'dw_custom_retrieve_password_title' );
-    remove_filter( 'retrieve_password_message', 'dw_custom_retrieve_password_message' );
-    // --- AKHIR PERBAIKAN ---
-
-    if (is_wp_error($result)) {
-        return new WP_Error('rest_reset_failed', $result->get_error_message(), ['status' => 500]);
-    }
-
-    return new WP_REST_Response(['message' => __('Email untuk reset password telah dikirim. Silakan periksa kotak masuk Anda.', 'desa-wisata-core')], 200);
-}
-
-/**
- * [BARU] Callback untuk me-reset password menggunakan key.
- */
-function dw_api_reset_password(WP_REST_Request $request) {
-    $key = $request['key'];
-    $login = $request['login'];
-    $new_password = $request['new_password'];
-
-    $user = check_password_reset_key($key, $login);
-
-    if (is_wp_error($user)) {
-        $error_code = $user->get_error_code();
-        $message = '';
-        if ($error_code === 'expired_key') {
-            $message = __('Link reset password Anda telah kedaluwarsa.', 'desa-wisata-core');
-        } elseif ($error_code === 'invalid_key') {
-            $message = __('Link reset password Anda tidak valid.', 'desa-wisata-core');
-        } else {
-            $message = $user->get_error_message();
-        }
-        return new WP_Error('rest_reset_key_invalid', $message, ['status' => 400]);
-    }
-
-    reset_password($user, $new_password);
-
-    return new WP_REST_Response(['message' => __('Password Anda telah berhasil direset. Silakan login.', 'desa-wisata-core')], 200);
-}
-
-
-// =========================================================================
-// HELPER INTERNAL (AUTH)
-// =========================================================================
-
-/**
- * Helper untuk mengambil data pengguna yang akan disimpan di frontend.
- */
-function dw_internal_get_user_data_for_token(WP_User $user) {
-    // Ambil alamat utama jika ada
-    $default_address_id = (int) get_user_meta($user->ID, 'default_address_id', true);
-    $alamat_utama = null;
-    if ($default_address_id > 0) {
-        global $wpdb;
-        $alamat_utama = $wpdb->get_row($wpdb->prepare(
-            "SELECT * FROM {$wpdb->prefix}dw_user_alamat WHERE id = %d AND user_id = %d",
-            $default_address_id, $user->ID
-        ), 'ARRAY_A');
-    }
-    
-    return [
+    // 4. Ambil Data Profil Singkat
+    $user_data = [
         'id' => $user->ID,
-        'email' => $user->user_email,
         'username' => $user->user_login,
+        'email' => $user->user_email,
         'display_name' => $user->display_name,
         'roles' => $user->roles,
-        'alamat_utama' => $alamat_utama,
     ];
-}
-
-/**
- * Helper untuk mengambil data pedagang.
- */
-function dw_get_pedagang_data_by_user_id($user_id) {
+    
+    // Cek apakah user adalah pedagang
     global $wpdb;
-    return $wpdb->get_row($wpdb->prepare(
-        "SELECT id, status_akun FROM {$wpdb->prefix}dw_pedagang WHERE id_user = %d", $user_id
-    ));
+    $pedagang = $wpdb->get_row($wpdb->prepare("SELECT id, status_akun, nama_toko FROM {$wpdb->prefix}dw_pedagang WHERE id_user = %d", $user->ID));
+    
+    if ($pedagang) {
+        $user_data['is_pedagang'] = true;
+        $user_data['pedagang_id'] = $pedagang->id;
+        $user_data['toko_status'] = $pedagang->status_akun;
+        $user_data['nama_toko'] = $pedagang->nama_toko;
+    } else {
+        $user_data['is_pedagang'] = false;
+    }
+
+    return dw_json_response([
+        'token' => $access_token,
+        'refresh_token' => $refresh_token,
+        'user' => $user_data
+    ]);
 }
 
 /**
- * Helper untuk mengambil data admin desa.
+ * Endpoint Register (Pembeli).
  */
-function dw_get_desa_admin_data_by_user_id($user_id) {
-     global $wpdb;
-    return $wpdb->get_row($wpdb->prepare(
-        "SELECT id, status FROM {$wpdb->prefix}dw_desa WHERE id_user_desa = %d", $user_id
-    ));
+function dw_rest_register($request) {
+    $params = $request->get_json_params();
+    
+    $username = sanitize_user($params['username'] ?? '');
+    $email    = sanitize_email($params['email'] ?? '');
+    $password = $params['password'] ?? '';
+    $fullname = sanitize_text_field($params['fullname'] ?? '');
+    $no_hp    = dw_sanitize_phone($params['no_hp'] ?? '');
+
+    // 1. Validasi Input
+    if (empty($username) || empty($email) || empty($password) || empty($fullname)) {
+        return new WP_Error('missing_fields', 'Semua field wajib diisi.', ['status' => 400]);
+    }
+    if (!is_email($email)) {
+        return new WP_Error('invalid_email', 'Format email tidak valid.', ['status' => 400]);
+    }
+    if (username_exists($username)) {
+        return new WP_Error('username_exists', 'Username sudah digunakan.', ['status' => 400]);
+    }
+    if (email_exists($email)) {
+        return new WP_Error('email_exists', 'Email sudah terdaftar.', ['status' => 400]);
+    }
+
+    // 2. Buat User WordPress
+    $user_id = wp_create_user($username, $password, $email);
+
+    if (is_wp_error($user_id)) {
+        return new WP_Error('registration_failed', $user_id->get_error_message(), ['status' => 500]);
+    }
+
+    // 3. Update Data User
+    wp_update_user([
+        'ID' => $user_id,
+        'display_name' => $fullname,
+        'first_name' => $fullname
+    ]);
+    
+    // Simpan No HP di meta
+    update_user_meta($user_id, 'billing_phone', $no_hp); // Kompatibilitas WooCommerce/Standar
+    update_user_meta($user_id, 'dw_phone', $no_hp);
+
+    // Set Role default (Customer/Subscriber)
+    $user = new WP_User($user_id);
+    $user->set_role('subscriber'); // Atau 'customer' jika ada
+
+    // 4. Auto Login (Generate Token)
+    $access_token = dw_encode_jwt(['user_id' => $user_id]);
+    $refresh_token = dw_create_refresh_token($user_id);
+
+    return dw_json_response([
+        'message' => 'Registrasi berhasil.',
+        'token' => $access_token,
+        'refresh_token' => $refresh_token,
+        'user' => [
+            'id' => $user_id,
+            'username' => $username,
+            'email' => $email,
+            'display_name' => $fullname,
+            'roles' => ['subscriber']
+        ]
+    ], 201);
 }
 
-// --- BARU: Kustomisasi Email Reset Password ---
-
 /**
- * Mengganti judul email reset password.
+ * Endpoint Refresh Token.
+ * Digunakan saat Access Token expired.
  */
-function dw_custom_retrieve_password_title( $title, $user_login, $user_data ) {
-    $site_name = wp_specialchars_decode( get_option( 'blogname' ), ENT_QUOTES );
-    return "[$site_name] Reset Password Anda";
+function dw_rest_refresh_token($request) {
+    $params = $request->get_json_params();
+    $token_client = $params['refresh_token'] ?? '';
+
+    if (empty($token_client)) {
+        return new WP_Error('missing_token', 'Refresh token wajib dikirim.', ['status' => 400]);
+    }
+
+    // 1. Validasi Token di DB
+    $user_id = dw_validate_refresh_token($token_client);
+
+    if (!$user_id) {
+        return new WP_Error('invalid_token', 'Refresh token tidak valid atau kadaluarsa. Silakan login ulang.', ['status' => 403]);
+    }
+
+    // 2. Rotate Refresh Token (Optional Security Best Practice: Ganti refresh token lama dengan baru)
+    // Jika ingin rotate, uncomment baris bawah dan kirim token baru ke client
+    // $new_refresh_token = dw_create_refresh_token($user_id); 
+    
+    // 3. Generate Access Token Baru
+    $new_access_token = dw_encode_jwt(['user_id' => $user_id]);
+
+    if (is_wp_error($new_access_token)) {
+        return $new_access_token;
+    }
+
+    return dw_json_response([
+        'token' => $new_access_token,
+        // 'refresh_token' => $new_refresh_token // Kirim jika rotasi aktif
+    ]);
 }
 
 /**
- * Mengganti isi pesan email reset password.
+ * Endpoint Logout.
+ * Mencabut refresh token dan mem-blacklist access token (jika perlu).
  */
-function dw_custom_retrieve_password_message( $message, $key, $user_login, $user_data ) {
-    // Ambil URL frontend dari pengaturan
-    $options = get_option('dw_settings');
-    $frontend_url = $options['frontend_url'] ?? home_url(); // Fallback ke home_url jika tidak diset
+function dw_rest_logout($request) {
+    $params = $request->get_json_params();
+    $refresh_token = $params['refresh_token'] ?? '';
     
-    // Pastikan URL frontend memiliki trailing slash
-    $frontend_url = rtrim($frontend_url, '/') . '/';
-    
-    // Buat link reset kustom yang mengarah ke frontend
-    // Frontend Anda harus memiliki halaman di /reset-password
-    $reset_link = $frontend_url . 'reset-password?key=' . $key . '&login=' . rawurlencode( $user_login );
+    // Ambil Access Token dari Header untuk diblacklist
+    $auth_header = $request->get_header('Authorization');
+    $access_token = str_replace('Bearer ', '', $auth_header);
 
-    $site_name = wp_specialchars_decode( get_option( 'blogname' ), ENT_QUOTES );
-    
-    $custom_message = "Halo " . $user_data->display_name . ",\n\n";
-    $custom_message .= "Seseorang telah meminta reset password untuk akun Anda di $site_name.\n\n";
-    $custom_message .= "Jika ini adalah Anda, klik link berikut untuk membuat password baru:\n";
-    $custom_message .= $reset_link . "\n\n";
-    $custom_message .= "Jika Anda tidak meminta ini, abaikan saja email ini.\n\n";
-    $custom_message .= "Terima kasih,\n";
-    $custom_message .= "Tim $site_name";
+    // 1. Cabut Refresh Token
+    if (!empty($refresh_token)) {
+        dw_revoke_refresh_token($refresh_token);
+    }
 
-    return $custom_message;
+    // 2. Blacklist Access Token (Opsional tapi bagus)
+    if (!empty($access_token)) {
+        $decoded = dw_validate_access_token($access_token); // Decode untuk dapat user_id & exp
+        if (!is_wp_error($decoded)) {
+            dw_add_token_to_blacklist($access_token, $decoded->data->user_id, $decoded->exp);
+        }
+    }
+
+    return dw_json_response(['message' => 'Berhasil logout.'], 200);
 }
 ?>
