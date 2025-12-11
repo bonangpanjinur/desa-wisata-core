@@ -1,16 +1,14 @@
 <?php
 /**
  * File Name:   desa-wisata-core.php
- * Plugin Name:       Desa Wisata Core
- * Version:           3.2.5 (Perbaikan Urutan Pemuatan)
+ * Plugin Name: Desa Wisata Core
+ * Version:     3.3.0 (Access Control Added)
  *
  * --- PERBAIKAN V3.2.5 (FIX FATAL ERROR) ---
  * - Mengubah urutan `require_once` di `dw_core_load_dependencies` secara drastis.
- * - Memindahkan file logika bisnis (cart.php, data-integrity.php, reviews.php)
- * ke atas agar dimuat SEBELUM file UI (admin-menus.php, rest-api.php)
- * yang memanggil fungsi-fungsi dari file tersebut.
- * - Ini memperbaiki fatal error "Call to undefined function" untuk
- * dw_get_pedagang_orders() dan dw_pedagang_delete_handler().
+ *
+ * --- UPDATE V3.3.0 (ACCESS CONTROL) ---
+ * - Menambahkan `includes/access-control.php` untuk redirect user frontend.
  */
 
 // Mencegah akses langsung ke file.
@@ -18,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'DW_CORE_VERSION', '3.2.5' ); 
+define( 'DW_CORE_VERSION', '3.3.0' ); 
 define( 'DW_CORE_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'DW_CORE_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'DW_CORE_PLUGIN_FILE', __FILE__ );
@@ -46,8 +44,8 @@ function dw_core_load_dependencies() {
     // TAHAP 2: Logika Bisnis & Penanganan Data
     // (File-file ini berisi fungsi yang akan dipanggil oleh TAHAP 3)
     // -----------------------------------------------------------------
-	require_once DW_CORE_PLUGIN_DIR . 'includes/cart.php'; // DIPINDAHKAN KE ATAS
-	require_once DW_CORE_PLUGIN_DIR . 'includes/data-integrity.php'; // DIPINDAHKAN KE ATAS
+	require_once DW_CORE_PLUGIN_DIR . 'includes/cart.php'; 
+	require_once DW_CORE_PLUGIN_DIR . 'includes/data-integrity.php'; 
 	require_once DW_CORE_PLUGIN_DIR . 'includes/reviews.php';
 	require_once DW_CORE_PLUGIN_DIR . 'includes/promotions.php'; 
 	require_once DW_CORE_PLUGIN_DIR . 'includes/whatsapp-templates.php';
@@ -59,14 +57,17 @@ function dw_core_load_dependencies() {
     // -----------------------------------------------------------------
 	require_once DW_CORE_PLUGIN_DIR . 'includes/post-types.php'; 
 	require_once DW_CORE_PLUGIN_DIR . 'includes/taxonomies.php'; 
-	require_once DW_CORE_PLUGIN_DIR . 'includes/admin-menus.php'; // (Membutuhkan cart.php & data-integrity.php)
+	require_once DW_CORE_PLUGIN_DIR . 'includes/admin-menus.php'; 
 	require_once DW_CORE_PLUGIN_DIR . 'includes/meta-boxes.php'; 
-	require_once DW_CORE_PLUGIN_DIR . 'includes/rest-api.php'; // (Membutuhkan data-integrity.php)
+	require_once DW_CORE_PLUGIN_DIR . 'includes/rest-api.php'; 
 	require_once DW_CORE_PLUGIN_DIR . 'includes/roles-capabilities.php'; 
 	require_once DW_CORE_PLUGIN_DIR . 'includes/user-profiles.php'; 
 	require_once DW_CORE_PLUGIN_DIR . 'includes/ajax-handlers.php'; 
 	require_once DW_CORE_PLUGIN_DIR . 'includes/admin-ui-tweaks.php'; 
     require_once DW_CORE_PLUGIN_DIR . 'includes/init.php'; 
+    
+    // --- BARU: Access Control ---
+    require_once DW_CORE_PLUGIN_DIR . 'includes/access-control.php';
 }
 dw_core_load_dependencies();
 
@@ -133,4 +134,4 @@ function dw_central_cors_handler($value = null) {
 }
 add_action('init', 'dw_central_cors_handler', 5);
 add_filter('rest_pre_serve_request', 'dw_central_cors_handler', 5);
-?>
+?> 
