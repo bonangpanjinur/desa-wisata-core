@@ -1,26 +1,17 @@
 <?php
 /**
- * File Path: includes/rest-api/api-helpers.php
+ * File Name:   api-helpers.php
+ * File Folder: includes/rest-api/
+ * File Path:   includes/rest-api/api-helpers.php
  *
- * Berisi fungsi helper KHUSUS untuk memformat data REST API.
+ * Berisi fungsi helper KHUSUS untuk memformat dan memproses data REST API.
  *
- * --- PERBAIKAN (KRITIS v3.2.4) ---
- * - MENAMBAHKAN FUNGSI `dw_get_user_id_from_request` YANG HILANG.
- * - Fungsi ini adalah inti dari seluruh sistem otentikasi API.
- * - Tanpa ini, semua endpoint yang memerlukan login akan gagal.
- *
- * PERBAIKAN 500 ERROR:
- * - Menambahkan fungsi `dw_rest_validate_numeric` untuk
- * menggantikan `is_numeric` di `register_rest_route`.
- *
- * PERBAIKAN (FATAL ERROR):
- * - Menghapus fungsi `dw_check_pedagang_kuota()` yang duplikat dari file ini.
- * - Fungsi tersebut seharusnya HANYA ada di `includes/helpers.php`.
- *
- * PERBAIKAN (FATAL ERROR v3.2.5):
- * - Menambahkan fungsi `dw_api_get_single_desa` yang hilang.
- * - MENAMBAHKAN FUNGSI `dw_api_format_produk_list` dan `dw_api_format_wisata_list`
- * yang hilang dan menyebabkan fatal error di `api-public.php`.
+ * --- UPDATE LENGKAP (v3.3) ---
+ * 1. Otentikasi: dw_get_user_id_from_request()
+ * 2. Validator: dw_rest_validate_numeric() untuk mencegah error 500.
+ * 3. Optimasi: dw_api_format_produk_list() dengan EAGER LOADING (Fix N+1 Query).
+ * 4. Fitur CRUD: Fungsi simpan produk & wisata (Save Data) dimuat lengkap.
+ * 5. Formatting: Semua helper format gambar, variasi, dan rating.
  *
  * @package DesaWisataCore
  */
@@ -28,16 +19,11 @@
 if ( ! defined( 'ABSPATH' ) ) exit;
 
 // =========================================================================
-// [PERBAIKAN KRITIS] HELPER OTENTIKASI
+// 1. HELPER OTENTIKASI & VALIDASI
 // =========================================================================
 
 /**
- * Mendapatkan User ID dari request API (Header Authorization).
- * Fungsi ini adalah inti dari permission callback.
- *
- * @param WP_REST_Request $request Objek request.
- * @param bool $return_error Apakah akan mengembalikan WP_Error jika gagal (default: true).
- * @return int|WP_Error User ID jika valid, atau WP_Error jika tidak valid.
+ * Mendapatkan User ID dari header Authorization (Bearer Token).
  */
 function dw_get_user_id_from_request( WP_REST_Request $request, $return_error = true ) {
     $auth_header = $request->get_header( 'Authorization' );
@@ -46,7 +32,6 @@ function dw_get_user_id_from_request( WP_REST_Request $request, $return_error = 
         return $return_error ? new WP_Error( 'rest_auth_header_missing', 'Header otentikasi (Authorization) tidak ditemukan.', [ 'status' => 401 ] ) : 0;
     }
     
-    // Cek format "Bearer {token}"
     if ( ! preg_match( '/^Bearer\s+(.*)$/i', $auth_header, $matches ) ) {
         return $return_error ? new WP_Error( 'rest_auth_malformed', 'Format header otentikasi tidak valid. Gunakan "Bearer {token}".', [ 'status' => 401 ] ) : 0;
     }
@@ -56,7 +41,7 @@ function dw_get_user_id_from_request( WP_REST_Request $request, $return_error = 
         return $return_error ? new WP_Error( 'rest_auth_token_missing', 'Token JWT tidak ditemukan.', [ 'status' => 401 ] ) : 0;
     }
     
-    // Panggil helper decode JWT dari /includes/helpers.php
+    // Pastikan fungsi decode tersedia (dari includes/helpers.php)
     if ( ! function_exists( 'dw_decode_jwt' ) ) {
         return $return_error ? new WP_Error( 'rest_auth_helper_missing', 'Fungsi otentikasi internal tidak ditemukan.', [ 'status' => 500 ] ) : 0;
     }
@@ -64,11 +49,9 @@ function dw_get_user_id_from_request( WP_REST_Request $request, $return_error = 
     $decoded_token = dw_decode_jwt( $token );
     
     if ( is_wp_error( $decoded_token ) ) {
-        // Jika token tidak valid (misal: expired, signature salah), kembalikan error
         return $return_error ? $decoded_token : 0;
     }
     
-    // Sukses, kembalikan user ID dari payload
     if ( isset( $decoded_token->data->user_id ) && is_numeric( $decoded_token->data->user_id ) ) {
         return (int) $decoded_token->data->user_id;
     }
@@ -76,26 +59,19 @@ function dw_get_user_id_from_request( WP_REST_Request $request, $return_error = 
     return $return_error ? new WP_Error( 'rest_auth_payload_invalid', 'Payload token tidak valid.', [ 'status' => 401 ] ) : 0;
 }
 
-
-// =========================================================================
-// VALIDATOR KUSTOM (FIX 500 ERROR)
-// =========================================================================
-
 /**
- * [BARU] Fungsi validasi kustom untuk argumen REST API.
- * Menggantikan 'is_numeric' yang menyebabkan error 500.
+ * Validator kustom untuk menggantikan is_numeric() yang kadang menyebabkan error 500
+ * pada register_rest_route 'validate_callback'.
  */
 function dw_rest_validate_numeric( $value, $request, $param ) {
     return is_numeric( $value );
 }
 
+
 // =========================================================================
-// FUNGSI FORMATTER DATA
+// 2. FUNGSI FORMATTER DATA (READ)
 // =========================================================================
 
-/**
- * Mengambil URL gambar dalam berbagai ukuran.
- */
 function dw_api_get_image_urls($attachment_id) {
     if (!$attachment_id) return null;
     return [
@@ -106,9 +82,6 @@ function dw_api_get_image_urls($attachment_id) {
     ];
 }
 
-/**
- * Mengambil URL galeri dari string ID (e.g., "1,2,3").
- */
 function dw_api_get_gallery_urls($ids_string) {
     if (empty($ids_string)) return [];
     $ids = array_filter(array_map('absint', explode(',', $ids_string)));
@@ -120,9 +93,6 @@ function dw_api_get_gallery_urls($ids_string) {
     return $gallery;
 }
 
-/**
- * Mengambil data variasi produk.
- */
 function dw_api_get_product_variations($post_id) {
     global $wpdb;
     $variations = $wpdb->get_results($wpdb->prepare(
@@ -142,10 +112,6 @@ function dw_api_get_product_variations($post_id) {
     }, $variations);
 }
 
-/**
- * Mengambil data toko (pedagang) berdasarkan ID user (author).
- * Menggunakan cache untuk performa.
- */
 function dw_api_get_toko_by_author($author_id) {
     if (!$author_id) return null;
     
@@ -163,7 +129,6 @@ function dw_api_get_toko_by_author($author_id) {
         ), 'ARRAY_A');
         
         if ($toko_data) {
-            // Konversi tipe data
             $toko_data['id_pedagang'] = (int) $toko_data['id_pedagang'];
             $toko_data['id_desa'] = (int) $toko_data['id_desa'];
         }
@@ -173,10 +138,6 @@ function dw_api_get_toko_by_author($author_id) {
     return $toko_data;
 }
 
-/**
- * Mengambil data desa berdasarkan ID.
- * Menggunakan cache untuk performa.
- */
 function dw_api_get_desa_by_id($desa_id) {
     if (!$desa_id) return null;
     
@@ -200,9 +161,6 @@ function dw_api_get_desa_by_id($desa_id) {
     return $desa_data;
 }
 
-/**
- * Mengambil rata-rata rating untuk target.
- */
 function dw_api_get_average_rating($target_id, $target_type) {
     if (function_exists('dw_get_rating_summary')) {
         $summary = dw_get_rating_summary($target_id, $target_type);
@@ -214,27 +172,15 @@ function dw_api_get_average_rating($target_id, $target_type) {
     return ['count' => 0, 'average' => 0.0];
 }
 
-/**
- * Mem-parsing string fasilitas (1 per baris) menjadi array.
- */
 function dw_api_parse_facilities($meta_value) {
-    if (is_array($meta_value)) { // Jika sudah array
-        return array_filter($meta_value);
-    }
-    if (is_string($meta_value)) { // Jika string dari textarea
-        return array_filter(array_map('trim', explode("\n", $meta_value)));
-    }
+    if (is_array($meta_value)) return array_filter($meta_value);
+    if (is_string($meta_value)) return array_filter(array_map('trim', explode("\n", $meta_value)));
     return [];
 }
 
-/**
- * Mem-parsing data media sosial (key:value) menjadi array.
- */
 function dw_api_parse_social_media($meta_value) {
-    if (is_array($meta_value)) { // Jika sudah array (dari meta box)
-        return $meta_value;
-    }
-     if (is_string($meta_value)) { // Jika string (dari API?)
+    if (is_array($meta_value)) return $meta_value;
+     if (is_string($meta_value)) {
         $media_sosial_arr = [];
         $lines = explode("\n", trim($meta_value));
         foreach ($lines as $line) {
@@ -249,7 +195,7 @@ function dw_api_parse_social_media($meta_value) {
 }
 
 /**
- * Helper internal untuk memformat data CPT Produk (untuk Admin Desa/Pedagang).
+ * Format detail lengkap PRODUK (untuk single view/edit).
  */
 function dw_internal_format_produk_data($post_or_id) {
     $post = get_post($post_or_id);
@@ -274,11 +220,12 @@ function dw_internal_format_produk_data($post_or_id) {
         'toko' => $toko,
         'catatan_ongkir' => get_post_meta($post->ID, '_dw_catatan_ongkir', true),
         'shipping_profile' => get_post_meta($post->ID, '_dw_shipping_profile', true),
+        'rating' => dw_api_get_average_rating($post->ID, 'produk'), // Tambahan rating di detail
     ];
 }
 
 /**
- * Helper internal untuk memformat data CPT Wisata (untuk Admin Desa).
+ * Format detail lengkap WISATA (untuk single view/edit).
  */
 function dw_internal_format_wisata_data($post_or_id) {
     $post = get_post($post_or_id);
@@ -314,15 +261,142 @@ function dw_internal_format_wisata_data($post_or_id) {
             'video_url' => get_post_meta($post->ID, '_dw_video_url', true),
             'media_sosial' => dw_api_parse_social_media(get_post_meta($post->ID, '_dw_media_sosial', true)),
         ],
+        'rating' => dw_api_get_average_rating($post->ID, 'wisata'),
     ];
 }
 
+// =========================================================================
+// 3. FUNGSI OPTIMASI LIST (EAGER LOADING)
+// =========================================================================
 
 /**
- * Helper untuk menyimpan data produk dari API.
+ * Helper untuk memformat satu item produk.
+ * Mendukung parameter $preloaded_toko (Opsional) untuk optimasi N+1.
+ */
+function dw_api_format_produk_list_item($post, $preloaded_toko = null) {
+    if (is_int($post)) {
+        $post = get_post($post);
+    }
+    if (!$post || $post->post_type !== 'dw_produk') return null;
+
+    $author_id = (int) $post->post_author;
+    
+    // OPTIMASI: Gunakan data preloaded jika ada
+    if ($preloaded_toko) {
+        $toko = $preloaded_toko;
+    } else {
+        $toko = dw_api_get_toko_by_author($author_id);
+    }
+    
+    return [
+        'id' => $post->ID,
+        'nama_produk' => $post->post_title,
+        'slug' => $post->post_name,
+        'harga_dasar' => (float) get_post_meta($post->ID, '_dw_harga_dasar', true),
+        'gambar_unggulan' => dw_api_get_image_urls(get_post_thumbnail_id($post->ID)),
+        'kategori' => wp_get_post_terms($post->ID, 'kategori_produk', ['fields' => 'slugs']),
+        'toko' => $toko,
+        'rating' => dw_api_get_average_rating($post->ID, 'produk'),
+    ];
+}
+
+/**
+ * [OPTIMASI UTAMA] Mengambil data Toko sekaligus dalam satu query.
+ * Mengurangi query database drastis saat memuat daftar produk.
+ */
+function dw_api_format_produk_list($posts) {
+    if (empty($posts) || !is_array($posts)) {
+        return [];
+    }
+
+    // 1. Kumpulkan semua ID Pedagang (Author) yang unik
+    $author_ids = [];
+    foreach ($posts as $post) {
+        $pid = is_int($post) ? $post : $post->ID; 
+        $p_obj = get_post($pid);
+        if ($p_obj) {
+            $author_ids[] = $p_obj->post_author;
+        }
+    }
+    $author_ids = array_unique(array_filter($author_ids));
+
+    // 2. Query Data Toko Sekaligus (WHERE IN)
+    $toko_map = [];
+    if (!empty($author_ids)) {
+        global $wpdb;
+        $ids_placeholder = implode(',', array_fill(0, count($author_ids), '%d'));
+        
+        $query = "SELECT p.id_user as id_pedagang, p.nama_toko, p.id_desa, d.nama_desa 
+                  FROM {$wpdb->prefix}dw_pedagang p
+                  LEFT JOIN {$wpdb->prefix}dw_desa d ON p.id_desa = d.id
+                  WHERE p.id_user IN ($ids_placeholder)";
+        
+        $results = $wpdb->get_results($wpdb->prepare($query, $author_ids), 'ARRAY_A');
+        
+        if ($results) {
+            foreach ($results as $row) {
+                // Casting tipe data
+                $row['id_pedagang'] = (int) $row['id_pedagang'];
+                $row['id_desa'] = (int) $row['id_desa'];
+                $toko_map[$row['id_pedagang']] = $row;
+            }
+        }
+    }
+
+    // 3. Format Item dengan menyuntikkan data toko (Dependency Injection)
+    $formatted_items = [];
+    foreach ($posts as $post) {
+        $p_obj = is_int($post) ? get_post($post) : $post;
+        if (!$p_obj) continue;
+
+        $toko_data = isset($toko_map[$p_obj->post_author]) ? $toko_map[$p_obj->post_author] : null;
+        
+        // Panggil formatter item dengan data preloaded
+        $item = dw_api_format_produk_list_item($p_obj, $toko_data);
+        if ($item) {
+            $formatted_items[] = $item;
+        }
+    }
+
+    return $formatted_items;
+}
+
+function dw_api_format_wisata_list_item($post) {
+     if (is_int($post)) {
+        $post = get_post($post);
+    }
+    if (!$post || $post->post_type !== 'dw_wisata') return null;
+    
+    return [
+        'id' => $post->ID,
+        'nama_wisata' => $post->post_title,
+        'slug' => $post->post_name,
+        'gambar_unggulan' => dw_api_get_image_urls(get_post_thumbnail_id($post->ID)),
+        'kategori' => wp_get_post_terms($post->ID, 'kategori_wisata', ['fields' => 'slugs']),
+        'lokasi' => [
+            'kabupaten' => get_post_meta($post->ID, '_dw_kabupaten', true),
+        ],
+        'rating' => dw_api_get_average_rating($post->ID, 'wisata'),
+    ];
+}
+
+function dw_api_format_wisata_list($posts) {
+    if (empty($posts) || !is_array($posts)) {
+        return [];
+    }
+    return array_filter(array_map('dw_api_format_wisata_list_item', $posts));
+}
+
+
+// =========================================================================
+// 4. FUNGSI PENYIMPANAN DATA (CREATE/UPDATE) - LENGKAP
+// =========================================================================
+
+/**
+ * Menyimpan data produk dari API ke Database (Meta & Taxonomies).
  */
 function dw_api_save_produk_data($post_id, $params, $user_id) {
-    // 1. Simpan Meta
+    // 1. Simpan Post Meta Standar
     $meta_fields = ['_dw_harga_dasar', '_dw_stok', '_dw_catatan_ongkir', '_dw_shipping_profile'];
     foreach ($meta_fields as $meta_key) {
         $param_key = str_replace('_dw_', '', $meta_key);
@@ -332,7 +406,7 @@ function dw_api_save_produk_data($post_id, $params, $user_id) {
         }
     }
     
-    // 2. Simpan Galeri
+    // 2. Simpan Galeri Foto
     if (isset($params['galeri_foto']) && is_array($params['galeri_foto'])) {
         $gallery_ids = array_map('absint', $params['galeri_foto']);
         update_post_meta($post_id, '_dw_galeri_foto', implode(',', $gallery_ids));
@@ -342,15 +416,17 @@ function dw_api_save_produk_data($post_id, $params, $user_id) {
         }
     }
     
-    // 3. Simpan Kategori
+    // 3. Simpan Kategori (Taxonomy)
     if (isset($params['kategori']) && is_array($params['kategori'])) {
         wp_set_post_terms($post_id, $params['kategori'], 'kategori_produk', false);
     }
     
-    // 4. Simpan Variasi
+    // 4. Simpan Variasi Produk (Complex Logic)
     if (isset($params['variasi']) && is_array($params['variasi'])) {
         global $wpdb;
         $table_name = $wpdb->prefix . 'dw_produk_variasi';
+        
+        // Ambil variasi eksisting untuk dibandingkan (hapus yang tidak disubmit)
         $existing_ids = $wpdb->get_col($wpdb->prepare("SELECT id FROM $table_name WHERE id_produk = %d", $post_id));
         $submitted_ids = [];
         
@@ -373,19 +449,22 @@ function dw_api_save_produk_data($post_id, $params, $user_id) {
                 $submitted_ids[] = $wpdb->insert_id;
             }
         }
+        
+        // Hapus variasi lama yang tidak ada di submission baru
         $ids_to_delete = array_diff($existing_ids, $submitted_ids);
         if (!empty($ids_to_delete)) {
             $wpdb->query("DELETE FROM $table_name WHERE id IN (" . implode(',', $ids_to_delete) . ")");
         }
     }
+    
     return true;
 }
 
 /**
- * Helper untuk menyimpan data wisata dari API.
+ * Menyimpan data wisata dari API ke Database.
  */
 function dw_api_save_wisata_data($post_id, $params, $user_id) {
-    // 1. Simpan Meta
+    // 1. Simpan Meta Data Wisata
     $meta_map = [
         'harga_tiket' => '_dw_harga_tiket',
         'jam_buka' => '_dw_jam_buka',
@@ -396,8 +475,9 @@ function dw_api_save_wisata_data($post_id, $params, $user_id) {
         'url_google_maps' => '_dw_url_google_maps',
         'url_website' => '_dw_url_website',
         'video_url' => '_dw_video_url',
-        '_dw_id_desa' => '_dw_id_desa', // Untuk memastikan ID Desa tersimpan
+        '_dw_id_desa' => '_dw_id_desa', // ID Desa (Penting!)
     ];
+    
     foreach ($meta_map as $param_key => $meta_key) {
         if (isset($params[$param_key])) {
             update_post_meta($post_id, $meta_key, sanitize_text_field($params[$param_key]));
@@ -418,19 +498,19 @@ function dw_api_save_wisata_data($post_id, $params, $user_id) {
         wp_set_post_terms($post_id, $params['kategori'], 'kategori_wisata', false);
     }
     
-    // 4. Simpan Fasilitas (array)
+    // 4. Simpan Fasilitas (Array serialized)
     if (isset($params['fasilitas']) && is_array($params['fasilitas'])) {
         $fasilitas = array_filter(array_map('sanitize_text_field', $params['fasilitas']));
         update_post_meta($post_id, '_dw_fasilitas', $fasilitas);
     }
     
-    // 5. Simpan Atraksi Terdekat (array)
+    // 5. Simpan Atraksi Terdekat
     if (isset($params['atraksi_terdekat']) && is_array($params['atraksi_terdekat'])) {
         $atraksi = array_filter(array_map('sanitize_text_field', $params['atraksi_terdekat']));
         update_post_meta($post_id, '_dw_nearby_attractions', $atraksi);
     }
     
-    // 6. Simpan Media Sosial (objek/array key:value)
+    // 6. Simpan Media Sosial (Array/Object)
     if (isset($params['media_sosial']) && (is_array($params['media_sosial']) || is_object($params['media_sosial']))) {
         $media_sosial_arr = [];
         foreach ($params['media_sosial'] as $key => $value) {
@@ -443,8 +523,7 @@ function dw_api_save_wisata_data($post_id, $params, $user_id) {
 }
 
 /**
- * [BARU] Helper internal untuk mengambil data Desa tunggal (untuk admin).
- * Fungsi ini hilang dan menyebabkan fatal error di endpoint Admin & Admin Desa.
+ * Helper internal untuk mengambil data Desa tunggal (untuk API Admin).
  *
  * @param WP_REST_Request $request Request object, harus berisi 'id'.
  * @return WP_REST_Response|WP_Error
@@ -465,100 +544,12 @@ function dw_api_get_single_desa(WP_REST_Request $request) {
         return new WP_Error('rest_not_found', __('Desa tidak ditemukan.', 'desa-wisata-core'), ['status' => 404]);
     }
     
-    // Format tipe data
+    // Format tipe data untuk JSON yang konsisten
     $desa_data['id'] = (int) $desa_data['id'];
     $desa_data['id_user_desa'] = $desa_data['id_user_desa'] ? (int) $desa_data['id_user_desa'] : null;
     $desa_data['persentase_komisi_penjualan'] = (float) $desa_data['persentase_komisi_penjualan'];
+    $desa_data['persentase_komisi_tiket'] = isset($desa_data['persentase_komisi_tiket']) ? (float) $desa_data['persentase_komisi_tiket'] : 0;
 
     return new WP_REST_Response($desa_data, 200);
-}
-
-
-// =========================================================================
-// [PERBAIKAN FATAL ERROR] FUNGSI FORMATTER YANG HILANG
-// =========================================================================
-
-/**
- * [BARU] Helper untuk memformat satu item produk untuk daftar.
- * Ini adalah versi ringan dari `dw_internal_format_produk_data`.
- *
- * @param WP_Post $post Objek post produk.
- * @return array Data produk yang diformat.
- */
-function dw_api_format_produk_list_item($post) {
-    if (is_int($post)) {
-        $post = get_post($post);
-    }
-    if (!$post || $post->post_type !== 'dw_produk') return null;
-
-    $author_id = (int) $post->post_author;
-    $toko = dw_api_get_toko_by_author($author_id);
-    
-    return [
-        'id' => $post->ID,
-        'nama_produk' => $post->post_title,
-        'slug' => $post->post_name,
-        'harga_dasar' => (float) get_post_meta($post->ID, '_dw_harga_dasar', true),
-        'gambar_unggulan' => dw_api_get_image_urls(get_post_thumbnail_id($post->ID)),
-        'kategori' => wp_get_post_terms($post->ID, 'kategori_produk', ['fields' => 'slugs']),
-        'toko' => $toko,
-        'rating' => dw_api_get_average_rating($post->ID, 'produk'),
-    ];
-}
-
-/**
- * [BARU] Fungsi yang hilang: Mengubah array post produk menjadi data list API.
- * Dipanggil oleh `dw_api_get_produk` di `api-public.php`.
- *
- * @param array $posts Array objek WP_Post.
- * @return array Array data produk yang diformat.
- */
-function dw_api_format_produk_list($posts) {
-    if (empty($posts) || !is_array($posts)) {
-        return [];
-    }
-    // Gunakan `array_map` untuk memformat setiap post
-    return array_filter(array_map('dw_api_format_produk_list_item', $posts));
-}
-
-/**
- * [BARU] Helper untuk memformat satu item wisata untuk daftar.
- * Ini adalah versi ringan dari `dw_internal_format_wisata_data`.
- *
- * @param WP_Post $post Objek post wisata.
- * @return array Data wisata yang diformat.
- */
-function dw_api_format_wisata_list_item($post) {
-     if (is_int($post)) {
-        $post = get_post($post);
-    }
-    if (!$post || $post->post_type !== 'dw_wisata') return null;
-    
-    return [
-        'id' => $post->ID,
-        'nama_wisata' => $post->post_title,
-        'slug' => $post->post_name,
-        'gambar_unggulan' => dw_api_get_image_urls(get_post_thumbnail_id($post->ID)),
-        'kategori' => wp_get_post_terms($post->ID, 'kategori_wisata', ['fields' => 'slugs']),
-        'lokasi' => [
-            'kabupaten' => get_post_meta($post->ID, '_dw_kabupaten', true), // Ambil kabupaten dari meta
-        ],
-        'rating' => dw_api_get_average_rating($post->ID, 'wisata'),
-    ];
-}
-
-/**
- * [BARU] Fungsi yang hilang: Mengubah array post wisata menjadi data list API.
- * Dipanggil oleh `dw_api_get_wisata` di `api-public.php`.
- *
- * @param array $posts Array objek WP_Post.
- * @return array Array data wisata yang diformat.
- */
-function dw_api_format_wisata_list($posts) {
-    if (empty($posts) || !is_array($posts)) {
-        return [];
-    }
-    // Gunakan `array_map` untuk memformat setiap post
-    return array_filter(array_map('dw_api_format_wisata_list_item', $posts));
 }
 ?>

@@ -6,9 +6,9 @@
  *
  * Fungsi bantuan umum untuk plugin Desa Wisata Core.
  * Termasuk fungsi JWT, formatting, dan utilitas lainnya.
- * * --- PERBAIKAN KEAMANAN & FITUR ---
- * 1. dw_get_jwt_secret_key: AUTO-GENERATE key jika tidak ada di wp-config.php.
- * 2. dw_update_sub_order_status: Logika update status pesanan terpusat.
+ * * --- UPDATE v3.3 (FITUR PENGEMBALIAN STOK) ---
+ * 1. Added: dw_restore_sub_order_stock() untuk mengembalikan stok.
+ * 2. Modified: dw_update_sub_order_status() memanggil restore stock saat batal.
  *
  * @package DesaWisataCore
  */
@@ -111,11 +111,6 @@ if (!defined('DW_JWT_REFRESH_TOKEN_EXPIRATION')) {
 
 /**
  * Mendapatkan Secret Key JWT dengan aman.
- * * SECURITY FIX: 
- * Mengutamakan konstanta di wp-config.php. Jika tidak ada, membuat kunci acak unik
- * dan menyimpannya di database (wp_options). Menghindari kunci default hardcoded.
- *
- * @return string Secret key JWT.
  */
 function dw_get_jwt_secret_key() {
     // 1. Cek Konstanta di wp-config.php (Prioritas Utama)
@@ -152,9 +147,6 @@ function dw_get_jwt_secret_key() {
 // FUNGSI JWT (Encode/Decode)
 // =============================================================================
 
-/**
- * Membuat token JWT dari payload.
- */
 function dw_encode_jwt($payload, $expiration = DW_JWT_ACCESS_TOKEN_EXPIRATION) {
      if ( ! class_exists('\Firebase\JWT\JWT') ) {
         return new WP_Error('jwt_library_missing', __('Library JWT tidak tersedia.', 'desa-wisata-core'));
@@ -188,9 +180,6 @@ function dw_encode_jwt($payload, $expiration = DW_JWT_ACCESS_TOKEN_EXPIRATION) {
     }
 }
 
-/**
- * Memvalidasi dan mendecode token JWT.
- */
 function dw_decode_jwt($jwt) {
      if ( ! class_exists('\Firebase\JWT\JWT') ) {
         return new WP_Error('jwt_library_missing', __('Library JWT tidak tersedia.', 'desa-wisata-core'), ['status' => 500]);
@@ -435,13 +424,27 @@ function dw_update_sub_order_status($sub_order_id, $new_status, $notes = '', $no
         $data_to_update['ongkir'] = $ongkir_final;
         $data_to_update['total_pesanan_toko'] = (float) $sub_order->sub_total + (float) $ongkir_final;
         $log_message_extra .= " Ongkir final di-set ke " . dw_format_rupiah($ongkir_final);
-        
-        // Sync nanti setelah update DB
     }
 
     if (empty($data_to_update)) return true;
 
-    // --- LOGIKA PENGURANGAN KUOTA ---
+    // --- [BARU] LOGIKA PENGEMBALIAN STOK (RESTOCK) ---
+    // Jika pesanan DIBATALKAN atau REFUNDED atau GAGAL BAYAR, kembalikan stok.
+    // Tapi hanya jika status sebelumnya BUKAN status gagal tersebut (agar tidak double restore).
+    $cancelled_statuses = ['dibatalkan', 'refunded', 'pembayaran_gagal'];
+    if (in_array($new_status, $cancelled_statuses) && !in_array($old_status, $cancelled_statuses)) {
+        
+        $restock_success = dw_restore_sub_order_stock($sub_order_id);
+        
+        if ($restock_success) {
+            $log_message_extra .= " [Stok Produk Dikembalikan]";
+        } else {
+            $log_message_extra .= " [PERINGATAN: Gagal mengembalikan stok]";
+        }
+    }
+    // -------------------------------------------------
+
+    // --- LOGIKA PENGURANGAN KUOTA PEDAGANG ---
     // Hanya kurangi kuota saat status berubah jadi 'lunas' atau 'selesai' pertama kali
     $is_quota_transition = !in_array($old_status, ['lunas', 'selesai', 'dibatalkan']) && in_array($new_status, ['lunas', 'selesai']);
 
@@ -574,5 +577,66 @@ function dw_send_user_notification($user_id, $subject, $message) {
 }
 function dw_send_pedagang_notification($user_id, $subject, $message) {
     return dw_send_user_notification($user_id, $subject, $message);
+}
+
+// =============================================================================
+// FUNGSI HELPER BARU: RESTOCK (Update v3.3)
+// =============================================================================
+
+/**
+ * Mengembalikan stok produk saat pesanan dibatalkan/refund.
+ *
+ * @param int $sub_order_id ID Sub Transaksi
+ * @return bool True jika berhasil, False jika gagal.
+ */
+function dw_restore_sub_order_stock($sub_order_id) {
+    global $wpdb;
+    $table_items = $wpdb->prefix . 'dw_transaksi_items';
+    $table_variasi = $wpdb->prefix . 'dw_produk_variasi';
+    $table_postmeta = $wpdb->postmeta;
+
+    // Ambil item dari pesanan ini
+    $items = $wpdb->get_results($wpdb->prepare(
+        "SELECT id_produk, id_variasi, jumlah FROM $table_items WHERE id_sub_transaksi = %d",
+        $sub_order_id
+    ));
+
+    if (empty($items)) {
+        return false;
+    }
+
+    foreach ($items as $item) {
+        $qty = (int) $item->jumlah;
+        $product_id = (int) $item->id_produk;
+        $variation_id = (int) $item->id_variasi;
+
+        if ($qty <= 0) continue;
+
+        if ($variation_id > 0) {
+            // A. Kembalikan stok VARIASI
+            // Query: UPDATE dw_produk_variasi SET stok_variasi = stok_variasi + qty
+            $wpdb->query($wpdb->prepare(
+                "UPDATE $table_variasi SET stok_variasi = stok_variasi + %d WHERE id = %d",
+                $qty, $variation_id
+            ));
+        } else {
+            // B. Kembalikan stok PRODUK UTAMA (Simple Product)
+            // Menggunakan SQL langsung ke postmeta agar atomik dan cepat
+            // Query: UPDATE wp_postmeta SET meta_value = meta_value + qty WHERE ...
+            
+            // Cek dulu apakah key _dw_stok ada dan berupa angka
+            $current_val = get_post_meta($product_id, '_dw_stok', true);
+            
+            if ($current_val !== '' && is_numeric($current_val)) {
+                $wpdb->query($wpdb->prepare(
+                    "UPDATE $table_postmeta SET meta_value = meta_value + %d 
+                     WHERE post_id = %d AND meta_key = '_dw_stok'",
+                    $qty, $product_id
+                ));
+            }
+        }
+    }
+
+    return true;
 }
 ?>
