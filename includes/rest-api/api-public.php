@@ -1,6 +1,8 @@
 <?php
 /**
- * File Path: includes/rest-api/api-public.php
+ * File Name:   api-public.php
+ * File Folder: includes/rest-api/
+ * File Path:   includes/rest-api/api-public.php
  *
  * Mendaftarkan semua endpoint API publik (tidak perlu login).
  *
@@ -477,7 +479,11 @@ function dw_api_get_desa_detail_by_id(WP_REST_Request $request) {
             'author__in' => $pedagang_ids, // Ambil produk berdasarkan author (pedagang)
         ];
         $produk_query = new WP_Query($args_produk);
+        
+        // --- PERBAIKAN: Gunakan Helper Baru ---
         $produk_list = dw_api_format_produk_list($produk_query->posts);
+        // --- AKHIR PERBAIKAN ---
+        
         $total_produk = (int) $produk_query->found_posts;
     }
 
@@ -554,7 +560,10 @@ function dw_api_get_toko_detail_by_id(WP_REST_Request $request) {
         'author' => $id, // Cari berdasarkan post_author
     ];
     $produk_query = new WP_Query($args_produk);
+    
+    // --- PERBAIKAN: Gunakan Helper Baru ---
     $produk_list = dw_api_format_produk_list($produk_query->posts);
+    // --- AKHIR PERBAIKAN ---
 
     $response = [
         'toko' => $formatted_toko,
@@ -635,7 +644,10 @@ function dw_api_get_produk(WP_REST_Request $request) {
     // TODO: Add sorting
 
     $query = new WP_Query($args);
+    
+    // --- PERBAIKAN: Gunakan Helper Baru ---
     $produk_list = dw_api_format_produk_list($query->posts);
+    // --- AKHIR PERBAIKAN ---
 
     $response = [
         'data' => $produk_list,
