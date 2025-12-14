@@ -396,18 +396,21 @@ function dw_get_embed_video_url_helper($url) {
  * Get Pending Reviews Count
  * Menghitung jumlah ulasan yang statusnya pending.
  * Dilengkapi pengecekan tabel untuk menghindari error jika tabel belum dibuat.
+ * * Safe declaration added to prevent redeclare error.
  */
-function dw_get_pending_reviews_count() {
-    global $wpdb;
-    $table_name = $wpdb->prefix . 'dw_ulasan';
-    
-    // Cek apakah tabel ada sebelum query untuk mencegah error database
-    if($wpdb->get_var("SHOW TABLES LIKE '$table_name'") != $table_name) {
-        return 0; // Return 0 jika tabel tidak ada
-    }
+if ( ! function_exists( 'dw_get_pending_reviews_count' ) ) {
+    function dw_get_pending_reviews_count() {
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'dw_ulasan';
+        
+        // Cek apakah tabel ada sebelum query untuk mencegah error database
+        if($wpdb->get_var("SHOW TABLES LIKE '$table_name'") != $table_name) {
+            return 0; // Return 0 jika tabel tidak ada
+        }
 
-    // Ambil jumlah ulasan pending
-    return (int) $wpdb->get_var("SELECT COUNT(id) FROM $table_name WHERE status_moderasi = 'pending'");
+        // Ambil jumlah ulasan pending
+        return (int) $wpdb->get_var("SELECT COUNT(id) FROM $table_name WHERE status_moderasi = 'pending'");
+    }
 }
 
 /**
