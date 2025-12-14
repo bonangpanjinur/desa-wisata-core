@@ -14,7 +14,7 @@
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
-	exit;
+    exit;
 }
 
 use Firebase\JWT\JWT;
@@ -302,8 +302,14 @@ function dw_add_token_to_blacklist($jwt, $user_id, $expires_at) {
 // FUNGSI HELPER UTILS (Format, Sanitize, dll)
 // =============================================================================
 
-function dw_format_rupiah($angka) {
-    return 'Rp ' . number_format($angka, 0, ',', '.');
+/**
+ * Format Rupiah (Safe Declaration)
+ * Mencegah error "Cannot redeclare" jika fungsi sudah ada di theme functions.php
+ */
+if ( ! function_exists( 'dw_format_rupiah' ) ) {
+    function dw_format_rupiah($angka) {
+        return 'Rp ' . number_format((float)$angka, 0, ',', '.');
+    }
 }
 
 function dw_sanitize_phone($phone) {
@@ -355,12 +361,12 @@ function dw_get_order_status_label($status) {
         'pembayaran_gagal'      => __('Pembayaran Gagal', 'desa-wisata-core'),
         'refunded'              => __('Refunded', 'desa-wisata-core'),
         'menunggu_konfirmasi'   => __('Menunggu Konfirmasi', 'desa-wisata-core'), 
-        'lunas'               => __('Lunas', 'desa-wisata-core'),
-        'diproses'            => __('Diproses Penjual', 'desa-wisata-core'),
-        'diantar_ojek'        => __('Dikirim (Ojek Lokal)', 'desa-wisata-core'),
-        'dikirim_ekspedisi'   => __('Dikirim (Ekspedisi)', 'desa-wisata-core'),
-        'selesai'             => __('Pesanan Selesai', 'desa-wisata-core'),
-        'dibatalkan'          => __('Dibatalkan', 'desa-wisata-core'),
+        'lunas'                 => __('Lunas', 'desa-wisata-core'),
+        'diproses'              => __('Diproses Penjual', 'desa-wisata-core'),
+        'diantar_ojek'          => __('Dikirim (Ojek Lokal)', 'desa-wisata-core'),
+        'dikirim_ekspedisi'     => __('Dikirim (Ekspedisi)', 'desa-wisata-core'),
+        'selesai'               => __('Pesanan Selesai', 'desa-wisata-core'),
+        'dibatalkan'            => __('Dibatalkan', 'desa-wisata-core'),
     ];
     return $labels[$status] ?? ucfirst(str_replace('_', ' ', $status));
 }
@@ -380,6 +386,66 @@ function dw_get_embed_video_url_helper($url) {
         return "https://player.vimeo.com/video/" . $match[1];
     }
     return null; 
+}
+
+// =============================================================================
+// FUNGSI TAMBAHAN (ADMIN UI & LOGS)
+// =============================================================================
+
+/**
+ * Get Pending Reviews Count
+ * Menghitung jumlah ulasan yang statusnya pending.
+ * Dilengkapi pengecekan tabel untuk menghindari error jika tabel belum dibuat.
+ */
+function dw_get_pending_reviews_count() {
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'dw_ulasan';
+    
+    // Cek apakah tabel ada sebelum query untuk mencegah error database
+    if($wpdb->get_var("SHOW TABLES LIKE '$table_name'") != $table_name) {
+        return 0; // Return 0 jika tabel tidak ada
+    }
+
+    // Ambil jumlah ulasan pending
+    return (int) $wpdb->get_var("SELECT COUNT(id) FROM $table_name WHERE status_moderasi = 'pending'");
+}
+
+/**
+ * Helper untuk mendapatkan status label (Desa/Produk)
+ * Memberikan badge visual HTML berdasarkan status.
+ * (Safe Declaration)
+ */
+if ( ! function_exists( 'dw_get_status_label' ) ) {
+    function dw_get_status_label($status) {
+        switch ($status) {
+            case 'aktif': return '<span class="dw-badge dw-badge-success">Aktif</span>';
+            case 'nonaktif': return '<span class="dw-badge dw-badge-danger">Nonaktif</span>';
+            case 'pending': return '<span class="dw-badge dw-badge-warning">Menunggu</span>';
+            default: return '<span class="dw-badge">' . esc_html($status) . '</span>';
+        }
+    }
+}
+
+/**
+ * Helper log aktivitas (Sederhana)
+ * Mencatat aktivitas user ke database.
+ * Dilengkapi pengecekan tabel log dan function_exists check.
+ */
+if ( ! function_exists( 'dw_add_log' ) ) {
+    function dw_add_log($user_id, $activity, $type = 'info') {
+        global $wpdb;
+        $table_logs = $wpdb->prefix . 'dw_logs';
+        
+        // Cek tabel logs sebelum insert
+        if($wpdb->get_var("SHOW TABLES LIKE '$table_logs'") != $table_logs) return;
+
+        $wpdb->insert($table_logs, [
+            'user_id' => $user_id,
+            'activity' => $activity,
+            'type' => $type,
+            'created_at' => current_time('mysql')
+        ]);
+    }
 }
 
 
@@ -600,70 +666,7 @@ function dw_restore_sub_order_stock($sub_order_id) {
         "SELECT id_produk, id_variasi, jumlah FROM $table_items WHERE id_sub_transaksi = %d",
         $sub_order_id
     ));
-if ( ! function_exists( 'dw_format_rupiah' ) ) {
-    function dw_format_rupiah($angka) {
-        return 'Rp ' . number_format((float)$angka, 0, ',', '.');
-    }
-}
 
-/**
- * PERBAIKAN: Get Pending Reviews Count
- * Cari fungsi dw_get_pending_reviews_count dan GANTI dengan blok ini.
- */
-function dw_get_pending_reviews_count() {
-    global $wpdb;
-    // Pastikan prefix tabel sesuai dengan instalasi Anda
-    $table_name = $wpdb->prefix . 'dw_ulasan';
-    
-    // Cek apakah tabel ada sebelum query
-    // Menggunakan teknik yang lebih ringan daripada SHOW TABLES untuk performa di admin panel
-    if($wpdb->get_var("SHOW TABLES LIKE '$table_name'") != $table_name) {
-        return 0; 
-    }
-
-    // Ambil jumlah
-    $count = $wpdb->get_var("SELECT COUNT(id) FROM $table_name WHERE status_moderasi = 'pending'");
-    return (int) $count;
-}
-
-/**
- * PERBAIKAN: Helper Status Label
- * Cari fungsi dw_get_status_label dan GANTI dengan blok ini.
- */
-if ( ! function_exists( 'dw_get_status_label' ) ) {
-    function dw_get_status_label($status) {
-        switch ($status) {
-            case 'aktif': return '<span class="dw-badge dw-badge-success">Aktif</span>';
-            case 'nonaktif': return '<span class="dw-badge dw-badge-danger">Nonaktif</span>';
-            case 'pending': return '<span class="dw-badge dw-badge-warning">Menunggu</span>';
-            case 'menunggu_pembayaran': return '<span class="dw-badge dw-badge-warning">Menunggu Pembayaran</span>';
-            case 'selesai': return '<span class="dw-badge dw-badge-success">Selesai</span>';
-            case 'dibatalkan': return '<span class="dw-badge dw-badge-danger">Dibatalkan</span>';
-            default: return '<span class="dw-badge">' . esc_html($status) . '</span>';
-        }
-    }
-}
-
-/**
- * PERBAIKAN: Helper Log
- * Cari fungsi dw_add_log dan GANTI dengan blok ini.
- */
-if ( ! function_exists( 'dw_add_log' ) ) {
-    function dw_add_log($user_id, $activity, $type = 'info') {
-        global $wpdb;
-        $table_logs = $wpdb->prefix . 'dw_logs';
-        
-        // Cek tabel logs
-        if($wpdb->get_var("SHOW TABLES LIKE '$table_logs'") != $table_logs) return;
-
-        $wpdb->insert($table_logs, [
-            'user_id' => $user_id,
-            'activity' => $activity,
-            'type' => $type,
-            'created_at' => current_time('mysql')
-        ]);
-    }
-}
     if (empty($items)) {
         return false;
     }
