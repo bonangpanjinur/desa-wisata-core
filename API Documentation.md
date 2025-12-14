@@ -8,15 +8,13 @@ Daftar Isi
 
 Otentikasi & Akun
 
-Data Publik (Produk, Wisata, Desa)
-
-Wilayah (Alamat)
+Data Publik (Guest)
 
 Keranjang & Checkout
 
-Pesanan Pembeli
+Area Pembeli
 
-Manajemen Pedagang (Toko)
+Area Pedagang (Merchant)
 
 1. Otentikasi & Akun
 
@@ -34,7 +32,7 @@ Method: POST
 Body:
 
 {
-  "username": "email@example.com", // atau username
+  "username": "email@example.com",
   "password": "password_user"
 }
 
@@ -42,15 +40,19 @@ Body:
 Response:
 
 {
-  "token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
-  "user_email": "email@example.com",
-  "user_nicename": "User Name",
-  "user_display_name": "User Name",
-  "roles": ["subscriber", "pedagang"] // Role user
+  "token": "eyJ0eXAiOiJKV1...",
+  "refresh_token": "def50200...",
+  "user": {
+    "id": 1,
+    "username": "user",
+    "email": "email@example.com",
+    "roles": ["subscriber", "pedagang"],
+    "is_pedagang": true
+  }
 }
 
 
-Register (Pendaftaran)
+Register (Pendaftaran Pembeli)
 
 Mendaftar sebagai pengguna baru.
 
@@ -64,24 +66,40 @@ Body:
   "username": "username_baru",
   "email": "email@example.com",
   "password": "password_kuat",
-  "nama_lengkap": "Nama Lengkap",
+  "fullname": "Nama Lengkap",
   "no_hp": "081234567890"
 }
 
 
 Refresh Token
 
-Mendapatkan token baru jika token lama kadaluwarsa (opsional, jika diimplementasikan di client).
+Memperbarui token akses yang kadaluwarsa.
 
-URL: /auth/token/refresh
+URL: /auth/refresh
 
 Method: POST
 
-Header: Authorization: Bearer <token_lama>
+Body:
+
+{ "refresh_token": "def50200..." }
+
+
+Logout
+
+Mencabut sesi token.
+
+URL: /auth/logout
+
+Method: POST
+
+Body:
+
+{ "refresh_token": "def50200..." }
+
 
 2. Data Publik
 
-Endpoint ini dapat diakses tanpa login.
+Endpoint ini dapat diakses tanpa login (Public).
 
 Daftar Banner
 
@@ -101,17 +119,9 @@ URL: /desa
 
 Method: GET
 
-Params:
-
-page: (int) Halaman ke berapa.
-
-search: (string) Cari nama desa.
-
-provinsi_id: (string) Filter ID Provinsi.
+Params: page, search, provinsi_id
 
 Detail Desa
-
-Mendapatkan info desa beserta daftar produk dan wisatanya.
 
 URL: /desa/{id}
 
@@ -123,23 +133,11 @@ URL: /produk
 
 Method: GET
 
-Params:
-
-page: (int) Halaman (default: 1).
-
-per_page: (int) Item per halaman (default: 10).
-
-search: (string) Kata kunci pencarian.
-
-kategori: (string) Slug kategori.
-
-desa: (int) ID Desa.
-
-toko: (int) ID User Pedagang.
+Params: page, per_page, search, kategori, desa (ID), toko (ID User).
 
 Detail Produk
 
-URL: /produk/{id} atau /produk/slug/{slug}
+URL: /produk/{id}
 
 Method: GET
 
@@ -153,29 +151,17 @@ Params: page, search, kategori, desa.
 
 Detail Wisata
 
-URL: /wisata/slug/{slug}
+URL: /wisata/{id} (atau slug)
 
 Method: GET
 
-3. Wilayah (Alamat)
-
-Mengambil data wilayah administratif Indonesia untuk form alamat.
-
-Provinsi: GET /alamat/provinsi
-
-Kabupaten: GET /alamat/provinsi/{id_provinsi}/kabupaten
-
-Kecamatan: GET /alamat/kabupaten/{id_kabupaten}/kecamatan
-
-Kelurahan/Desa: GET /alamat/kecamatan/{id_kecamatan}/kelurahan
-
-4. Keranjang & Checkout
+3. Keranjang & Checkout
 
 Memerlukan Header Authorization.
 
 Sinkronisasi Keranjang
 
-Menggabungkan keranjang tamu (local storage) dengan keranjang di database saat user login.
+Menggabungkan keranjang lokal dengan database.
 
 URL: /cart/sync
 
@@ -185,18 +171,14 @@ Body:
 
 {
   "cart_items": [
-     {
-       "productId": 101,
-       "quantity": 2,
-       "variation": { "id": 5 } // Opsional
-     }
+     { "productId": 101, "quantity": 2 }
   ]
 }
 
 
 Cek Ongkir (Shipping Options)
 
-Mendapatkan opsi pengiriman yang tersedia dari tiap toko di keranjang ke alamat tujuan.
+Mendapatkan opsi pengiriman dari tiap toko.
 
 URL: /shipping-options
 
@@ -206,28 +188,10 @@ Body:
 
 {
   "address_api": {
-      "kabupaten_id": "35.15", // ID Kabupaten Tujuan
-      "kecamatan_id": "35.15.01" // ID Kecamatan Tujuan
+      "kabupaten_id": "35.15",
+      "kecamatan_id": "35.15.01"
   },
-  "cart_items": [
-      { "product_id": 101, "quantity": 1, "seller_id": 5 },
-      { "product_id": 202, "quantity": 2, "seller_id": 8 }
-  ]
-}
-
-
-Response:
-
-{
-  "seller_options": {
-      "5": { // ID Pedagang
-          "options": [
-              { "metode": "jne", "nama": "JNE REG", "harga": 25000 },
-              { "metode": "local_delivery", "nama": "Kurir Desa", "harga": 5000 }
-          ]
-      },
-      "8": { ... }
-  }
+  "cart_items": [ ... ]
 }
 
 
@@ -240,19 +204,17 @@ Method: POST
 Body:
 
 {
-  "shipping_address_id": 12, // ID Alamat User (dari database)
+  "shipping_address_id": 12,
   "payment_method": "transfer_bank",
-  "cart_items": [ ... ], // Sama seperti shipping-options
+  "cart_items": [ ... ],
   "seller_shipping_choices": {
-      "5": { "metode": "local_delivery" }, // User memilih Kurir Desa untuk Toko ID 5
+      "5": { "metode": "local_delivery" },
       "8": { "metode": "jne" }
   }
 }
 
 
-5. Pesanan Pembeli
-
-Memerlukan Header Authorization.
+4. Area Pembeli
 
 Riwayat Pesanan Saya
 
@@ -268,29 +230,49 @@ Method: GET
 
 Konfirmasi Pembayaran
 
-Mengunggah bukti transfer untuk pesanan.
-
 URL: /orders/{id}/confirm
 
 Method: POST
 
 Content-Type: multipart/form-data
 
-Body:
+Body: bukti_bayar (File), catatan (Text)
 
-bukti_bayar: (File Gambar)
+5. Area Pedagang
 
-catatan: (Text) Catatan tambahan (opsional)
-
-6. Manajemen Pedagang
-
-Khusus untuk user dengan role pedagang atau administrator.
+Khusus untuk user dengan role pedagang.
 
 Dashboard Ringkasan
+
+Mendapatkan statistik penjualan, stok habis, dll.
 
 URL: /pedagang/dashboard/summary
 
 Method: GET
+
+Profil Toko
+
+Mendapatkan data toko saat ini.
+
+URL: /pedagang/profile/me
+
+Method: GET
+
+Update Profil Toko
+
+URL: /pedagang/profile/me
+
+Method: POST
+
+Body:
+
+{
+  "nama_toko": "Toko Baru",
+  "deskripsi_toko": "...",
+  "no_rekening": "12345",
+  "nama_bank": "BCA"
+}
+
 
 Kelola Produk (List)
 
@@ -298,41 +280,53 @@ URL: /pedagang/produk
 
 Method: GET
 
-Tambah/Edit Produk
+Tambah Produk
 
-URL: /pedagang/produk (Tambah) atau /pedagang/produk/{id} (Edit)
+URL: /pedagang/produk
 
 Method: POST
+
+Content-Type: multipart/form-data atau application/json
 
 Body:
 
 {
-  "nama_produk": "Kopi Bubuk Asli",
-  "deskripsi": "Kopi robusta pilihan...",
+  "nama_produk": "Kopi Bubuk",
+  "deskripsi": "...",
   "harga_dasar": 25000,
-  "stok": 100,
-  "kategori": [15, 18], // ID Kategori
-  "galeri_foto": [101, 102], // ID Attachment Media
-  "variasi": [
-     { "deskripsi": "250gr", "harga_variasi": 25000, "stok": 50 },
-     { "deskripsi": "500gr", "harga_variasi": 45000, "stok": 50 }
-  ]
+  "stok": 100
 }
 
 
+Edit/Hapus Produk
+
+Detail: GET /pedagang/produk/{id}
+
+Update: POST /pedagang/produk/{id}
+
+Hapus: DELETE /pedagang/produk/{id}
+
 Kelola Pesanan Masuk
 
-URL: /pedagang/pesanan
+URL: /pedagang/orders
 
 Method: GET
 
-Params: status (menunggu_konfirmasi, diproses, dikirim, selesai, dll).
+Params: status (opsional: menunggu_konfirmasi, diproses, dikirim_ekspedisi, selesai, dibatalkan)
+
+Detail Sub-Order
+
+Mendapatkan detail pesanan spesifik yang masuk ke toko pedagang.
+
+URL: /pedagang/orders/sub/{sub_order_id}
+
+Method: GET
 
 Update Status Pesanan
 
-Pedagang memperbarui status pesanan (misal: kirim barang).
+Pedagang memproses pesanan (Terima, Tolak, Kirim Resi).
 
-URL: /pedagang/pesanan/{sub_order_id}/update
+URL: /pedagang/orders/sub/{sub_order_id}
 
 Method: POST
 
@@ -340,21 +334,13 @@ Body:
 
 {
   "status": "dikirim_ekspedisi",
-  "resi": "JP123456789", // Wajib jika status dikirim_ekspedisi
-  "catatan": "Barang sudah dipickup kurir."
+  "nomor_resi": "JP123456", // Wajib jika dikirim
+  "catatan": "Barang sudah dikirim"
 }
 
 
-(Catatan: Jika status diubah menjadi dibatalkan, stok produk otomatis dikembalikan).
+Paket & Kuota
 
-Upload Media (Gambar Produk)
+Daftar Paket: GET /pedagang/paket/daftar
 
-URL: /media/upload
-
-Method: POST
-
-Content-Type: multipart/form-data
-
-Body:
-
-file: (File Gambar)
+Beli Paket: POST /pedagang/paket/beli (Body: id_paket, file bukti bayar)

@@ -41,7 +41,7 @@ jobs:
           security: loose
           
           local-dir: ./
-          server-dir: /public_html/admin.bonang.my.id/wp-content/plugins/desa-wisata-core/
+          server-dir: /public_html/sadesa.site/wp-content/plugins/desa-wisata-core/
           
           # 3. Exclude file sync agar tidak loop
           exclude: |
