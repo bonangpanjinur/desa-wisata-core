@@ -1,296 +1,286 @@
 <?php
-/**
- * File Path: includes/admin-pages/page-desa.php
- *
- * --- FASE 1: REFAKTOR PENDAFTARAN GRATIS ---
- * PERUBAHAN:
- * - MENGHAPUS field "Komisi Pendaftaran Nominal".
- * - MENGHAPUS kolom-kolom Rekonsiliasi (`total_komisi_sa_terkumpul`, `is_blocked`, `last_setoran_at`).
- *
- * @package DesaWisataCore
- */
-
-if ( ! defined( 'ABSPATH' ) ) exit;
-
-// Form handler untuk menyimpan data desa
-function dw_desa_form_handler() {
-    if (!isset($_POST['dw_submit_desa'])) return;
-    if (!wp_verify_nonce($_POST['_wpnonce'], 'dw_save_desa_nonce')) wp_die('Security check failed.');
-    if (!current_user_can('dw_manage_desa')) wp_die('Anda tidak memiliki izin.');
-
-    global $wpdb;
-    $table_name = $wpdb->prefix . 'dw_desa';
-    $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
-
-    // Validasi spesifik
-    if (empty($_POST['nama_desa'])) {
-        add_settings_error('dw_desa_notices', 'nama_desa_empty', 'Nama Desa Wisata tidak boleh kosong.', 'error');
-        set_transient('dw_desa_form_data', $_POST, 60);
-        wp_redirect(admin_url('admin.php?page=dw-desa&action=' . ($id ? 'edit&id='.$id : 'add'))); // Redirect kembali ke form
-        exit;
-    }
-
-    if (empty($_POST['provinsi_id']) || empty($_POST['kabupaten_id'])) {
-         add_settings_error('dw_desa_notices', 'location_incomplete', 'ID Provinsi dan Kabupaten wajib diisi untuk fungsi Ongkir dan Geotagging.', 'error');
-         set_transient('dw_desa_form_data', $_POST, 60);
-         wp_redirect(admin_url('admin.php?page=dw-desa&action=' . ($id ? 'edit&id='.$id : 'add'))); // Redirect kembali ke form
-         exit;
-    }
-
-    // Ambil data lama (komisi penjualan persentase)
-    $old_data = $id > 0 ? $wpdb->get_row($wpdb->prepare("SELECT persentase_komisi_penjualan FROM $table_name WHERE id = %d", $id), ARRAY_A) : [];
-
-    $data = [
-        'id_user_desa'        => isset($_POST['id_user_desa']) ? absint($_POST['id_user_desa']) : null,
-        'nama_desa'           => sanitize_text_field($_POST['nama_desa']),
-        'deskripsi'           => wp_kses_post($_POST['deskripsi']),
-        'status'              => sanitize_text_field($_POST['status']),
-        'foto'                => esc_url_raw($_POST['foto']),
-        // 'komisi_pendaftaran_nominal' => ... DIHAPUS
-
-        'persentase_komisi_penjualan' => $old_data['persentase_komisi_penjualan'] ?? 0.00, // Tetap ada untuk Fase 2
-
-        // Detail Rekening Desa
-        'no_rekening_desa'    => sanitize_text_field($_POST['no_rekening_desa'] ?? null),
-        'nama_bank_desa'      => sanitize_text_field($_POST['nama_bank_desa'] ?? null),
-        'atas_nama_rekening_desa' => sanitize_text_field($_POST['atas_nama_rekening_desa'] ?? null), 
-        'qris_image_url_desa' => esc_url_raw($_POST['qris_image_url_desa'] ?? null),
-
-        // Data Alamat API
-        'id_provinsi'         => isset($_POST['provinsi_id']) ? sanitize_text_field($_POST['provinsi_id']) : null,
-        'id_kabupaten'        => isset($_POST['kabupaten_id']) ? sanitize_text_field($_POST['kabupaten_id']) : null,
-        'id_kecamatan'        => isset($_POST['kecamatan_id']) ? sanitize_text_field($_POST['kecamatan_id']) : null,
-        'id_kelurahan'        => isset($_POST['kelurahan_id']) ? sanitize_text_field($_POST['kelurahan_id']) : null,
-        'provinsi'            => isset($_POST['provinsi_nama']) ? sanitize_text_field($_POST['provinsi_nama']) : null,
-        'kabupaten'           => isset($_POST['kabupaten_nama']) ? sanitize_text_field($_POST['kabupaten_nama']) : null,
-        'kecamatan'           => isset($_POST['kecamatan_nama']) ? sanitize_text_field($_POST['kecamatan_nama']) : null,
-        'kelurahan'           => isset($_POST['desa_nama']) ? sanitize_text_field($_POST['desa_nama']) : null,
-    ];
-
-    if ($id > 0) {
-        $wpdb->update($table_name, $data, ['id' => $id]);
-        do_action('dw_desa_updated', $id, $data);
-        add_settings_error('dw_desa_notices', 'desa_updated', 'Data Desa berhasil diperbarui.', 'success');
-    } else {
-        $wpdb->insert($table_name, $data);
-        add_settings_error('dw_desa_notices', 'desa_created', 'Data Desa berhasil dibuat.', 'success');
-    }
-
-    delete_transient('dw_desa_form_data');
-    set_transient('settings_errors', get_settings_errors(), 30);
-    wp_redirect(admin_url('admin.php?page=dw-desa'));
+// Pastikan tidak diakses langsung
+if (!defined('ABSPATH')) {
     exit;
 }
-add_action('admin_init', 'dw_desa_form_handler');
 
-// Handler untuk penghapusan (tetap sama)
-function dw_desa_delete_handler() {
-    if (!isset($_GET['action']) || $_GET['action'] !== 'delete' || !isset($_GET['id'])) return;
-    if (!wp_verify_nonce($_GET['_wpnonce'], 'dw_delete_desa_nonce')) wp_die('Security check failed.');
-    if (!current_user_can('dw_manage_desa')) wp_die('Anda tidak memiliki izin.');
+global $wpdb;
+$table_name = $wpdb->prefix . 'dw_desa';
 
-    global $wpdb;
-    $id = intval($_GET['id']);
+// --- 1. HANDLE POST REQUEST (SAVE/UPDATE/DELETE) ---
+$message = '';
+$message_type = '';
 
-    do_action('dw_before_desa_deleted', $id);
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_desa'])) {
+    
+    // Verifikasi Nonce untuk keamanan
+    if (!isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'dw_desa_action')) {
+        die('Security check failed');
+    }
 
-    $wpdb->delete($wpdb->prefix . 'dw_desa', ['id' => $id]);
-    add_settings_error('dw_desa_notices', 'desa_deleted', 'Data Desa berhasil dihapus.', 'success');
-    set_transient('settings_errors', get_settings_errors(), 30);
-    wp_redirect(admin_url('admin.php?page=dw-desa'));
-    exit;
+    $action = sanitize_text_field($_POST['action_desa']);
+
+    if ($action === 'delete' && isset($_POST['desa_id'])) {
+        // --- LOGIKA DELETE ---
+        $wpdb->delete($table_name, ['id' => intval($_POST['desa_id'])]);
+        $message = 'Data desa berhasil dihapus.';
+        $message_type = 'success';
+    
+    } elseif ($action === 'save') {
+        // --- LOGIKA SAVE/UPDATE ---
+        
+        // Sanitasi Input
+        $data = [
+            'id_user_desa' => intval($_POST['id_user_desa']),
+            'nama_desa'    => sanitize_text_field($_POST['nama_desa']),
+            'deskripsi'    => wp_kses_post($_POST['deskripsi']),
+            'provinsi'     => sanitize_text_field($_POST['provinsi_nama']), // Simpan Nama, bukan ID
+            'kabupaten'    => sanitize_text_field($_POST['kabupaten_nama']),
+            'kecamatan'    => sanitize_text_field($_POST['kecamatan_nama']),
+            'kelurahan'    => sanitize_text_field($_POST['kelurahan_nama']),
+            // Simpan juga ID untuk keperluan API kedepannya jika perlu
+            'alamat_json'  => json_encode([
+                'prov_id' => sanitize_text_field($_POST['provinsi']),
+                'kab_id'  => sanitize_text_field($_POST['kabupaten']),
+                'kec_id'  => sanitize_text_field($_POST['kecamatan']),
+                'kel_id'  => sanitize_text_field($_POST['kelurahan'])
+            ]),
+            'alamat_lengkap' => sanitize_textarea_field($_POST['alamat_lengkap']),
+            'foto'         => esc_url_raw($_POST['foto_desa_url']),
+            'status'       => sanitize_text_field($_POST['status']),
+            'updated_at'   => current_time('mysql')
+        ];
+
+        if (!empty($_POST['desa_id'])) {
+            // UPDATE
+            $where = ['id' => intval($_POST['desa_id'])];
+            $wpdb->update($table_name, $data, $where);
+            $message = 'Data desa berhasil diperbarui.';
+        } else {
+            // INSERT
+            $data['created_at'] = current_time('mysql');
+            $wpdb->insert($table_name, $data);
+            $message = 'Data desa baru berhasil ditambahkan.';
+        }
+        $message_type = 'success';
+    }
 }
-add_action('admin_init', 'dw_desa_delete_handler');
 
-// Fungsi render halaman utama (list table)
-function dw_desa_page_render() {
-    $action = isset($_GET['action']) ? $_GET['action'] : 'list';
-    $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
+// --- 2. PREPARE DATA FOR EDIT OR LIST ---
+$is_edit = isset($_GET['action']) && $_GET['action'] == 'edit' && isset($_GET['id']);
+$edit_data = null;
 
-    if ('add' === $action || 'edit' === $action) {
-        dw_desa_form_render($id);
-        return;
-    }
+if ($is_edit) {
+    $edit_id = intval($_GET['id']);
+    $edit_data = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE id = %d", $edit_id));
+    
+    // Decode JSON alamat untuk pre-fill dropdown
+    $alamat_ids = json_decode($edit_data->alamat_json ?? '{}', true);
+}
 
-    if (!class_exists('DW_Desa_List_Table')) {
-        require_once DW_CORE_PLUGIN_DIR . 'includes/list-tables/class-dw-desa-list-table.php';
-    }
-    $desaListTable = new DW_Desa_List_Table();
-    $desaListTable->prepare_items();
-    ?>
-    <div class="wrap dw-wrap">
-        <div class="dw-header">
-            <h1>Manajemen Desa</h1>
-            <a href="<?php echo admin_url('admin.php?page=dw-desa&action=add'); ?>" class="page-title-action">Tambah Desa Baru</a>
+// Ambil list user untuk dropdown 'Kepala Desa / Akun Admin Desa'
+$users = get_users(['role__in' => ['administrator', 'dw_admin_desa']]);
+
+?>
+
+<div class="wrap">
+    <h1 class="wp-heading-inline">Manajemen Desa Wisata</h1>
+    <a href="<?php echo admin_url('admin.php?page=dw-desa&action=new'); ?>" class="page-title-action">Tambah Baru</a>
+    <hr class="wp-header-end">
+
+    <!-- NOTIFIKASI -->
+    <?php if ($message): ?>
+        <div class="notice notice-<?php echo $message_type; ?> is-dismissible">
+            <p><?php echo $message; ?></p>
         </div>
+    <?php endif; ?>
 
-        <?php
-        $errors = get_transient('settings_errors');
-        if($errors) {
-            settings_errors('dw_desa_notices');
-            delete_transient('settings_errors');
-        }
-        ?>
+    <!-- VIEW: FORM INPUT (NEW/EDIT) -->
+    <?php if (isset($_GET['action']) && ($_GET['action'] == 'new' || $_GET['action'] == 'edit')): ?>
+        
+        <div class="card" style="max-width: 100%; padding: 20px; margin-top: 20px;">
+            <form method="post" action="<?php echo admin_url('admin.php?page=dw-desa'); ?>">
+                <?php wp_nonce_field('dw_desa_action'); ?>
+                <input type="hidden" name="action_desa" value="save">
+                <?php if ($edit_data): ?>
+                    <input type="hidden" name="desa_id" value="<?php echo esc_attr($edit_data->id); ?>">
+                <?php endif; ?>
 
-        <form method="post">
-            <?php $desaListTable->search_box('Cari Desa', 'search_id'); ?>
-            <?php $desaListTable->display(); ?>
-        </form>
-    </div>
-    <?php
-}
-
-function dw_desa_form_render($id = 0) {
-    global $wpdb;
-    $item = null;
-    $page_title = 'Tambah Desa Baru';
-
-    $transient_data = get_transient('dw_desa_form_data');
-    if ($transient_data) {
-        $item = $transient_data; 
-        delete_transient('dw_desa_form_data');
-    } elseif ($id > 0) {
-        $item = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$wpdb->prefix}dw_desa WHERE id = %d", $id), ARRAY_A);
-        $page_title = 'Edit Desa';
-        if (!$item) {
-             echo '<div class="notice notice-error"><p>Data Desa tidak ditemukan.</p></div>';
-             return;
-        }
-    }
-
-    $users = get_users(['role__in' => ['admin_desa', 'administrator']]);
-
-    $provinsi_id    = $item['id_provinsi'] ?? '';
-    $kabupaten_id   = $item['id_kabupaten'] ?? '';
-    $kecamatan_id   = $item['id_kecamatan'] ?? '';
-    $kelurahan_id   = $item['id_kelurahan'] ?? '';
-
-    $provinsi_list  = dw_get_api_provinsi();
-    $kabupaten_list = !empty($provinsi_id) ? dw_get_api_kabupaten($provinsi_id) : [];
-    $kecamatan_list = !empty($kabupaten_id) ? dw_get_api_kecamatan($kabupaten_id) : [];
-    $desa_list      = !empty($kecamatan_id) ? dw_get_api_desa($kecamatan_id) : [];
-
-    // Data Rekening Desa
-    $no_rekening_desa = $item['no_rekening_desa'] ?? '';
-    $nama_bank_desa = $item['nama_bank_desa'] ?? '';
-    $atas_nama_rekening_desa = $item['atas_nama_rekening_desa'] ?? ''; 
-    $qris_image_url_desa = $item['qris_image_url_desa'] ?? '';
-
-    // Ambil Komisi Penjualan Global untuk Info
-    $dw_settings = get_option('dw_settings');
-    $komisi_desa_global = $dw_settings['persentase_komisi_desa_global'] ?? 0.00;
-    ?>
-    <div class="wrap dw-wrap">
-        <h1><?php echo esc_html($page_title); ?></h1>
-        <?php settings_errors('dw_desa_notices'); ?>
-
-        <form method="post" class="dw-form-card">
-            <input type="hidden" name="id" value="<?php echo esc_attr($id); ?>">
-            <?php wp_nonce_field('dw_save_desa_nonce'); ?>
-
-            <h3>Informasi Dasar Desa</h3>
-            <table class="form-table dw-form-table">
-                <tbody>
-                    <tr><th><label for="nama_desa">Nama Desa Wisata</label></th>
-                        <td><input name="nama_desa" id="nama_desa" type="text" value="<?php echo esc_attr($item['nama_desa'] ?? ''); ?>" required></td></tr>
-                    <tr><th><label for="id_user_desa">Akun Pengelola Desa</label></th>
-                        <td><select name="id_user_desa" id="id_user_desa">
-                                <option value="">-- Tidak Ada --</option>
-                                <?php foreach ($users as $user) : ?>
-                                <option value="<?php echo esc_attr($user->ID); ?>" <?php selected($item['id_user_desa'] ?? '', $user->ID); ?>><?php echo esc_html($user->display_name); ?></option>
-                                <?php endforeach; ?>
-                            </select></td></tr>
-                    <tr><th><label for="deskripsi">Deskripsi</label></th>
-                        <td><textarea name="deskripsi" id="deskripsi" rows="5"><?php echo esc_textarea($item['deskripsi'] ?? ''); ?></textarea></td></tr>
-                    <tr><th><label for="foto">Foto Utama Desa</label></th>
+                <table class="form-table">
+                    <!-- Akun Pengelola -->
+                    <tr>
+                        <th scope="row"><label for="id_user_desa">Akun Admin Desa</label></th>
                         <td>
-                            <div class="dw-image-uploader-wrapper">
-                                <img src="<?php echo esc_url($item['foto'] ?? 'https://placehold.co/100x100/e2e8f0/64748b?text=Pilih+Gambar'); ?>" class="dw-image-preview" style="width:100px; height:100px; object-fit:cover; border-radius:4px;"/>
-                                <input name="foto" type="hidden" value="<?php echo esc_attr($item['foto'] ?? ''); ?>" class="dw-image-url">
-                                <button type="button" class="button dw-upload-button">Pilih/Ubah Gambar</button>
-                                <button type="button" class="button button-link-delete dw-remove-image-button" style="<?php echo empty($item['foto']) ? 'display:none;' : ''; ?>">Hapus Gambar</button>
+                            <select name="id_user_desa" id="id_user_desa" class="regular-text" required>
+                                <option value="">-- Pilih User --</option>
+                                <?php foreach ($users as $user): ?>
+                                    <option value="<?php echo $user->ID; ?>" <?php selected($edit_data ? $edit_data->id_user_desa : '', $user->ID); ?>>
+                                        <?php echo $user->display_name; ?> (<?php echo $user->user_email; ?>)
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <p class="description">Pilih user WordPress yang akan mengelola desa ini.</p>
+                        </td>
+                    </tr>
+
+                    <!-- Nama Desa -->
+                    <tr>
+                        <th scope="row"><label for="nama_desa">Nama Desa</label></th>
+                        <td>
+                            <input name="nama_desa" type="text" id="nama_desa" value="<?php echo esc_attr($edit_data->nama_desa ?? ''); ?>" class="regular-text" required>
+                        </td>
+                    </tr>
+
+                    <!-- Deskripsi -->
+                    <tr>
+                        <th scope="row"><label for="deskripsi">Deskripsi</label></th>
+                        <td>
+                            <?php 
+                            $content = $edit_data->deskripsi ?? '';
+                            wp_editor($content, 'deskripsi', ['textarea_rows' => 5, 'media_buttons' => false]); 
+                            ?>
+                        </td>
+                    </tr>
+
+                    <!-- Foto Utama -->
+                    <tr>
+                        <th scope="row">Foto Desa</th>
+                        <td>
+                            <div class="image-preview-wrapper">
+                                <img id="foto_preview" src="<?php echo esc_url($edit_data->foto ?? ''); ?>" style="max-width: 200px; display: <?php echo empty($edit_data->foto) ? 'none' : 'block'; ?>; margin-bottom: 10px; border-radius: 8px;">
+                            </div>
+                            <input type="hidden" name="foto_desa_url" id="foto_desa_url" value="<?php echo esc_attr($edit_data->foto ?? ''); ?>">
+                            <button type="button" class="button" id="upload_foto_btn">Pilih Foto</button>
+                            <button type="button" class="button is-link is-destructive" id="remove_foto_btn" style="display: <?php echo empty($edit_data->foto) ? 'none' : 'inline-block'; ?>;">Hapus</button>
+                        </td>
+                    </tr>
+
+                    <!-- WILAYAH (Hidden Fields untuk menyimpan Nama Wilayah) -->
+                    <input type="hidden" name="provinsi_nama" id="provinsi_nama" value="<?php echo esc_attr($edit_data->provinsi ?? ''); ?>">
+                    <input type="hidden" name="kabupaten_nama" id="kabupaten_nama" value="<?php echo esc_attr($edit_data->kabupaten ?? ''); ?>">
+                    <input type="hidden" name="kecamatan_nama" id="kecamatan_nama" value="<?php echo esc_attr($edit_data->kecamatan ?? ''); ?>">
+                    <input type="hidden" name="kelurahan_nama" id="kelurahan_nama" value="<?php echo esc_attr($edit_data->kelurahan ?? ''); ?>">
+
+                    <!-- DROPDOWNS WILAYAH (Trigger JS) -->
+                    <tr>
+                        <th scope="row">Alamat Wilayah</th>
+                        <td>
+                            <!-- Atribut data-selected digunakan oleh JS untuk pre-fill saat edit -->
+                            <div style="margin-bottom: 10px;">
+                                <select name="provinsi" id="select_provinsi" class="regular-text" 
+                                    data-selected="<?php echo esc_attr($alamat_ids['prov_id'] ?? ''); ?>">
+                                    <option value="">Pilih Provinsi</option>
+                                </select>
+                            </div>
+                            <div style="margin-bottom: 10px;">
+                                <select name="kabupaten" id="select_kabupaten" class="regular-text" 
+                                    data-selected="<?php echo esc_attr($alamat_ids['kab_id'] ?? ''); ?>" disabled>
+                                    <option value="">Pilih Kabupaten/Kota</option>
+                                </select>
+                            </div>
+                            <div style="margin-bottom: 10px;">
+                                <select name="kecamatan" id="select_kecamatan" class="regular-text" 
+                                    data-selected="<?php echo esc_attr($alamat_ids['kec_id'] ?? ''); ?>" disabled>
+                                    <option value="">Pilih Kecamatan</option>
+                                </select>
+                            </div>
+                            <div>
+                                <select name="kelurahan" id="select_kelurahan" class="regular-text" 
+                                    data-selected="<?php echo esc_attr($alamat_ids['kel_id'] ?? ''); ?>" disabled>
+                                    <option value="">Pilih Kelurahan</option>
+                                </select>
                             </div>
                         </td>
                     </tr>
-                </tbody>
-            </table>
 
-            <hr>
-            <h3>Alamat Desa</h3>
-            <div class="dw-address-wrapper">
-                <table class="form-table">
-                    <tr><th><label for="dw_provinsi">Provinsi</label></th>
-                        <td><select name="provinsi_id" id="dw_provinsi" class="dw-provinsi-select" style="width: 100%;">
-                            <option value="">-- Pilih Provinsi --</option>
-                            <?php foreach ($provinsi_list as $prov) : ?>
-                                <option value="<?php echo esc_attr($prov['code']); ?>" <?php selected($provinsi_id, $prov['code']); ?>><?php echo esc_html($prov['name']); ?></option>
-                            <?php endforeach; ?>
-                        </select></td></tr>
-                     <tr><th><label for="dw_kabupaten">Kabupaten/Kota</label></th>
-                        <td><select name="kabupaten_id" id="dw_kabupaten" class="dw-kabupaten-select" <?php disabled(empty($kabupaten_list)); ?> style="width: 100%;">
-                            <option value="">Pilih Provinsi Dulu</option>
-                            <?php foreach ($kabupaten_list as $kab) : ?>
-                                <option value="<?php echo esc_attr($kab['code']); ?>" <?php selected($kabupaten_id, $kab['code']); ?>><?php echo esc_html($kab['name']); ?></option>
-                            <?php endforeach; ?>
-                        </select></td></tr>
-                    <tr><th><label for="dw_kecamatan">Kecamatan</label></th>
-                        <td><select name="kecamatan_id" id="dw_kecamatan" class="dw-kecamatan-select" <?php disabled(empty($kecamatan_list)); ?> style="width: 100%;">
-                            <option value="">Pilih Kabupaten Dulu</option>
-                             <?php foreach ($kecamatan_list as $kec) : ?>
-                                <option value="<?php echo esc_attr($kec['code']); ?>" <?php selected($kecamatan_id, $kec['code']); ?>><?php echo esc_html($kec['name']); ?></option>
-                            <?php endforeach; ?>
-                        </select></td></tr>
-                     <tr><th><label for="dw_desa">Desa/Kelurahan</label></th>
-                        <td><select name="kelurahan_id" id="dw_desa" class="dw-desa-select" <?php disabled(empty($desa_list)); ?> style="width: 100%;">
-                            <option value="">Pilih Kecamatan Dulu</option>
-                             <?php foreach ($desa_list as $desa) : ?>
-                                <option value="<?php echo esc_attr($desa['code']); ?>" <?php selected($kelurahan_id, $desa['code']); ?>><?php echo esc_html($desa['name']); ?></option>
-                            <?php endforeach; ?>
-                        </select></td></tr>
+                    <!-- Alamat Detail -->
+                    <tr>
+                        <th scope="row"><label for="alamat_lengkap">Alamat Lengkap</label></th>
+                        <td>
+                            <textarea name="alamat_lengkap" id="alamat_lengkap" class="large-text" rows="3"><?php echo esc_textarea($edit_data->alamat_lengkap ?? ''); ?></textarea>
+                        </td>
+                    </tr>
+
+                    <!-- Status -->
+                    <tr>
+                        <th scope="row"><label for="status">Status</label></th>
+                        <td>
+                            <select name="status" id="status">
+                                <option value="aktif" <?php selected($edit_data ? $edit_data->status : 'aktif', 'aktif'); ?>>Aktif</option>
+                                <option value="nonaktif" <?php selected($edit_data ? $edit_data->status : '', 'nonaktif'); ?>>Nonaktif</option>
+                            </select>
+                        </td>
+                    </tr>
                 </table>
-                <input type="hidden" class="dw-provinsi-nama" name="provinsi_nama" value="<?php echo esc_attr($item['provinsi'] ?? ''); ?>">
-                <input type="hidden" class="dw-kabupaten-nama" name="kabupaten_nama" value="<?php echo esc_attr($item['kabupaten'] ?? ''); ?>">
-                <input type="hidden" class="dw-kecamatan-nama" name="kecamatan_nama" value="<?php echo esc_attr($item['kecamatan'] ?? ''); ?>">
-                <input type="hidden" class="dw-desa-nama" name="desa_nama" value="<?php echo esc_attr($item['kelurahan'] ?? ''); ?>">
-            </div>
 
-            <hr>
-            <h3><span class="dashicons dashicons-bank"></span> Rekening Bank & QRIS Desa</h3>
-            <p class="description">Rekening ini akan digunakan Super Admin untuk mentransfer komisi penjualan (Fase 2).</p>
-            <table class="form-table dw-form-table">
-                 <tr><th><label for="no_rekening_desa">Nomor Rekening</label></th><td><input name="no_rekening_desa" id="no_rekening_desa" type="text" value="<?php echo esc_attr($no_rekening_desa); ?>" placeholder="Contoh: 1234567890"></td></tr>
-                 <tr><th><label for="nama_bank_desa">Nama Bank</label></th><td><input name="nama_bank_desa" id="nama_bank_desa" type="text" value="<?php echo esc_attr($nama_bank_desa); ?>" placeholder="Contoh: Bank BRI Unit Desa"></td></tr>
-                 <tr><th><label for="atas_nama_rekening_desa">Atas Nama Rekening</label></th><td><input name="atas_nama_rekening_desa" id="atas_nama_rekening_desa" type="text" value="<?php echo esc_attr($atas_nama_rekening_desa); ?>" placeholder="Contoh: BUMDes Maju Sejahtera"></td></tr>
-                 <tr><th><label for="qris_image_url_desa">QRIS Desa</label></th><td><div class="dw-image-uploader-wrapper"><img src="<?php echo esc_url($qris_image_url_desa ?: 'https://placehold.co/150x150/e2e8f0/64748b?text=QRIS+Desa'); ?>" data-default-src="https://placehold.co/150x150/e2e8f0/64748b?text=QRIS+Desa" class="dw-image-preview" alt="QRIS Desa" style="width:150px; height:150px; object-fit:contain; border-radius:4px; border:1px solid #ddd;"/><input name="qris_image_url_desa" type="hidden" value="<?php echo esc_attr($qris_image_url_desa); ?>" class="dw-image-url"><button type="button" class="button dw-upload-button">Pilih/Ubah QRIS</button><button type="button" class="button button-link-delete dw-remove-image-button" style="<?php echo empty($qris_image_url_desa) ? 'display:none;' : ''; ?>">Hapus Gambar</button></div><p class="description">Unggah gambar QRIS Desa (opsional).</p></td></tr>
-            </table>
+                <p class="submit">
+                    <input type="submit" name="submit" id="submit" class="button button-primary" value="<?php echo $is_edit ? 'Update Desa' : 'Simpan Desa Baru'; ?>">
+                    <a href="<?php echo admin_url('admin.php?page=dw-desa'); ?>" class="button button-secondary">Batal</a>
+                </p>
+            </form>
+        </div>
 
-            <hr>
-            <h3>Pengaturan Komisi & Status</h3>
-            <table class="form-table">
-                 <tr><th><label for="status">Status Desa</label></th>
-                        <td><select name="status" id="status">
-                                <option value="aktif" <?php selected($item['status'] ?? 'aktif', 'aktif'); ?>>Aktif</option>
-                                <option value="pending" <?php selected($item['status'] ?? '', 'pending'); ?>>Pending</option>
-                            </select></td></tr>
-                    
-                    <!-- FIELD KOMISI PENDAFTARAN DIHAPUS -->
-                    <!-- <tr><th><label for="komisi_pendaftaran_nominal">Komisi Pendaftaran Desa (Rp)</label></th> ... </tr> -->
+        <!-- Script Khusus Halaman Ini (Media Uploader & Address Logic) -->
+        <script>
+        jQuery(document).ready(function($){
+            // --- 1. MEDIA UPLOADER ---
+            var mediaUploader;
+            $('#upload_foto_btn').click(function(e) {
+                e.preventDefault();
+                if (mediaUploader) { mediaUploader.open(); return; }
+                mediaUploader = wp.media.frames.file_frame = wp.media({
+                    title: 'Pilih Foto Desa',
+                    button: { text: 'Gunakan Foto Ini' },
+                    multiple: false
+                });
+                mediaUploader.on('select', function() {
+                    var attachment = mediaUploader.state().get('selection').first().toJSON();
+                    $('#foto_desa_url').val(attachment.url);
+                    $('#foto_preview').attr('src', attachment.url).show();
+                    $('#remove_foto_btn').show();
+                });
+                mediaUploader.open();
+            });
+            $('#remove_foto_btn').click(function(){
+                $('#foto_desa_url').val('');
+                $('#foto_preview').hide();
+                $(this).hide();
+            });
 
-                    <tr><th><label>Komisi Penjualan Desa</label></th>
-                        <td><p class="description">Komisi Penjualan Desa diatur secara **Global** oleh Super Admin sebesar <strong><?php echo esc_html($komisi_desa_global); ?>%</strong> di halaman Pengaturan.</p></td></tr>
-            </table>
+            // --- 2. ADDRESS API HELPER (Simpan Nama saat Change) ---
+            // Pastikan Anda memanggil fungsi load wilayah di file JS terpisah (admin-scripts.js)
+            // Di sini kita hanya menangkap perubahannya untuk mengisi Hidden Input Nama
+            
+            $('#select_provinsi').change(function() {
+                $('#provinsi_nama').val($(this).find("option:selected").text());
+            });
+            $('#select_kabupaten').change(function() {
+                $('#kabupaten_nama').val($(this).find("option:selected").text());
+            });
+            $('#select_kecamatan').change(function() {
+                $('#kecamatan_nama').val($(this).find("option:selected").text());
+            });
+            $('#select_kelurahan').change(function() {
+                $('#kelurahan_nama').val($(this).find("option:selected").text());
+            });
+        });
+        </script>
 
-             <!-- BAGIAN REKONSILIASI DIHAPUS -->
-             <?php // if ($id > 0) : ... <h3> Status Rekonsiliasi ... </table> ... endif; ?>
-
-
-             <div class="dw-form-footer">
-                <?php submit_button('Simpan Desa', 'primary', 'dw_submit_desa', false); ?>
-                <a href="<?php echo admin_url('admin.php?page=dw-desa'); ?>" class="button button-secondary">Batal</a>
-            </div>
+    <!-- VIEW: LIST TABLE -->
+    <?php else: ?>
+        
+        <?php
+        // Load List Table Class
+        require_once DW_CORE_PATH . 'includes/list-tables/class-dw-desa-list-table.php';
+        $desa_list_table = new DW_Desa_List_Table();
+        $desa_list_table->prepare_items();
+        ?>
+        
+        <form id="desa-filter" method="get">
+            <input type="hidden" name="page" value="dw-desa" />
+            <?php $desa_list_table->search_box('Cari Desa', 'search_id'); ?>
+            <?php $desa_list_table->display(); ?>
         </form>
-    </div>
-    <?php
-}
 
-?>
+    <?php endif; ?>
+</div>
