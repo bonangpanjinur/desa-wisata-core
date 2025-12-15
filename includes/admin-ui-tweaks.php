@@ -71,16 +71,38 @@ class DW_Admin_UI_Tweaks {
         $post = get_post($post_id);
         
         // 1. Ambil Data Relasi Toko & Desa
-        // Logika: Produk dimiliki oleh Author (User ID) -> User ID ada di tabel dw_pedagang -> dw_pedagang punya id_desa
         if ($column === 'dw_toko' || $column === 'dw_desa') {
-            $pedagang = $wpdb->get_row($wpdb->prepare(
-                "SELECT p.nama_toko, d.nama_desa 
-                 FROM {$wpdb->prefix}dw_pedagang p
-                 LEFT JOIN {$wpdb->prefix}dw_desa d ON p.id_desa = d.id
-                 WHERE p.id_user = %d",
-                $post->post_author
-            ));
             
+            // --- PERBAIKAN: Ambil data dari Custom Table dw_produk terlebih dahulu (Source of Truth) ---
+            // Menggunakan slug sebagai kunci pencocokan (karena CPT dan Tabel Custom disinkronkan via slug)
+            $pedagang = null;
+            
+            $produk_custom = $wpdb->get_row($wpdb->prepare(
+                "SELECT id_pedagang FROM {$wpdb->prefix}dw_produk WHERE slug = %s",
+                $post->post_name
+            ));
+
+            if ($produk_custom && $produk_custom->id_pedagang) {
+                // Jika ada relasi di tabel custom, gunakan ID Pedagang tersebut (paling akurat)
+                $pedagang = $wpdb->get_row($wpdb->prepare(
+                    "SELECT p.nama_toko, d.nama_desa 
+                     FROM {$wpdb->prefix}dw_pedagang p
+                     LEFT JOIN {$wpdb->prefix}dw_desa d ON p.id_desa = d.id
+                     WHERE p.id = %d",
+                    $produk_custom->id_pedagang
+                ));
+            } else {
+                // Fallback: Gunakan Author WP jika data custom belum tersinkronisasi
+                $pedagang = $wpdb->get_row($wpdb->prepare(
+                    "SELECT p.nama_toko, d.nama_desa 
+                     FROM {$wpdb->prefix}dw_pedagang p
+                     LEFT JOIN {$wpdb->prefix}dw_desa d ON p.id_desa = d.id
+                     WHERE p.id_user = %d",
+                    $post->post_author
+                ));
+            }
+            
+            // Render Kolom
             if ($column === 'dw_toko') {
                 if ($pedagang) {
                     echo '<strong>' . esc_html($pedagang->nama_toko) . '</strong>';
