@@ -3,9 +3,10 @@
  * File Name:   admin-menus.php
  * File Folder: includes/
  * Description: Mengatur menu admin dan meload halaman admin.
- * * [FIXED]
- * - Meload page-produk.php & page-pedagang.php di awal (is_admin).
- * - Mengubah menu 'Produk' agar mengarah ke Halaman Custom (dw-produk), bukan CPT bawaan WP.
+ * * [FIXED UPDATE]
+ * - Sinkronisasi nama fungsi callback dengan file page-produk.php dan page-wisata.php terbaru.
+ * - Mengubah menu 'Wisata' agar mengarah ke Halaman Custom (dw-wisata).
+ * - Mengubah menu 'Produk' agar memanggil fungsi render yang benar.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -24,9 +25,9 @@ if ( is_admin() ) {
     require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-wisata.php'; 
     
     // Fitur Utama (Handler Form ada di sini - WAJIB LOAD DI SINI)
-    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-pedagang.php';       // Fix Toko
-    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-produk.php';         // Fix Produk
-    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-paket-transaksi.php'; // Fix Paket
+    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-pedagang.php';
+    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-produk.php';
+    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-paket-transaksi.php';
     require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-pesanan-pedagang.php';
     require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-verifikasi-paket.php';
     require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-desa-verifikasi-pedagang.php';
@@ -48,12 +49,26 @@ if ( is_admin() ) {
 /**
  * 2. FUNGSI RENDER (JEMBATAN UI)
  * Fungsi ini membungkus pemanggilan fungsi render dari file-file di atas.
+ * PERBAIKAN: Nama fungsi disesuaikan dengan update terbaru.
  */
 
 function dw_render_dashboard() { if (function_exists('dw_dashboard_page_render')) dw_dashboard_page_render(); }
 function dw_render_desa() { if (function_exists('dw_desa_page_render')) dw_desa_page_render(); }
 function dw_render_pedagang() { if (function_exists('dw_pedagang_page_render')) dw_pedagang_page_render(); }
-function dw_render_produk() { if (function_exists('dw_produk_page_info_render')) dw_produk_page_info_render(); } // Callback Produk Baru
+
+// [FIX] Panggil fungsi render produk yang baru (dw_produk_page_render)
+function dw_render_produk() { 
+    if (function_exists('dw_produk_page_render')) {
+        dw_produk_page_render();
+    } elseif (function_exists('dw_produk_page_info_render')) {
+        // Fallback untuk jaga-jaga
+        dw_produk_page_info_render();
+    }
+} 
+
+// [FIX] Panggil fungsi render wisata yang baru (dw_wisata_page_render)
+function dw_render_wisata() { if (function_exists('dw_wisata_page_render')) dw_wisata_page_render(); }
+
 function dw_render_pesanan() { if (function_exists('dw_pesanan_pedagang_page_render')) dw_pesanan_pedagang_page_render(); }
 function dw_render_komisi() { if (function_exists('dw_komisi_page_render')) dw_komisi_page_render(); }
 function dw_render_paket() { if (function_exists('dw_paket_transaksi_page_render')) dw_paket_transaksi_page_render(); }
@@ -82,11 +97,11 @@ function dw_register_admin_menus() {
     // SUBMENU: Desa
     add_submenu_page('dw-dashboard', 'Desa', 'Desa', 'dw_manage_desa', 'dw-desa', 'dw_render_desa');
 
-    // SUBMENU: Wisata (Tetap pakai CPT WP karena skemanya cocok)
-    add_submenu_page('dw-dashboard', 'Wisata', 'Wisata', 'edit_posts', 'edit.php?post_type=dw_wisata');
+    // SUBMENU: Wisata (FIX: Ubah ke Halaman Custom 'dw-wisata')
+    // Agar bisa menggunakan layout input galeri/fasilitas yang baru
+    add_submenu_page('dw-dashboard', 'Wisata', 'Wisata', 'edit_posts', 'dw-wisata', 'dw_render_wisata');
     
-    // SUBMENU: Produk (FIX: Ubah dari CPT WP ke Custom Page 'dw-produk')
-    // Karena Anda menggunakan tabel khusus 'dw_produk', jangan pakai 'edit.php?post_type=...'
+    // SUBMENU: Produk (FIX: Pastikan callback dw_render_produk memanggil fungsi yang benar)
     if (!current_user_can('admin_desa')) {
         add_submenu_page('dw-dashboard', 'Produk', 'Produk', 'edit_posts', 'dw-produk', 'dw_render_produk');
     }
