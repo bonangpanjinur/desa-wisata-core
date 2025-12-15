@@ -3,12 +3,6 @@
  * File Name:   class-dw-desa-list-table.php
  * File Folder: includes/list-tables/
  * File Path:   includes/list-tables/class-dw-desa-list-table.php
- *
- * PERBAIKAN:
- * - Menghapus `onclick="return confirm()"` dari link Hapus.
- * - Menambahkan `class="dw-confirm-link"` dan `data-confirm-message="..."`
- * agar ditangani oleh `admin-scripts.js` yang sudah diperbarui.
- * - FIX ERROR: Undefined index: page (menambahkan fallback variable).
  */
 
 if ( ! class_exists( 'WP_List_Table' ) ) {
@@ -25,6 +19,7 @@ class DW_Desa_List_Table extends WP_List_Table {
         return [
             'cb'          => '<input type="checkbox" />',
             'nama_desa'   => 'Nama Desa',
+            'kabupaten'   => 'Kabupaten/Kota', // Tambahan kolom
             'status'      => 'Status',
             'created_at'  => 'Tanggal Dibuat'
         ];
@@ -35,14 +30,13 @@ class DW_Desa_List_Table extends WP_List_Table {
     }
 
     public function process_bulk_action() {
-        if ('delete' === $this->current_action() && current_user_can('dw_manage_desa')) {
+        if ('delete' === $this->current_action()) {
             $ids = isset($_REQUEST['ids']) ? array_map('intval', $_REQUEST['ids']) : [];
             if (count($ids) > 0) {
                 global $wpdb;
-                $table_name = $wpdb->prefix . 'dw_desa';
                 foreach ($ids as $id) {
-                    do_action('dw_before_desa_deleted', $id);
-                    $wpdb->delete($table_name, ['id' => $id], ['%d']);
+                    if (function_exists('dw_handle_desa_deletion')) dw_handle_desa_deletion($id);
+                    $wpdb->delete($wpdb->prefix . 'dw_desa', ['id' => $id]);
                 }
             }
         }
@@ -58,38 +52,25 @@ class DW_Desa_List_Table extends WP_List_Table {
     protected function column_default( $item, $column_name ) {
         switch($column_name) {
             case 'status':
-                return '<span class="dw-status-' . esc_attr($item['status']) . '">' . ucfirst(esc_html($item['status'])) . '</span>';
+                return ucfirst(esc_html($item['status']));
             case 'created_at':
-                return date('d M Y, H:i', strtotime($item['created_at']));
+                return date('d M Y', strtotime($item['created_at']));
             default:
                 return esc_html($item[ $column_name ]);
         }
     }
 
     protected function column_nama_desa( $item ) {
-        $nonce = wp_create_nonce('dw_delete_desa_nonce');
-        
-        // --- PERBAIKAN ERROR UNDEFINED INDEX: PAGE ---
-        // Gunakan nilai default 'dw-desa' jika parameter 'page' tidak ada di URL
-        $page_slug = isset($_REQUEST['page']) ? $_REQUEST['page'] : 'dw-desa';
-
-        // --- PERBAIKAN CONFIRM LINK ---
-        // Menghapus onclick="return confirm(...)" dari link Hapus
-        // Menambahkan class="dw-confirm-link" dan data-confirm-message
-        $delete_link = sprintf(
-            '<a href="?page=%s&action=%s&id=%s&_wpnonce=%s" class="dw-confirm-link" data-confirm-message="%s" style="color:#a00;">Hapus</a>', 
-            esc_attr($page_slug), 
-            'delete', 
-            $item['id'], 
-            $nonce,
-            esc_attr('Anda yakin ingin menghapus desa ini? Semua relasi ke pedagang dan wisata akan dilepaskan.')
-        );
+        $page = $_REQUEST['page'] ?? 'dw-desa';
+        $nonce = wp_create_nonce('dw_desa_action');
         
         $actions = [
-            'edit'   => sprintf( '<a href="?page=%s&action=%s&id=%s">Edit</a>', esc_attr($page_slug), 'edit', $item['id'] ),
-            'delete' => $delete_link
+            'edit'   => sprintf( '<a href="?page=%s&action=edit&id=%s">Edit</a>', $page, $item['id'] ),
+            'delete' => sprintf( 
+                '<a href="#" onclick="if(confirm(\'Hapus desa ini beserta data pedagang terkait?\')) { var f = document.createElement(\'form\'); f.method=\'POST\'; f.innerHTML=\'<input type=hidden name=action_desa value=delete><input type=hidden name=desa_id value=%s><input type=hidden name=_wpnonce value=%s>\'; document.body.appendChild(f); f.submit(); } return false;" style="color:red;">Hapus</a>', 
+                $item['id'], $nonce 
+            )
         ];
-        // --- AKHIR PERBAIKAN ---
         
         return sprintf( '<strong>%1$s</strong> %2$s', esc_html($item['nama_desa']), $this->row_actions( $actions ) );
     }
@@ -107,26 +88,26 @@ class DW_Desa_List_Table extends WP_List_Table {
         $per_page = 20;
         $this->_column_headers = [$this->get_columns(), [], $this->get_sortable_columns()];
         
-        $orderby = ( ! empty( $_REQUEST['orderby'] ) && in_array($_REQUEST['orderby'], array_keys($this->get_sortable_columns())) ) ? $_REQUEST['orderby'] : 'created_at';
-        $order = ( ! empty( $_REQUEST['order'] ) && in_array(strtolower($_REQUEST['order']), ['asc', 'desc']) ) ? $_REQUEST['order'] : 'desc';
-
         $where_sql = '';
         if ( ! empty( $_REQUEST['s'] ) ) {
-            $search_term = '%' . $wpdb->esc_like( stripslashes( $_REQUEST['s'] ) ) . '%';
-            $where_sql = $wpdb->prepare(" WHERE nama_desa LIKE %s", $search_term);
+            $search = '%' . $wpdb->esc_like( stripslashes( $_REQUEST['s'] ) ) . '%';
+            $where_sql = $wpdb->prepare(" WHERE nama_desa LIKE %s OR kabupaten LIKE %s", $search, $search);
         }
 
-        // Hitung total item dengan filter
-        $total_items = $wpdb->get_var("SELECT COUNT(id) FROM $table_name" . $where_sql);
+        $total_items = $wpdb->get_var("SELECT COUNT(id) FROM $table_name $where_sql");
 
         $current_page = $this->get_pagenum();
         $offset = ( $current_page - 1 ) * $per_page;
         
-        // Ambil data untuk halaman saat ini
-        $query = "SELECT * FROM $table_name" . $where_sql . " ORDER BY " . esc_sql($orderby) . " " . esc_sql($order) . " LIMIT %d OFFSET %d";
+        $orderby = $_REQUEST['orderby'] ?? 'created_at';
+        $order = $_REQUEST['order'] ?? 'desc';
+        
+        // Whitelist orderby
+        if(!in_array($orderby, ['nama_desa', 'created_at'])) $orderby = 'created_at';
+
+        $query = "SELECT * FROM $table_name $where_sql ORDER BY $orderby $order LIMIT %d OFFSET %d";
         $this->items = $wpdb->get_results( $wpdb->prepare($query, $per_page, $offset), ARRAY_A );
         
-        // Atur argumen paginasi
         $this->set_pagination_args([
             'total_items' => $total_items,
             'per_page'    => $per_page,
