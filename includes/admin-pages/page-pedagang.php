@@ -1,7 +1,11 @@
 <?php
 /**
  * File Path: includes/admin-pages/page-pedagang.php
- * Description: Manajemen CRUD Data Toko/Pedagang dengan Form Lengkap (Verifikasi & Shipping).
+ * Description: Manajemen CRUD Data Toko/Pedagang dengan Form Lengkap & Perbaikan Logic CRUD.
+ * * CHANGE LOG:
+ * - Fix Insert Logic: Memastikan ID User dicek dengan benar sebelum insert.
+ * - Fix Update Logic: Menangani perubahan data user dan role dengan aman.
+ * - Fix Delete Logic: Menambahkan handler delete yang robust.
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -15,10 +19,12 @@ function dw_pedagang_form_handler() {
     // Cek apakah form disubmit
     if (!isset($_POST['dw_submit_pedagang'])) { return; }
 
-    // Validasi Nonce & Permission
-    if (!wp_verify_nonce($_POST['_wpnonce'], 'dw_save_pedagang_nonce')) {
-        wp_die('Security check failed. Silakan refresh halaman.');
+    // Validasi Nonce
+    if (!isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'dw_save_pedagang_nonce')) {
+        wp_die('Security check failed. Silakan kembali dan refresh halaman.');
     }
+
+    // Validasi Permission
     if (!current_user_can('dw_manage_pedagang')) {
         wp_die('Anda tidak memiliki izin untuk mengelola data toko.');
     }
@@ -56,6 +62,7 @@ function dw_pedagang_form_handler() {
             exit;
         }
     } else {
+        // Jika edit, pastikan tidak mengganti ke user yang sudah punya toko lain (selain toko ini sendiri)
         $existing_store = $wpdb->get_var($wpdb->prepare("SELECT id FROM $table_pedagang WHERE id_user = %d AND id != %d", $id_user_baru, $id));
         if ($existing_store) {
             add_settings_error('dw_pedagang_notices', 'user_exists', 'User yang dipilih sudah memiliki toko lain.', 'error');
@@ -71,8 +78,16 @@ function dw_pedagang_form_handler() {
     $status_akun = sanitize_text_field($_POST['status_akun']); 
     $status_pendaftaran = isset($_POST['status_pendaftaran']) ? sanitize_text_field($_POST['status_pendaftaran']) : 'menunggu_desa';
 
+    // Logika bisnis: Jika belum disetujui, akun tidak boleh aktif
     if ($status_pendaftaran !== 'disetujui' && $status_akun === 'aktif') {
         $status_akun = 'nonaktif'; 
+    }
+
+    // --- VALIDASI ZONA TARIF JSON ---
+    $zona_json = isset($_POST['shipping_ojek_lokal_zona']) ? wp_unslash($_POST['shipping_ojek_lokal_zona']) : '';
+    if (!empty($zona_json) && is_null(json_decode($zona_json))) {
+        $zona_json = '[]'; 
+        add_settings_error('dw_pedagang_notices', 'json_invalid', 'Format JSON untuk Tarif Zona tidak valid. Disimpan sebagai kosong.', 'warning');
     }
 
     $data = [
@@ -85,7 +100,7 @@ function dw_pedagang_form_handler() {
         'url_gmaps'     => esc_url_raw($_POST['url_gmaps'] ?? ''), 
         'deskripsi_toko'=> sanitize_textarea_field($_POST['deskripsi_toko'] ?? ''), 
         
-        // VERIFIKASI (BARU)
+        // VERIFIKASI
         'nik'           => sanitize_text_field($_POST['nik'] ?? ''),
         'url_ktp'       => esc_url_raw($_POST['url_ktp'] ?? ''),
         'foto_profil'   => esc_url_raw($_POST['foto_profil'] ?? ''),
@@ -96,9 +111,10 @@ function dw_pedagang_form_handler() {
         'atas_nama_rekening'=> sanitize_text_field($_POST['bank_atas_nama'] ?? ''), 
         'qris_image_url'=> esc_url_raw($_POST['qris_url'] ?? ''),
         
-        // PENGATURAN PENGIRIMAN (BARU)
+        // PENGATURAN PENGIRIMAN
         'shipping_ojek_lokal_aktif' => isset($_POST['shipping_ojek_lokal_aktif']) ? 1 : 0,
         'shipping_nasional_aktif'   => isset($_POST['shipping_nasional_aktif']) ? 1 : 0,
+        'shipping_ojek_lokal_zona'  => $zona_json,
 
         // STATUS
         'status_akun'   => $status_akun,
@@ -110,7 +126,7 @@ function dw_pedagang_form_handler() {
         'api_kecamatan_id' => sanitize_text_field($_POST['kecamatan_id'] ?? ''),
         'api_kelurahan_id' => sanitize_text_field($_POST['kelurahan_id'] ?? ''),
         
-        // DATA NAMA WILAYAH (CACHE)
+        // DATA NAMA WILAYAH
         'provinsi_nama' => sanitize_text_field($_POST['provinsi_nama'] ?? ''),
         'kabupaten_nama' => sanitize_text_field($_POST['kabupaten_nama'] ?? ''),
         'kecamatan_nama' => sanitize_text_field($_POST['kecamatan_nama'] ?? ''),
@@ -118,9 +134,7 @@ function dw_pedagang_form_handler() {
         'alamat_lengkap' => sanitize_textarea_field($_POST['alamat_lengkap_manual'] ?? ''),
     ];
 
-    // =====================================================================
-    // LOGIKA RELASI DESA (SMART LINK)
-    // =====================================================================
+    // --- LOGIKA RELASI DESA (SMART LINK) ---
     $pilihan_relasi = isset($_POST['id_desa_selection']) ? sanitize_text_field($_POST['id_desa_selection']) : 'auto';
     $final_id_desa = null;
 
@@ -145,6 +159,7 @@ function dw_pedagang_form_handler() {
 
     // --- EKSEKUSI DATABASE ---
     if ($is_new) {
+        // INSERT
         $options = get_option('dw_settings');
         if (!isset($data['sisa_transaksi'])) {
             $data['sisa_transaksi'] = isset($options['kuota_gratis_default']) ? absint($options['kuota_gratis_default']) : 0;
@@ -155,11 +170,13 @@ function dw_pedagang_form_handler() {
         
         if ($inserted) {
             $id = $wpdb->insert_id;
+            // Update Role User
             $user = new WP_User($id_user_baru);
             if ($user->exists() && !$user->has_cap('administrator')) {
                 $user->add_role('pedagang');
             }
             add_settings_error('dw_pedagang_notices', 'create_success', 'Toko baru berhasil dibuat.', 'success');
+            // Redirect ke halaman edit untuk item baru
             wp_redirect(admin_url('admin.php?page=dw-pedagang&action=edit&id=' . $id)); 
             exit;
         } else {
@@ -170,27 +187,34 @@ function dw_pedagang_form_handler() {
         }
 
     } else {
-        // Update Data
+        // UPDATE
+        // Ambil data lama untuk manajemen role
         $old_data = $wpdb->get_row($wpdb->prepare("SELECT id_user, status_akun FROM $table_pedagang WHERE id = %d", $id));
+        
         $updated = $wpdb->update($table_pedagang, $data, ['id' => $id]);
 
         // Manage Role Changes
         if ($old_data && $old_data->id_user != $id_user_baru) {
+             // Cabut role dari user lama
              $old_user = new WP_User($old_data->id_user);
              if ($old_user->exists() && !$old_user->has_cap('administrator')) {
-                 $old_user->remove_role('pedagang'); $old_user->add_role('subscriber');
+                 $old_user->remove_role('pedagang'); 
+                 $old_user->add_role('subscriber');
              }
         }
-        // Activate Role for New/Current User
+        
+        // Pastikan user saat ini punya role pedagang jika aktif
         $current_user_obj = new WP_User($id_user_baru);
         if ($current_user_obj->exists() && !$current_user_obj->has_cap('administrator')) {
-             if ($status_akun === 'aktif') $current_user_obj->add_role('pedagang');
+             if ($status_akun === 'aktif') {
+                 $current_user_obj->add_role('pedagang');
+             }
         }
 
         if ($updated !== false) {
             add_settings_error('dw_pedagang_notices', 'update_success', 'Data toko berhasil diperbarui.', 'success');
         } else {
-            add_settings_error('dw_pedagang_notices', 'update_failed', 'Gagal update database.', 'error');
+            add_settings_error('dw_pedagang_notices', 'update_failed', 'Gagal update database atau tidak ada perubahan data.', 'error');
         }
         
         set_transient('settings_errors', get_settings_errors(), 30);
@@ -203,14 +227,25 @@ add_action('admin_init', 'dw_pedagang_form_handler');
 
 /**
  * =========================================================================
- * 2. HANDLER: HAPUS PERMANEN
+ * 2. HANDLER: HAPUS PERMANEN (DELETE)
  * =========================================================================
  */
 function dw_pedagang_delete_handler() {
-    if (!isset($_GET['action']) || $_GET['action'] !== 'dw_delete' || !isset($_GET['id'])) return;
+    // Validasi Parameter
+    if (!isset($_GET['action']) || $_GET['action'] !== 'dw_delete' || !isset($_GET['id'])) {
+        return;
+    }
+    
+    // Validasi Nonce
     $nonce = isset($_GET['_wpnonce']) ? $_GET['_wpnonce'] : '';
-    if (!wp_verify_nonce($nonce, 'dw_delete_pedagang_action')) wp_die('Link expired.');
-    if (!current_user_can('administrator')) wp_die('Akses ditolak.');
+    if (!wp_verify_nonce($nonce, 'dw_delete_pedagang_action')) {
+        wp_die('Link expired atau keamanan gagal. Silakan coba lagi.');
+    }
+    
+    // Validasi Permission
+    if (!current_user_can('administrator')) {
+        wp_die('Akses ditolak. Hanya administrator yang dapat menghapus.');
+    }
 
     global $wpdb;
     $pedagang_id = intval($_GET['id']);
@@ -218,28 +253,45 @@ function dw_pedagang_delete_handler() {
     $table_produk   = $wpdb->prefix . 'dw_produk';
     
     $pedagang = $wpdb->get_row($wpdb->prepare("SELECT id_user, nama_toko FROM $table_pedagang WHERE id = %d", $pedagang_id));
-    if (!$pedagang) return;
+    if (!$pedagang) {
+        add_settings_error('dw_pedagang_notices', 'delete_error', 'Data toko tidak ditemukan.', 'error');
+        wp_redirect(admin_url('admin.php?page=dw-pedagang')); exit;
+    }
 
     // Hapus Produk (CPT & Table)
     $produk_ids = $wpdb->get_col($wpdb->prepare("SELECT ID FROM {$wpdb->posts} WHERE post_type = 'dw_produk' AND post_author = %d", $pedagang->id_user));
-    foreach ($produk_ids as $pid) wp_delete_post($pid, true);
+    if (!empty($produk_ids)) {
+        foreach ($produk_ids as $pid) {
+            wp_delete_post($pid, true); // Force delete
+        }
+    }
+    
+    // Hapus dari tabel custom produk jika ada
     $wpdb->delete($table_produk, ['id_pedagang' => $pedagang_id]);
 
     // Hapus Toko
     $deleted = $wpdb->delete($table_pedagang, ['id' => $pedagang_id]);
 
-    // Downgrade Role
+    // Downgrade Role User
     if ($deleted && $pedagang->id_user) {
         $user = new WP_User($pedagang->id_user);
         if ($user->exists() && !$user->has_cap('administrator')) {
-            $user->remove_role('pedagang'); $user->add_role('subscriber');
+            $user->remove_role('pedagang'); 
+            $user->add_role('subscriber');
         }
     }
     
-    add_settings_error('dw_pedagang_notices', 'deleted', "Toko dihapus.", 'success');
+    if ($deleted) {
+        add_settings_error('dw_pedagang_notices', 'deleted', "Toko '{$pedagang->nama_toko}' berhasil dihapus.", 'success');
+    } else {
+        add_settings_error('dw_pedagang_notices', 'delete_fail', "Gagal menghapus data toko.", 'error');
+    }
+    
     set_transient('settings_errors', get_settings_errors(), 30);
-    wp_redirect(admin_url('admin.php?page=dw-pedagang')); exit;
+    wp_redirect(admin_url('admin.php?page=dw-pedagang')); 
+    exit;
 }
+// Delete handler dipanggil langsung di render function untuk menangkap $_GET action
 
 
 /**
@@ -248,13 +300,23 @@ function dw_pedagang_delete_handler() {
  * =========================================================================
  */
 function dw_pedagang_page_render() {
+    // Cek Action Delete di sini
+    if (isset($_GET['action']) && $_GET['action'] === 'dw_delete') { 
+        dw_pedagang_delete_handler(); 
+        return; 
+    }
+
     $action = isset($_GET['action']) ? $_GET['action'] : 'list';
     $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
 
-    if ($action === 'dw_delete') { dw_pedagang_delete_handler(); return; }
-    if ('add' === $action || ('edit' === $action && $id > 0)) { dw_pedagang_form_render($id); return; }
+    if ('add' === $action || ('edit' === $action && $id > 0)) { 
+        dw_pedagang_form_render($id); 
+        return; 
+    }
 
-    if (!class_exists('DW_Pedagang_List_Table')) require_once DW_CORE_PLUGIN_DIR . 'includes/list-tables/class-dw-pedagang-list-table.php';
+    if (!class_exists('DW_Pedagang_List_Table')) {
+        require_once DW_CORE_PLUGIN_DIR . 'includes/list-tables/class-dw-pedagang-list-table.php';
+    }
     $pedagangListTable = new DW_Pedagang_List_Table();
     $pedagangListTable->prepare_items();
     ?>
@@ -263,7 +325,16 @@ function dw_pedagang_page_render() {
             <h1>Manajemen Toko (Pedagang)</h1>
             <a href="<?php echo admin_url('admin.php?page=dw-pedagang&action=add'); ?>" class="page-title-action">Tambah Toko Baru</a>
         </div>
-        <?php $errors = get_transient('settings_errors'); if($errors) { settings_errors('dw_pedagang_notices'); delete_transient('settings_errors'); } ?>
+        
+        <?php 
+        // Tampilkan Notifikasi
+        $errors = get_transient('settings_errors'); 
+        if($errors) { 
+            settings_errors('dw_pedagang_notices'); 
+            delete_transient('settings_errors'); 
+        } 
+        ?>
+        
         <form method="get"> 
             <input type="hidden" name="page" value="<?php echo esc_attr($_REQUEST['page']); ?>">
             <?php $pedagangListTable->search_box('Cari Toko', 'pedagang_search'); ?>
@@ -285,7 +356,7 @@ function dw_pedagang_form_render($id = 0) {
     $page_title = 'Tambah Toko Baru';
     $is_super_admin = current_user_can('administrator');
 
-    // Data handling
+    // Data handling dari Transient (Error state) atau Database
     $transient_data = get_transient('dw_pedagang_form_data');
     if ($transient_data) {
         $item = (object) $transient_data; 
@@ -293,14 +364,17 @@ function dw_pedagang_form_render($id = 0) {
         if ($id > 0) $page_title = 'Edit Toko'; 
     } elseif ($id > 0) {
         $item = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$wpdb->prefix}dw_pedagang WHERE id = %d", $id));
-        if (!$item) { echo '<div class="notice notice-error"><p>Data tidak ditemukan.</p></div>'; return; }
+        if (!$item) { 
+            echo '<div class="notice notice-error"><p>Data toko tidak ditemukan.</p></div>'; 
+            return; 
+        }
         $page_title = 'Edit Toko';
     }
 
     $all_users = get_users(['orderby' => 'display_name']); 
     $all_desas = $wpdb->get_results("SELECT id, nama_desa, kecamatan FROM {$wpdb->prefix}dw_desa WHERE status = 'aktif' ORDER BY nama_desa ASC");
 
-    // Pre-fill
+    // Pre-fill Data Wilayah
     $provinsi_id    = $item->api_provinsi_id ?? '';
     $kabupaten_id   = $item->api_kabupaten_id ?? '';
     $kecamatan_id   = $item->api_kecamatan_id ?? '';
@@ -314,15 +388,29 @@ function dw_pedagang_form_render($id = 0) {
     $current_id_desa = $item->id_desa ?? null;
     $sisa_kuota = $item->sisa_transaksi ?? (get_option('dw_settings')['kuota_gratis_default'] ?? 0);
     
-    // Helper function untuk gambar
+    // Default data zona (JSON)
+    $zona_json = isset($item->shipping_ojek_lokal_zona) ? $item->shipping_ojek_lokal_zona : '';
+    if (empty($zona_json)) {
+        $zona_json = "[\n  {\"id\": \"zona_1\", \"nama\": \"Area Dekat (0-3km)\", \"harga\": 5000},\n  {\"id\": \"zona_2\", \"nama\": \"Area Jauh (3-10km)\", \"harga\": 15000}\n]";
+    }
+
+    // Helper Image Preview
     function dw_img_preview($url, $placeholder = 'Foto') {
-        $src = $url ? $url : "https://placehold.co/150x150/e2e8f0/64748b?text=$placeholder";
-        return $src;
+        return $url ? $url : "https://placehold.co/150x150/e2e8f0/64748b?text=$placeholder";
     }
     ?>
     <div class="wrap dw-wrap">
         <h1><?php echo esc_html($page_title); ?></h1>
-        <?php settings_errors('dw_pedagang_notices'); ?>
+        
+        <?php 
+        $errors = get_transient('settings_errors'); 
+        if($errors) { 
+            settings_errors('dw_pedagang_notices'); 
+            delete_transient('settings_errors'); 
+        } else {
+            settings_errors('dw_pedagang_notices');
+        }
+        ?>
 
         <form method="post" class="dw-form-card"> 
              <input type="hidden" name="id" value="<?php echo esc_attr($id); ?>">
@@ -338,9 +426,12 @@ function dw_pedagang_form_render($id = 0) {
                             <select name="id_user" id="id_user" class="regular-text" required>
                                 <option value="">-- Pilih User --</option>
                                 <?php foreach($all_users as $u): ?>
-                                    <option value="<?php echo $u->ID; ?>" <?php selected($item->id_user ?? '', $u->ID); ?>><?php echo esc_html($u->display_name); ?></option>
+                                    <option value="<?php echo $u->ID; ?>" <?php selected($item->id_user ?? '', $u->ID); ?>>
+                                        <?php echo esc_html($u->display_name . ' (' . $u->user_email . ')'); ?>
+                                    </option>
                                 <?php endforeach; ?>
                             </select>
+                            <p class="description">Pastikan user ini belum memiliki toko lain.</p>
                         </td></tr>
                         <tr><th>Nama Toko <span class="text-red">*</span></th><td><input name="nama_toko" type="text" value="<?php echo esc_attr($item->nama_toko ?? ''); ?>" class="regular-text" required></td></tr>
                         <tr><th>Nama Pemilik <span class="text-red">*</span></th><td><input name="nama_pemilik" type="text" value="<?php echo esc_attr($item->nama_pemilik ?? ''); ?>" class="regular-text" required></td></tr>
@@ -422,6 +513,7 @@ function dw_pedagang_form_render($id = 0) {
              <div class="postbox">
                  <div class="postbox-header"><h2 class="hndle">Pengaturan Pengiriman</h2></div>
                  <div class="inside">
+                     <p class="description">Centang metode yang ingin diaktifkan. Untuk Ojek Lokal, Anda bisa mengatur tarif manual via JSON.</p>
                      <table class="form-table">
                          <tr>
                              <th>Metode Aktif</th>
@@ -429,13 +521,20 @@ function dw_pedagang_form_render($id = 0) {
                                  <fieldset>
                                      <label style="margin-right: 20px;">
                                          <input type="checkbox" name="shipping_ojek_lokal_aktif" value="1" <?php checked(1, $item->shipping_ojek_lokal_aktif ?? 0); ?>> 
-                                         <strong>Ojek Lokal</strong> (Tarif per Jarak/Zona)
+                                         <strong>Ojek Lokal</strong> (Tarif per Zona)
                                      </label>
                                      <label>
                                          <input type="checkbox" name="shipping_nasional_aktif" value="1" <?php checked(1, $item->shipping_nasional_aktif ?? 0); ?>> 
                                          <strong>Kurir Nasional</strong> (JNE, POS, dll - via RajaOngkir)
                                      </label>
                                  </fieldset>
+                             </td>
+                         </tr>
+                         <tr>
+                             <th>Konfigurasi Tarif Ojek (JSON)</th>
+                             <td>
+                                 <textarea name="shipping_ojek_lokal_zona" rows="5" class="large-text code"><?php echo esc_textarea($zona_json); ?></textarea>
+                                 <p class="description">Format: <code>[{"id":"zona1", "nama":"Dekat", "harga":5000}, {"id":"zona2", "nama":"Jauh", "harga":10000}]</code>. <br>Admin bisa membantu mengatur ini jika Pedagang kesulitan.</p>
                              </td>
                          </tr>
                      </table>
@@ -502,6 +601,11 @@ function dw_pedagang_form_render($id = 0) {
                 var $imgPreview = $container.find('.img-preview');
                 var $btnRemove = $container.find('.btn-remove');
                 
+                if (typeof wp === 'undefined' || !wp.media) {
+                    alert('Error: WP Media Library tidak termuat.');
+                    return;
+                }
+
                 var uploader = wp.media({
                     title: 'Pilih Gambar', button: { text: 'Gunakan Gambar Ini' }, multiple: false
                 }).on('select', function() {
