@@ -2,6 +2,11 @@
 /**
  * File Path: includes/init.php
  * Description: Mendaftarkan aset dan variabel global untuk JavaScript.
+ * * UPDATE (DYNAMIC HOST DETECTION):
+ * - Menggunakan $_SERVER['HTTP_HOST'] untuk menyusun URL API secara dinamis.
+ * - Ini memperbaiki error ERR_PROXY_CONNECTION_FAILED / ERR_NAME_NOT_RESOLVED
+ * karena JS akan dipaksa menggunakan domain/IP yang sedang diakses user,
+ * mengabaikan setting 'Site URL' di database yang mungkin berbeda (misal sadesa.site vs localhost).
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -30,29 +35,48 @@ function dw_core_load_admin_assets($hook) {
     $is_dw_cpt = ($screen && in_array($screen->post_type, ['dw_wisata', 'dw_produk']));
 
     if ( $is_dw_page || $is_dw_cpt ) {
-        // Load CSS
+        // Load CSS Utama
         wp_enqueue_style( 'dw-admin-styles', DW_CORE_PLUGIN_URL . 'assets/css/admin-styles.css', [], DW_CORE_VERSION );
         
-        // Load JS
-        wp_enqueue_script( 'dw-admin-scripts', DW_CORE_PLUGIN_URL . 'assets/js/admin-scripts.js', ['jquery'], DW_CORE_VERSION, true );
+        // Load Library Select2 (Diperlukan untuk dropdown wilayah/alamat di banyak halaman)
+        wp_enqueue_style('select2', 'https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/css/select2.min.css');
+        wp_enqueue_script('select2', 'https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js', ['jquery'], '4.0.13', true);
+
+        // Load JS Utama
+        wp_enqueue_script( 'dw-admin-scripts', DW_CORE_PLUGIN_URL . 'assets/js/admin-scripts.js', ['jquery', 'select2'], DW_CORE_VERSION, true );
         wp_enqueue_media();
 
-        // [PENTING] Kirim Data ke JS (AJAX URL & REST API URL)
-        // Gunakan admin_url('admin-ajax.php') agar dinamis mengikuti URL yang sedang diakses
-        // (Misal: localhost, IP, atau domain)
+        // --- PERBAIKAN URL API (DYNAMIC ABSOLUTE HOST) ---
+        // Kita hitung URL secara manual berdasarkan Host yang sedang diakses.
+        // Ini lebih kuat daripada relative URL biasa untuk mengatasi masalah Proxy/DNS local.
+        
+        // 1. Tentukan Protokol (HTTP/HTTPS)
+        $protocol = is_ssl() ? 'https://' : 'http://';
+        
+        // 2. Ambil Host saat ini (misal: localhost atau 192.168.1.5)
+        $current_host = $_SERVER['HTTP_HOST']; 
+        
+        // 3. Ambil Path Relatif WordPress (misal: / atau /my-site/)
+        // Kita ambil dari admin_url relative lalu buang bagian 'wp-admin/...'
+        $ajax_relative_path = admin_url('admin-ajax.php', 'relative'); 
+        $site_path_relative = str_replace('wp-admin/admin-ajax.php', '', $ajax_relative_path);
+        
+        // 4. Susun URL Absolute Dinamis
+        $dynamic_site_url = $protocol . $current_host . $site_path_relative;
+        
+        // URL Hasil Akhir
+        $final_rest_url = $dynamic_site_url . rest_get_url_prefix() . '/dw/v1/';
+        $final_ajax_url = $dynamic_site_url . 'wp-admin/admin-ajax.php';
+
+        // Kirim Data ke JS
         wp_localize_script('dw-admin-scripts', 'dw_admin_vars', [
-            'ajax_url'   => admin_url('admin-ajax.php', 'relative'), // Gunakan relative untuk mencegah mixed content issue
+            'ajax_url'   => $final_ajax_url, // URL Absolute Dinamis (http://localhost/wp-admin/admin-ajax.php)
             'nonce'      => wp_create_nonce('dw_admin_nonce'),
-            'rest_url'   => esc_url_raw(rest_url('dw/v1/')), // URL API Internal
-            'rest_nonce' => wp_create_nonce('wp_rest')       // Nonce untuk API
+            'rest_url'   => $final_rest_url, // URL Absolute Dinamis (http://localhost/wp-json/dw/v1/)
+            'rest_nonce' => wp_create_nonce('wp_rest')
         ]);
 
-        // Library tambahan untuk halaman tertentu
-        if ($screen && $screen->id === 'desa-wisata_page_dw-pedagang') {
-            wp_enqueue_style('select2', 'https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/css/select2.min.css');
-            wp_enqueue_script('select2', 'https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js', ['jquery'], '4.0.13', true);
-        }
-        
+        // Library tambahan khusus halaman settings (Color Picker)
         if ($screen && $screen->id === 'desa-wisata_page_dw-settings') {
             wp_enqueue_style( 'wp-color-picker' );
             wp_enqueue_script( 'dw-admin-scripts' ); 
