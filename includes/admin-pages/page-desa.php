@@ -271,7 +271,8 @@ $users = get_users(['role__in' => ['administrator', 'dw_admin_desa']]);
         
         <?php
         // Load List Table Class
-        require_once DW_CORE_PATH . 'includes/list-tables/class-dw-desa-list-table.php';
+        // FIXED: Ganti DW_CORE_PATH dengan DW_CORE_PLUGIN_DIR
+        require_once DW_CORE_PLUGIN_DIR . 'includes/list-tables/class-dw-desa-list-table.php';
         $desa_list_table = new DW_Desa_List_Table();
         $desa_list_table->prepare_items();
         ?>
