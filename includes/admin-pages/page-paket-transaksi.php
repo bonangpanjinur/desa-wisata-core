@@ -4,9 +4,7 @@
  * File Folder: includes/admin-pages/
  * File Path:   includes/admin-pages/page-paket-transaksi.php
  *
- * [FIXED] 
- * - Memperbaiki nama tombol submit agar sesuai dengan handler PHP.
- * - Memastikan data tersimpan ke tabel dw_paket_transaksi.
+ * [FIXED] Nama tombol submit disamakan dengan handler PHP.
  *
  * @package DesaWisataCore
  */
@@ -17,9 +15,10 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  * Handler untuk form Tambah/Edit Paket.
  */
 function dw_paket_form_handler() {
-    // FIX: Mengecek nama tombol yang benar ('dw_submit_paket')
+    // 1. Cek apakah tombol ditekan
     if (!isset($_POST['dw_submit_paket'])) return;
     
+    // 2. Cek keamanan
     if (!wp_verify_nonce($_POST['_wpnonce'], 'dw_save_paket_nonce')) wp_die('Security check failed.');
     if (!current_user_can('dw_manage_settings')) wp_die('Anda tidak punya izin.');
 
@@ -28,10 +27,12 @@ function dw_paket_form_handler() {
     $id = isset($_POST['id']) ? absint($_POST['id']) : 0;
     $redirect_url = admin_url('admin.php?page=dw-paket-transaksi');
 
+    // 3. Validasi Input
     if (empty($_POST['nama_paket']) || !isset($_POST['harga']) || !isset($_POST['jumlah_transaksi'])) {
         add_settings_error('dw_paket_notices', 'fields_empty', 'Nama, Harga, dan Jumlah Transaksi wajib diisi.', 'error');
         set_transient('settings_errors', get_settings_errors(), 30);
-        wp_redirect($redirect_url . ($id == 0 ? '&action=add' : '&action=edit_paket&id='.$id));
+        // Redirect kembali ke form
+        wp_redirect(add_query_arg(['action' => ($id > 0 ? 'edit_paket' : 'add'), 'id' => $id], $redirect_url));
         exit;
     }
 
@@ -44,19 +45,21 @@ function dw_paket_form_handler() {
         'status'       => sanitize_key($_POST['status']),
     ];
 
+    // 4. Simpan ke Database
     if ($id > 0) {
         $updated = $wpdb->update($table_name, $data, ['id' => $id]);
-        if ($updated === false) {
-             add_settings_error('dw_paket_notices', 'db_error', 'Gagal update database: ' . $wpdb->last_error, 'error');
+        if ($updated !== false) {
+            add_settings_error('dw_paket_notices', 'paket_updated', 'Paket berhasil diperbarui.', 'success');
         } else {
-             add_settings_error('dw_paket_notices', 'paket_updated', 'Paket berhasil diperbarui.', 'success');
+            add_settings_error('dw_paket_notices', 'db_error', 'Gagal update database: ' . $wpdb->last_error, 'error');
         }
     } else {
         $inserted = $wpdb->insert($table_name, $data);
         if ($inserted) {
             add_settings_error('dw_paket_notices', 'paket_created', 'Paket berhasil dibuat.', 'success');
         } else {
-            add_settings_error('dw_paket_notices', 'db_error', 'Gagal insert database: ' . $wpdb->last_error, 'error');
+            // PENTING: Ini menangkap error jika tabel belum ada
+            add_settings_error('dw_paket_notices', 'db_error', 'Gagal insert database (Cek tabel): ' . $wpdb->last_error, 'error');
         }
     }
 
@@ -77,8 +80,10 @@ function dw_paket_delete_handler() {
     global $wpdb;
     $id = absint($_GET['id']);
     $wpdb->delete($wpdb->prefix . 'dw_paket_transaksi', ['id' => $id]);
+    
     add_settings_error('dw_paket_notices', 'paket_deleted', 'Paket berhasil dihapus.', 'success');
     set_transient('settings_errors', get_settings_errors(), 30);
+    
     wp_redirect(admin_url('admin.php?page=dw-paket-transaksi'));
     exit;
 }
@@ -137,15 +142,20 @@ function dw_paket_form_render($id = 0) {
         $item = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$wpdb->prefix}dw_paket_transaksi WHERE id = %d", $id));
         $page_title = 'Edit Paket';
     }
+    
+    // Tampilkan error di halaman form juga
+    $errors = get_transient('settings_errors');
+    if($errors) {
+        settings_errors('dw_paket_notices');
+        delete_transient('settings_errors');
+    }
     ?>
     <div class="wrap dw-wrap">
         <h1><?php echo esc_html($page_title); ?></h1>
-        <?php settings_errors('dw_paket_notices'); ?>
         
-        <!-- FIX: Action form diarahkan ke halaman yang sama agar handler admin_init tertangkap -->
         <form method="post" class="dw-form-card" action="">
             <input type="hidden" name="id" value="<?php echo esc_attr($id); ?>">
-            <!-- FIX: Name input hidden ini harus sama dengan yang dicek di handler -->
+            <!-- Hidden input kunci untuk trigger handler -->
             <input type="hidden" name="dw_submit_paket" value="1">
             <?php wp_nonce_field('dw_save_paket_nonce'); ?>
             
@@ -184,7 +194,7 @@ function dw_paket_form_render($id = 0) {
             </table>
             
             <div class="dw-form-footer">
-                <!-- FIX: Name tombol disesuaikan, atau gunakan input hidden seperti di atas -->
+                <!-- Gunakan name yang sama dengan pengecekan di handler -->
                 <?php submit_button('Simpan Paket', 'primary', 'dw_submit_paket', false); ?>
                  <a href="<?php echo admin_url('admin.php?page=dw-paket-transaksi'); ?>" class="button button-secondary">Batal</a>
             </div>
