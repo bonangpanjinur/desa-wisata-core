@@ -117,4 +117,44 @@ function dw_check_desa_match_from_address() {
     wp_die();
 }
 add_action( 'wp_ajax_dw_check_desa_match_from_address', 'dw_check_desa_match_from_address' );
+
+/**
+ * [BARU] Handler AJAX untuk mengambil data wilayah (Provinsi/Kota/Kec/Kel)
+ * Memperbaiki masalah dropdown tidak loading di halaman admin.
+ */
+function dw_get_wilayah_handler() {
+    // Cek nonce untuk keamanan (dikirim dari admin-scripts.js)
+    check_ajax_referer( 'dw_admin_nonce', 'nonce' );
+
+    $type = isset($_GET['type']) ? sanitize_text_field($_GET['type']) : '';
+    $id   = isset($_GET['id']) ? sanitize_text_field($_GET['id']) : '';
+    $data = [];
+
+    // Pastikan file API helper dimuat
+    if (!function_exists('dw_get_api_provinsi')) {
+        require_once DW_CORE_PLUGIN_DIR . 'includes/address-api.php';
+    }
+
+    // Routing berdasarkan tipe wilayah
+    if ($type === 'provinsi') {
+        $data = dw_get_api_provinsi();
+    } 
+    elseif ($type === 'kabupaten' && !empty($id)) {
+        $data = dw_get_api_kabupaten($id);
+    } 
+    elseif ($type === 'kecamatan' && !empty($id)) {
+        $data = dw_get_api_kecamatan($id);
+    } 
+    elseif ($type === 'kelurahan' && !empty($id)) {
+        $data = dw_get_api_desa($id); // API Helper menamakannya 'desa', tapi ini level kelurahan
+    }
+
+    if (empty($data)) {
+        wp_send_json_error(['message' => 'Gagal mengambil data atau data kosong.']);
+    } else {
+        wp_send_json_success($data);
+    }
+    wp_die();
+}
+add_action('wp_ajax_dw_get_wilayah', 'dw_get_wilayah_handler');
 ?>
