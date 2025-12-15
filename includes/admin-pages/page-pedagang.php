@@ -2,10 +2,10 @@
 /**
  * File: includes/admin-pages/page-pedagang.php
  * Description: Manajemen CRUD Toko (Pedagang) + Auto Relasi Desa Wisata.
- * * PERBAIKAN:
- * - Menambahkan logika "Smart Context" untuk Admin Desa.
- * - Jika user adalah Admin Desa, input Desa & Alamat otomatis diset/disembunyikan.
- * - Memastikan Admin Desa hanya bisa menambah pedagang ke desanya sendiri.
+ * * PERBAIKAN PENTING:
+ * 1. Menambahkan Transient Notices (set_transient) agar pesan error TIDAK HILANG saat redirect.
+ * 2. Memperbaiki nama Action AJAX di script JS ('dw_get_wilayah' bukan 'dw_get_region_options').
+ * 3. Memastikan logika Admin Desa memaksa ID Desa yang benar.
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -22,7 +22,7 @@ function dw_pedagang_form_handler() {
         wp_die('Security check failed. Silakan refresh halaman.');
     }
     if (!current_user_can('dw_manage_pedagang')) {
-        wp_die('Akses ditolak. Anda tidak memiliki izin mengelola pedagang.');
+        wp_die('Akses ditolak. Anda tidak memiliki izin.');
     }
 
     global $wpdb;
@@ -30,47 +30,41 @@ function dw_pedagang_form_handler() {
     $table_desa     = $wpdb->prefix . 'dw_desa';
     $current_user_id = get_current_user_id();
 
-    // Cek apakah user adalah Admin Desa
+    // Cek Konteks Admin Desa
     $is_super_admin = current_user_can('administrator') || current_user_can('admin_kabupaten');
     $admin_desa_id  = 0;
     
     if (!$is_super_admin) {
-        // Ambil ID Desa yang dikelola
         $admin_desa_id = $wpdb->get_var($wpdb->prepare("SELECT id FROM $table_desa WHERE id_user_desa = %d", $current_user_id));
         if (!$admin_desa_id) {
-            wp_die('Error: Akun Admin Desa Anda belum terhubung dengan data Desa manapun.');
+            wp_die('Error Fatal: Akun Admin Desa Anda belum terhubung dengan data Desa manapun. Hubungi Super Admin.');
         }
     }
 
     $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
     $is_new = ($id === 0);
 
-    // Validasi Input Wajib
+    // 1. Validasi Input Wajib
     if (empty($_POST['id_user']) || empty($_POST['nama_toko']) || empty($_POST['nama_pemilik'])) {
-        add_settings_error('dw_pedagang_notices', 'empty', 'User, Nama Toko, dan Pemilik wajib diisi.', 'error');
-        $url = $is_new ? admin_url('admin.php?page=dw-pedagang&action=add') : admin_url('admin.php?page=dw-pedagang&action=edit&id='.$id);
-        wp_redirect($url); exit;
+        dw_set_notice('User, Nama Toko, dan Pemilik wajib diisi.', 'error');
+        wp_redirect(dw_get_redirect_url($id)); exit;
     }
 
-    // Cek Duplikat User
+    // 2. Cek Duplikat User (Satu user hanya boleh punya satu toko)
     $id_user = intval($_POST['id_user']);
     $cek_sql = $is_new 
         ? "SELECT id FROM $table_pedagang WHERE id_user = $id_user" 
         : "SELECT id FROM $table_pedagang WHERE id_user = $id_user AND id != $id";
     
     if ($wpdb->get_var($cek_sql)) {
-        add_settings_error('dw_pedagang_notices', 'duplicate', 'User ini sudah memiliki toko lain.', 'error');
-        $url = $is_new ? admin_url('admin.php?page=dw-pedagang&action=add') : admin_url('admin.php?page=dw-pedagang&action=edit&id='.$id);
-        wp_redirect($url); exit;
+        dw_set_notice('Gagal: User WordPress yang dipilih sudah memiliki Toko lain.', 'error');
+        wp_redirect(dw_get_redirect_url($id)); exit;
     }
 
-    // Persiapan Data
+    // 3. Persiapan Data
     $kel_id = sanitize_text_field($_POST['kelurahan_id_mirror'] ?? '');
-    
-    $zona_json = isset($_POST['shipping_ojek_lokal_zona']) ? wp_unslash($_POST['shipping_ojek_lokal_zona']) : '';
-    if (!empty($zona_json) && is_null(json_decode($zona_json))) {
-        $zona_json = '[]';
-    }
+    $zona_json = isset($_POST['shipping_ojek_lokal_zona']) ? wp_unslash($_POST['shipping_ojek_lokal_zona']) : '[]';
+    if (is_null(json_decode($zona_json))) $zona_json = '[]';
 
     $data = [
         'id_user'       => $id_user,
@@ -95,9 +89,8 @@ function dw_pedagang_form_handler() {
         'shipping_ojek_lokal_zona'  => $zona_json
     ];
 
-    // LOGIKA RELASI DESA (PERBAIKAN)
+    // 4. Logika Relasi Desa
     if ($is_super_admin) {
-        // Admin Bebas: Logic Auto / Manual
         $id_desa_found = null;
         $pilihan_relasi = isset($_POST['id_desa_selection']) ? sanitize_text_field($_POST['id_desa_selection']) : 'auto';
 
@@ -114,107 +107,111 @@ function dw_pedagang_form_handler() {
         }
         $data['id_desa'] = $id_desa_found;
     } else {
-        // Admin Desa: PAKSA ID Desa mereka
+        // Admin Desa: PAKSA masuk ke desa mereka sendiri
         $data['id_desa'] = $admin_desa_id;
         
-        // Opsional: Jika data lokasi kosong, isi dengan data lokasi Desa Admin
-        // (Supaya data konsisten)
+        // Fallback: Jika data kecamatan kosong, isi dengan data desa admin agar tidak null
         if (empty($data['api_kecamatan_id'])) {
-            $desa_loc = $wpdb->get_row("SELECT api_kecamatan_id, api_kelurahan_id FROM $table_desa WHERE id = $admin_desa_id");
-            if ($desa_loc) {
-                $data['api_kecamatan_id'] = $desa_loc->api_kecamatan_id;
-                // Kita juga bisa menyimpan api_kelurahan_id jika ada kolomnya di tabel pedagang (saat ini belum ada di skema activation.php tapi logika butuh)
-            }
+            $desa_loc = $wpdb->get_row("SELECT api_kecamatan_id FROM $table_desa WHERE id = $admin_desa_id");
+            if ($desa_loc) $data['api_kecamatan_id'] = $desa_loc->api_kecamatan_id;
         }
     }
 
+    // 5. Eksekusi Database
     if ($is_new) {
         $data['created_at'] = current_time('mysql');
         $inserted = $wpdb->insert($table_pedagang, $data);
         
         if ($inserted) {
             $new_id = $wpdb->insert_id;
+            // Update Role WP
             $u = new WP_User($id_user);
             if ($u->exists() && !$u->has_cap('administrator')) $u->add_role('pedagang');
 
-            add_settings_error('dw_pedagang_notices', 'success', 'Toko berhasil dibuat.', 'success');
+            dw_set_notice('Toko berhasil dibuat.', 'success');
             wp_redirect(admin_url('admin.php?page=dw-pedagang&action=edit&id='.$new_id)); exit;
         } else {
-            add_settings_error('dw_pedagang_notices', 'fail', 'Gagal insert database: '.$wpdb->last_error, 'error');
+            dw_set_notice('Gagal menyimpan ke database: ' . $wpdb->last_error, 'error');
+            wp_redirect(dw_get_redirect_url(0)); exit;
         }
     } else {
         $updated = $wpdb->update($table_pedagang, $data, ['id' => $id]);
+        
         $u = new WP_User($id_user);
         if ($u->exists() && $data['status_akun'] === 'aktif' && !$u->has_cap('administrator')) {
             $u->add_role('pedagang');
         }
-        add_settings_error('dw_pedagang_notices', 'success', 'Data Toko diperbarui.', 'success');
+        
+        dw_set_notice('Data Toko diperbarui.', 'success');
         wp_redirect(admin_url('admin.php?page=dw-pedagang&action=edit&id='.$id)); exit;
     }
 }
 add_action('admin_init', 'dw_pedagang_form_handler');
 
-// --- DELETE HANDLER (SAMA SEPERTI SEBELUMNYA) ---
+// Helper: Set Notice Transient (Agar pesan tidak hilang saat redirect)
+function dw_set_notice($message, $type = 'success') {
+    add_settings_error('dw_pedagang_notices', 'dw_msg', $message, $type);
+    set_transient('settings_errors', get_settings_errors(), 30);
+}
+
+// Helper: Redirect URL
+function dw_get_redirect_url($id = 0) {
+    return ($id > 0) ? admin_url('admin.php?page=dw-pedagang&action=edit&id='.$id) : admin_url('admin.php?page=dw-pedagang&action=add');
+}
+
+// --- DELETE HANDLER ---
 function dw_pedagang_delete_handler() {
     if (!isset($_GET['id']) || !isset($_GET['_wpnonce'])) return;
     if (!wp_verify_nonce($_GET['_wpnonce'], 'dw_delete_pedagang_action')) wp_die('Security Fail');
     
-    // PERBAIKAN: Admin Desa juga boleh menghapus pedagang di desanya
     global $wpdb;
     $id = intval($_GET['id']);
-    
     $is_super_admin = current_user_can('administrator') || current_user_can('admin_kabupaten');
     $current_user_id = get_current_user_id();
     
-    // Cek Ownership sebelum hapus
+    // Cek Data
     $pedagang = $wpdb->get_row("SELECT id_user, nama_toko, id_desa FROM {$wpdb->prefix}dw_pedagang WHERE id = $id");
     if (!$pedagang) {
-         add_settings_error('dw_pedagang_notices', 'delete_error', 'Data tidak ditemukan.', 'error');
+         dw_set_notice('Data tidak ditemukan.', 'error');
          wp_redirect(admin_url('admin.php?page=dw-pedagang')); exit;
     }
 
+    // Security Check: Admin Desa hanya boleh hapus pedagang desanya
     if (!$is_super_admin) {
-        // Cek apakah Admin Desa ini memiliki desa dari pedagang tsb
         $my_desa_id = $wpdb->get_var($wpdb->prepare("SELECT id FROM {$wpdb->prefix}dw_desa WHERE id_user_desa = %d", $current_user_id));
         if (!$my_desa_id || $my_desa_id != $pedagang->id_desa) {
             wp_die('Akses Ditolak. Anda tidak boleh menghapus pedagang dari desa lain.');
         }
     }
 
-    // 1. Hapus Produk
+    // Hapus Produk & Data
     $produk_ids = $wpdb->get_col("SELECT ID FROM {$wpdb->posts} WHERE post_type='dw_produk' AND post_author = {$pedagang->id_user}");
-    if (!empty($produk_ids)) {
-        foreach($produk_ids as $pid) wp_delete_post($pid, true);
-    }
+    if (!empty($produk_ids)) { foreach($produk_ids as $pid) wp_delete_post($pid, true); }
 
-    // 2. Hapus Data
     $wpdb->delete($wpdb->prefix.'dw_pedagang', ['id' => $id]);
 
-    // 3. Downgrade Role
+    // Downgrade Role
     $u = new WP_User($pedagang->id_user);
     if ($u->exists() && !$u->has_cap('administrator')) {
         $u->remove_role('pedagang');
         $u->add_role('subscriber');
     }
 
-    add_settings_error('dw_pedagang_notices', 'deleted', "Toko '{$pedagang->nama_toko}' berhasil dihapus.", 'success');
+    dw_set_notice("Toko '{$pedagang->nama_toko}' berhasil dihapus.", 'success');
     wp_redirect(admin_url('admin.php?page=dw-pedagang')); exit;
 }
 
 // --- RENDER UTAMA ---
 function dw_pedagang_page_render() {
     $action = $_GET['action'] ?? 'list';
-    if ($action === 'dw_delete') {
-        dw_pedagang_delete_handler(); return;
-    }
-    if ($action === 'add' || $action === 'edit') {
+    if ($action === 'dw_delete') { dw_pedagang_delete_handler(); return; }
+    if ($action === 'add' || $action === 'edit') { 
         $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
-        dw_pedagang_form_render($id); return;
+        dw_pedagang_form_render($id); return; 
     }
 
-    if (!class_exists('DW_Pedagang_List_Table')) {
-        require_once DW_CORE_PLUGIN_DIR . 'includes/list-tables/class-dw-pedagang-list-table.php';
-    }
+    // List Table View
+    if (!class_exists('DW_Pedagang_List_Table')) { require_once DW_CORE_PLUGIN_DIR . 'includes/list-tables/class-dw-pedagang-list-table.php'; }
     $table = new DW_Pedagang_List_Table();
     $table->prepare_items();
     ?>
@@ -222,7 +219,14 @@ function dw_pedagang_page_render() {
         <h1 class="wp-heading-inline">Manajemen Toko (UMKM)</h1>
         <a href="?page=dw-pedagang&action=add" class="page-title-action">Tambah Toko Baru</a>
         <hr class="wp-header-end">
-        <?php settings_errors('dw_pedagang_notices'); ?>
+        <?php 
+        // Tampilkan pesan error/sukses dari transient
+        $errors = get_transient('settings_errors');
+        if ($errors) {
+            settings_errors('dw_pedagang_notices');
+            delete_transient('settings_errors');
+        }
+        ?>
         <form method="get">
             <input type="hidden" name="page" value="dw-pedagang">
             <?php $table->search_box('Cari Toko', 's'); ?>
@@ -240,19 +244,18 @@ function dw_pedagang_form_render($id) {
     $current_user_id = get_current_user_id();
     $is_super_admin = current_user_can('administrator') || current_user_can('admin_kabupaten');
 
-    // Data Admin Desa (Untuk Context)
+    // Data Context Admin Desa
     $my_desa_data = null;
     if (!$is_super_admin) {
-        $my_desa_data = $wpdb->get_row($wpdb->prepare("SELECT id, nama_desa, api_provinsi_id, api_kabupaten_id, api_kecamatan_id, api_kelurahan_id FROM {$wpdb->prefix}dw_desa WHERE id_user_desa = %d", $current_user_id));
+        $my_desa_data = $wpdb->get_row($wpdb->prepare("SELECT id, nama_desa, api_kecamatan_id, api_kelurahan_id FROM {$wpdb->prefix}dw_desa WHERE id_user_desa = %d", $current_user_id));
         if (!$my_desa_data) {
-            echo '<div class="notice notice-error"><p>Error: Akun Anda belum terhubung ke Desa.</p></div>'; return;
+            echo '<div class="notice notice-error"><p>Error: Akun Anda belum terhubung ke Desa. Hubungi Admin.</p></div>'; return;
         }
     }
 
     if ($id > 0) {
         $item = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$wpdb->prefix}dw_pedagang WHERE id = %d", $id));
         if (!$item) { echo "<div class='error'><p>Data tidak ditemukan.</p></div>"; return; }
-        
         // Security check edit
         if (!$is_super_admin && $item->id_desa != $my_desa_data->id) {
             echo "<div class='error'><p>Akses Ditolak: Ini bukan pedagang desa Anda.</p></div>"; return;
@@ -262,19 +265,16 @@ function dw_pedagang_form_render($id) {
 
     $users = get_users(['orderby' => 'display_name']);
     $zona_json = isset($item->shipping_ojek_lokal_zona) ? $item->shipping_ojek_lokal_zona : "[\n  {\"id\": \"zona_1\", \"nama\": \"Area Dekat (0-3km)\", \"harga\": 5000}\n]";
-    
-    // Helper Preview
-    function dw_img_preview($url, $placeholder = 'Foto') {
-        return $url ? $url : "https://placehold.co/150x150/e2e8f0/64748b?text=$placeholder";
-    }
-    
-    // Load Helper API
+    function dw_img_preview($url, $placeholder = 'Foto') { return $url ? $url : "https://placehold.co/150x150/e2e8f0/64748b?text=$placeholder"; }
     $list_prov = function_exists('dw_get_api_provinsi') ? dw_get_api_provinsi() : [];
+    
+    // Tampilkan notifikasi di Form juga
+    $errors = get_transient('settings_errors');
+    if ($errors) { settings_errors('dw_pedagang_notices'); delete_transient('settings_errors'); }
     ?>
     <div class="wrap">
         <h1><?php echo $title; ?></h1>
-        <?php settings_errors('dw_pedagang_notices'); ?>
-
+        
         <form method="post" action="">
             <input type="hidden" name="id" value="<?php echo $id; ?>">
             <?php wp_nonce_field('dw_save_pedagang_nonce'); ?>
@@ -372,7 +372,6 @@ function dw_pedagang_form_render($id) {
                 </div>
 
                 <!-- BOX 3 & 4 (STATUS & BANK) -->
-                <!-- Kode sama seperti sebelumnya, hanya copy paste bagian ini -->
                 <div class="postbox">
                     <div class="postbox-header"><h2 class="hndle">3. Pengiriman & Status</h2></div>
                     <div class="inside">
@@ -410,12 +409,25 @@ function dw_pedagang_form_render($id) {
     <?php if ($is_super_admin): ?>
     <script>
     jQuery(document).ready(function($){
-        // Reuse script from previous file for cascading dropdown
+        // PERBAIKAN: Menggunakan action 'dw_get_wilayah' bukan 'dw_get_region_options'
         function loadRegion(type, parentId, targetSelector) {
             if(!parentId) return;
             $(targetSelector).prop('disabled', true).html('<option>Loading...</option>');
-            $.post(ajaxurl, { action: 'dw_get_region_options', type: type, parent_id: parentId }, function(res) {
-                $(targetSelector).html(res).prop('disabled', false);
+            $.get(dw_admin_vars.ajax_url, { 
+                action: 'dw_get_wilayah', // <-- ACTION YANG BENAR
+                type: type, 
+                id: parentId, // <-- PARAM YANG BENAR (id bukan parent_id)
+                nonce: dw_admin_vars.nonce 
+            }, function(res) {
+                if(res.success) {
+                    var options = '<option value="">-- Pilih --</option>';
+                    $.each(res.data, function(i, item){
+                        options += '<option value="' + item.code + '">' + item.name + '</option>';
+                    });
+                    $(targetSelector).html(options).prop('disabled', false);
+                } else {
+                    $(targetSelector).html('<option>Gagal memuat</option>');
+                }
             });
         }
         $('#dw_provinsi').change(function(){
