@@ -1,327 +1,307 @@
 /* * File Name:   admin-styles.css
- * Description: Stylesheet modern untuk Dashboard ala SaaS.
+ * Description: Stylesheet Premium Dashboard (Clean Style).
  */
 
 :root {
-    /* Color Palette - SaaS Style */
-    --saas-primary: #2563eb;       /* Royal Blue */
-    --saas-primary-dark: #1e40af;
-    --saas-secondary: #64748b;     /* Slate Gray */
-    --saas-bg: #f1f5f9;            /* Light Blue-Gray Background */
-    --saas-card-bg: #ffffff;
-    --saas-text-main: #0f172a;     /* Dark Slate */
-    --saas-text-muted: #64748b;
-    --saas-border: #e2e8f0;
-    
-    /* Status Colors */
-    --saas-green-bg: #dcfce7;
-    --saas-green-text: #166534;
-    --saas-blue-bg: #dbeafe;
-    --saas-blue-text: #1e40af;
-    --saas-orange-bg: #ffedd5;
-    --saas-orange-text: #9a3412;
-    --saas-teal-bg: #ccfbf1;
-    --saas-teal-text: #115e59;
-    --saas-red-bg: #fee2e2;
-    --saas-red-text: #991b1b;
+    --dw-brand-blue: #1e40af;      /* Biru Gelap (Header) */
+    --dw-brand-light: #eff6ff;     /* Biru Sangat Muda (Background Icon) */
+    --dw-text-dark: #1e293b;       /* Slate 800 */
+    --dw-text-grey: #64748b;       /* Slate 500 */
+    --dw-border-color: #e2e8f0;
+    --dw-white: #ffffff;
+    --dw-success: #10b981;
+    --dw-warning: #f59e0b;
+    --dw-danger: #ef4444;
 }
 
 .dw-wrap {
     margin: 20px 20px 0 0;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    color: var(--saas-text-main);
+    color: var(--dw-text-dark);
 }
 
-/* --- HEADER SECTION --- */
-.dw-saas-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 24px;
-}
-
-.dw-saas-title h1 {
-    font-size: 24px;
-    font-weight: 700;
-    color: var(--saas-text-main);
-    margin: 0;
-    letter-spacing: -0.5px;
-}
-
-.dw-saas-title p {
-    margin: 4px 0 0;
-    color: var(--saas-text-muted);
-    font-size: 14px;
-}
-
-.dw-user-profile {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    background: var(--saas-card-bg);
-    padding: 8px 16px;
-    border-radius: 30px;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-    border: 1px solid var(--saas-border);
-}
-
-.dw-user-avatar img {
-    border-radius: 50%;
-    display: block;
-}
-
-.dw-user-info span {
-    display: block;
-    font-size: 13px;
-    font-weight: 600;
-    line-height: 1.2;
-}
-
-.dw-user-info small {
-    font-size: 11px;
-    color: var(--saas-text-muted);
-}
-
-/* --- HERO BANNER (Gradient Blue) --- */
-.dw-saas-banner {
-    background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+/* --- 1. HERO BANNER (Blue Box) --- */
+.dw-dashboard-hero {
+    background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%); /* Gradient Biru Profesional */
     color: #fff;
     padding: 40px;
     border-radius: 16px;
-    margin-bottom: 32px;
-    box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.2);
+    box-shadow: 0 4px 20px rgba(37, 99, 235, 0.15);
+    margin-bottom: 30px;
     position: relative;
     overflow: hidden;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
 
-.dw-saas-banner::before {
+/* Pola background halus */
+.dw-dashboard-hero::before {
     content: '';
     position: absolute;
-    top: -50px; right: -50px;
-    width: 200px; height: 200px;
-    background: rgba(255,255,255,0.1);
-    border-radius: 50%;
-}
-.dw-saas-banner::after {
-    content: '';
-    position: absolute;
-    bottom: -30px; left: 50px;
-    width: 100px; height: 100px;
-    background: rgba(255,255,255,0.05);
-    border-radius: 50%;
+    right: 0; bottom: 0;
+    width: 300px; height: 100%;
+    background: radial-gradient(circle at bottom right, rgba(255,255,255,0.1) 0%, transparent 60%);
+    pointer-events: none;
 }
 
-.dw-saas-banner h2 {
+.dw-hero-content h2 {
+    color: #fff !important;
     font-size: 28px;
     font-weight: 700;
-    margin: 0 0 8px 0;
-    color: #fff !important;
+    margin: 0 0 10px 0;
+    line-height: 1.2;
 }
 
-.dw-saas-banner p {
+.dw-hero-content p {
+    color: rgba(255, 255, 255, 0.9);
     font-size: 15px;
-    opacity: 0.9;
     margin: 0;
     max-width: 600px;
 }
 
-/* --- STATS CARDS --- */
+.dw-hero-date {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 10px 20px;
+    border-radius: 12px;
+    backdrop-filter: blur(5px);
+    text-align: right;
+    border: 1px solid rgba(255,255,255,0.2);
+}
+
+.dw-hero-date span {
+    display: block;
+    font-size: 12px;
+    text-transform: uppercase;
+    opacity: 0.8;
+    margin-bottom: 4px;
+}
+
+.dw-hero-date strong {
+    font-size: 16px;
+    font-weight: 600;
+}
+
+/* --- 2. STATS GRID (Clean Cards) --- */
 .dw-stats-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); /* Responsif */
     gap: 24px;
     margin-bottom: 32px;
 }
 
 .dw-stat-card {
-    background: var(--saas-card-bg);
+    background: var(--dw-white);
     border-radius: 16px;
     padding: 24px;
-    border: 1px solid var(--saas-border);
-    box-shadow: 0 1px 3px rgba(0,0,0,0.02);
-    transition: transform 0.2s, box-shadow 0.2s;
+    border: 1px solid var(--dw-border-color);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    height: 100%;
+    height: 140px; /* Tinggi seragam */
 }
 
 .dw-stat-card:hover {
-    transform: translateY(-2px);
+    transform: translateY(-4px);
     box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+    border-color: #cbd5e1;
 }
 
-.dw-stat-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 16px;
-}
-
-.dw-stat-icon {
+.dw-stat-icon-wrapper {
     width: 48px;
     height: 48px;
     border-radius: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
+    margin-bottom: 16px;
     font-size: 24px;
 }
 
-.icon-blue { background: #eff6ff; color: #2563eb; }
-.icon-green { background: #f0fdf4; color: #16a34a; }
-.icon-purple { background: #f3e8ff; color: #9333ea; }
-.icon-orange { background: #fff7ed; color: #ea580c; }
-.icon-teal { background: #ccfbf1; color: #0d9488; } /* Untuk Wisata */
+/* Warna-warni Icon Background */
+.bg-blue { background: #eff6ff; color: #2563eb; }
+.bg-green { background: #f0fdf4; color: #16a34a; }
+.bg-purple { background: #f3e8ff; color: #9333ea; }
+.bg-orange { background: #fff7ed; color: #ea580c; }
+.bg-teal { background: #ccfbf1; color: #0d9488; }
 
 .dw-stat-value {
     font-size: 28px;
-    font-weight: 700;
-    color: var(--saas-text-main);
+    font-weight: 800;
+    color: var(--dw-text-dark);
     margin: 0;
     line-height: 1;
-    margin-bottom: 8px;
 }
 
 .dw-stat-label {
     font-size: 14px;
-    color: var(--saas-text-muted);
+    color: var(--dw-text-grey);
     font-weight: 500;
+    margin-top: 8px;
 }
 
-.dw-trend-badge {
-    font-size: 12px;
-    font-weight: 600;
-    padding: 2px 8px;
-    border-radius: 12px;
-    display: inline-block;
-}
-.trend-up { background: var(--saas-green-bg); color: var(--saas-green-text); }
-.trend-neutral { background: var(--saas-bg); color: var(--saas-text-muted); }
-
-/* --- CONTENT GRID (Chart & List) --- */
-.dw-content-grid {
+/* --- 3. MAIN CONTENT (Chart & List) --- */
+.dw-dashboard-split {
     display: grid;
     grid-template-columns: 2fr 1fr;
     gap: 24px;
 }
 
 @media (max-width: 1024px) {
-    .dw-content-grid { grid-template-columns: 1fr; }
+    .dw-dashboard-split { grid-template-columns: 1fr; }
 }
 
 .dw-panel {
-    background: var(--saas-card-bg);
+    background: var(--dw-white);
     border-radius: 16px;
-    border: 1px solid var(--saas-border);
+    border: 1px solid var(--dw-border-color);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
     overflow: hidden;
 }
 
 .dw-panel-header {
     padding: 20px 24px;
-    border-bottom: 1px solid var(--saas-border);
+    border-bottom: 1px solid var(--dw-border-color);
     display: flex;
     justify-content: space-between;
     align-items: center;
+    background: #f8fafc;
 }
 
 .dw-panel-header h3 {
     margin: 0;
     font-size: 16px;
     font-weight: 700;
+    color: var(--dw-text-dark);
 }
 
 .dw-panel-body {
     padding: 24px;
 }
 
-/* Custom Chart Bars */
-.dw-saas-chart {
-    height: 250px;
+/* --- CHART STYLE (CSS Bar Chart) --- */
+.dw-css-chart {
     display: flex;
     align-items: flex-end;
+    justify-content: space-between;
+    height: 250px;
     gap: 12px;
     padding-top: 20px;
 }
 
-.dw-chart-col {
+.dw-chart-column {
     flex: 1;
     display: flex;
     flex-direction: column;
     align-items: center;
-    height: 100%;
     justify-content: flex-end;
+    height: 100%;
     position: relative;
 }
 
 .dw-chart-bar {
     width: 100%;
-    background: #e2e8f0;
-    border-radius: 6px;
-    transition: height 0.6s cubic-bezier(0.4, 0, 0.2, 1), background 0.3s;
+    background-color: #e2e8f0;
+    border-radius: 6px 6px 0 0;
+    transition: height 0.6s cubic-bezier(0.4, 0, 0.2, 1);
     min-height: 4px;
 }
 
-.dw-chart-col:hover .dw-chart-bar {
-    background: var(--saas-primary);
+/* Hover Effect pada Bar */
+.dw-chart-column:hover .dw-chart-bar {
+    background-color: #2563eb; /* Biru */
+}
+
+/* Tooltip Angka */
+.dw-chart-tooltip {
+    position: absolute;
+    bottom: 100%;
+    margin-bottom: 8px;
+    background: #1e293b;
+    color: #fff;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+    opacity: 0;
+    transform: translateY(5px);
+    transition: all 0.2s;
+    pointer-events: none;
+    z-index: 10;
+}
+
+.dw-chart-column:hover .dw-chart-tooltip {
+    opacity: 1;
+    transform: translateY(0);
 }
 
 .dw-chart-label {
-    margin-top: 8px;
-    font-size: 12px;
-    color: var(--saas-text-muted);
+    margin-top: 10px;
+    font-size: 11px;
+    color: var(--dw-text-grey);
+    font-weight: 600;
 }
 
-/* List Items */
-.dw-list-item {
+/* --- RECENT ACTIVITY LIST --- */
+.dw-activity-list .activity-item {
+    padding: 16px 0;
+    border-bottom: 1px solid var(--dw-border-color);
     display: flex;
     align-items: center;
-    padding: 16px 0;
-    border-bottom: 1px solid var(--saas-border);
 }
-.dw-list-item:last-child { border-bottom: none; }
+.dw-activity-list .activity-item:last-child {
+    border-bottom: none;
+}
 
-.dw-list-icon {
+.activity-icon {
     width: 40px; height: 40px;
     border-radius: 10px;
-    background: var(--saas-bg);
-    color: var(--saas-primary);
+    background: #f1f5f9;
+    color: #64748b;
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-right: 16px;
-    font-size: 20px;
+    margin-right: 15px;
+    flex-shrink: 0;
 }
 
-.dw-list-content {
-    flex: 1;
-}
-
-.dw-list-title {
+.activity-info h4 {
+    margin: 0;
     font-size: 14px;
     font-weight: 600;
-    color: var(--saas-text-main);
-    display: block;
+    color: var(--dw-text-dark);
 }
 
-.dw-list-sub {
+.activity-info p {
+    margin: 2px 0 0;
     font-size: 12px;
-    color: var(--saas-text-muted);
-    display: block;
-    margin-top: 2px;
+    color: var(--dw-text-grey);
 }
 
-.dw-list-action {
+.activity-meta {
+    margin-left: auto;
     text-align: right;
 }
 
-.dw-badge-pill {
-    font-size: 11px;
+.activity-amount {
+    display: block;
     font-weight: 700;
-    padding: 4px 10px;
-    border-radius: 20px;
-    text-transform: uppercase;
+    font-size: 13px;
+    color: var(--dw-text-dark);
 }
-.badge-success { background: var(--saas-green-bg); color: var(--saas-green-text); }
-.badge-warning { background: var(--saas-orange-bg); color: var(--saas-orange-text); }
-.badge-danger { background: var(--saas-red-bg); color: var(--saas-red-text); }
+
+.activity-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    margin-top: 4px;
+}
+.badge-paid { background: #dcfce7; color: #166534; }
+.badge-pending { background: #fef9c3; color: #854d0e; }
+.badge-failed { background: #fee2e2; color: #991b1b; }
