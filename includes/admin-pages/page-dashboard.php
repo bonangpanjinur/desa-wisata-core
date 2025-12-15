@@ -3,6 +3,7 @@
  * File Name:   page-dashboard.php
  * File Folder: includes/admin-pages/
  * Description: Dashboard Admin Premium (Clean UI) dengan data Real-Time.
+ * Updated: Menambahkan Statistik Wisata & Sinkronisasi Desain SaaS.
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -13,7 +14,7 @@ function dw_dashboard_page_render() {
 
     // --- 1. PENGAMBILAN DATA (DATABASE REAL) ---
     
-    // Cek keberadaan tabel untuk menghindari error jika plugin baru diaktifkan
+    // Cek keberadaan tabel untuk menghindari error
     $table_desa = $wpdb->prefix . 'dw_desa';
     $table_wisata = $wpdb->prefix . 'dw_wisata';
     $table_pedagang = $wpdb->prefix . 'dw_pedagang';
@@ -27,7 +28,10 @@ function dw_dashboard_page_render() {
     };
 
     $count_desa = $get_count($table_desa, "status = 'aktif'");
+    
+    // [BARU] Menghitung Data Wisata
     $count_wisata = $get_count($table_wisata, "status = 'aktif'");
+    
     $count_pedagang = $get_count($table_pedagang, "status_akun = 'aktif'");
     $count_produk = $get_count($table_produk, "status = 'aktif'");
 
@@ -108,7 +112,7 @@ function dw_dashboard_page_render() {
                 </div>
             </div>
 
-            <!-- Card 3: Wisata (Sesuai Request) -->
+            <!-- Card 3: Wisata (DATA WISATA DITAMPILKAN DI SINI) -->
             <div class="dw-stat-card">
                 <div>
                     <div class="dw-stat-icon-wrapper bg-teal">
