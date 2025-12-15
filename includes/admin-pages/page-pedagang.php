@@ -7,8 +7,6 @@
  * yang dipilih cocok dengan salah satu Desa Wisata Aktif.
  * - Jika cocok, Toko otomatis dihubungkan ke Desa tersebut (kolom id_desa terisi).
  * - Menambahkan feedback visual AJAX di form agar Admin tahu status koneksinya sebelum menyimpan.
- *
- * @package DesaWisataCore
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -103,18 +101,16 @@ function dw_pedagang_form_handler() {
     // LOGIKA PENTING: AUTO-MATCH DESA (RELASI OTOMATIS)
     // =====================================================================
     $matched_desa_id = NULL;
-    if (!empty($data['api_kelurahan_id']) && !empty($data['api_kecamatan_id']) && !empty($data['api_kabupaten_id'])) {
-        // Cari di tabel dw_desa, apakah ada desa yang memiliki ID wilayah API yang sama
+    // PERBAIKAN: Hanya gunakan ID Kelurahan sebagai kunci pencocokan utama (agar konsisten dengan AJAX/Visual)
+    if (!empty($data['api_kelurahan_id'])) {
+        // Cari di tabel dw_desa, apakah ada desa yang memiliki ID Kelurahan yang sama
         // Dan pastikan desa tersebut statusnya 'aktif'
         $matched_desa_id = $wpdb->get_var($wpdb->prepare(
             "SELECT id FROM {$wpdb->prefix}dw_desa 
              WHERE api_kelurahan_id = %s 
-             AND api_kecamatan_id = %s 
-             AND api_kabupaten_id = %s
-             AND status = 'aktif'", // Pastikan desa aktif
-            $data['api_kelurahan_id'],
-            $data['api_kecamatan_id'],
-            $data['api_kabupaten_id']
+             AND status = 'aktif'
+             LIMIT 1", // Ambil 1 yang cocok
+            $data['api_kelurahan_id']
         ));
     }
     

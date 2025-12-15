@@ -1,7 +1,8 @@
 <?php
 /**
- * File Name:   page-desa.php
- * Description: CRUD Desa dengan Integrasi Alamat API Wilayah (Full Support).
+ * File Name:   includes/admin-pages/page-desa.php
+ * Description: CRUD Desa dengan Integrasi Alamat API Wilayah (Full Support) 
+ * + Data Keuangan (Bank, QRIS, Komisi).
  */
 
 if (!defined('ABSPATH')) exit;
@@ -43,6 +44,13 @@ function dw_desa_page_render() {
                 'foto'         => esc_url_raw($_POST['foto_desa_url']),
                 'status'       => sanitize_text_field($_POST['status']),
                 
+                // DATA KEUANGAN & KOMISI (BARU)
+                'persentase_komisi_penjualan' => isset($_POST['persentase_komisi']) ? floatval($_POST['persentase_komisi']) : 0,
+                'nama_bank_desa'              => sanitize_text_field($_POST['nama_bank_desa']),
+                'no_rekening_desa'            => sanitize_text_field($_POST['no_rekening_desa']),
+                'atas_nama_rekening_desa'     => sanitize_text_field($_POST['atas_nama_rekening_desa']),
+                'qris_image_url_desa'         => esc_url_raw($_POST['qris_image_url_desa']),
+
                 // DATA WILAYAH (API)
                 'api_provinsi_id' => sanitize_text_field($_POST['provinsi_id']),
                 'api_kabupaten_id'=> sanitize_text_field($_POST['kabupaten_id']),
@@ -53,7 +61,7 @@ function dw_desa_page_render() {
                 'provinsi'     => sanitize_text_field($_POST['provinsi_nama']), 
                 'kabupaten'    => sanitize_text_field($_POST['kabupaten_nama']),
                 'kecamatan'    => sanitize_text_field($_POST['kecamatan_nama']),
-                'kelurahan'    => sanitize_text_field($_POST['desa_nama']), // Perhatikan name='desa_nama' dari JS
+                'kelurahan'    => sanitize_text_field($_POST['desa_nama']),
                 
                 'alamat_lengkap' => sanitize_textarea_field($_POST['alamat_lengkap']),
                 'updated_at'   => current_time('mysql')
@@ -91,13 +99,11 @@ function dw_desa_page_render() {
     $users = get_users(['role__in' => ['administrator', 'admin_desa', 'editor']]);
 
     // --- LOGIKA API WILAYAH (Server Side Pre-fill) ---
-    // Mengambil data awal agar dropdown terisi saat mode Edit
     $provinsi_id    = $edit_data->api_provinsi_id ?? '';
     $kabupaten_id   = $edit_data->api_kabupaten_id ?? '';
     $kecamatan_id   = $edit_data->api_kecamatan_id ?? '';
     $kelurahan_id   = $edit_data->api_kelurahan_id ?? '';
 
-    // Pastikan fungsi helper tersedia
     $provinsi_list  = function_exists('dw_get_api_provinsi') ? dw_get_api_provinsi() : [];
     $kabupaten_list = (!empty($provinsi_id) && function_exists('dw_get_api_kabupaten')) ? dw_get_api_kabupaten($provinsi_id) : [];
     $kecamatan_list = (!empty($kabupaten_id) && function_exists('dw_get_api_kecamatan')) ? dw_get_api_kecamatan($kabupaten_id) : [];
@@ -143,12 +149,58 @@ function dw_desa_page_render() {
                         <tr><th>Nama Desa</th><td><input name="nama_desa" type="text" value="<?php echo esc_attr($edit_data->nama_desa ?? ''); ?>" class="regular-text" required placeholder="Contoh: Desa Wisata Pujon Kidul"></td></tr>
                         <tr><th>Deskripsi</th><td><?php wp_editor($edit_data->deskripsi ?? '', 'deskripsi', ['textarea_rows'=>5, 'media_buttons'=>false]); ?></td></tr>
                         
-                        <tr><th>Foto Desa</th><td>
-                            <input type="text" name="foto_desa_url" id="foto_desa_url" value="<?php echo esc_attr($edit_data->foto ?? ''); ?>" class="regular-text">
-                            <button type="button" class="button" id="btn_upload_foto">Upload Foto</button>
+                        <tr><th>Foto Sampul Desa</th><td>
+                            <div style="margin-bottom: 5px;">
+                                <input type="text" name="foto_desa_url" id="foto_desa_url" value="<?php echo esc_attr($edit_data->foto ?? ''); ?>" class="regular-text">
+                                <button type="button" class="button" id="btn_upload_foto">Upload Foto</button>
+                            </div>
+                            <p class="description">Foto utama untuk profil desa.</p>
                         </td></tr>
 
-                        <!-- BAGIAN 2: ALAMAT LENGKAP (API) -->
+                        <!-- BAGIAN 2: KEUANGAN & KOMISI -->
+                        <tr valign="top">
+                            <th scope="row"><h3 style="margin-top:20px;">Keuangan & Komisi</h3></th>
+                            <td><hr></td>
+                        </tr>
+                        <tr>
+                            <th><label for="persentase_komisi">Komisi Penjualan (%)</label></th>
+                            <td>
+                                <input type="number" name="persentase_komisi" id="persentase_komisi" step="0.01" min="0" max="100" value="<?php echo esc_attr($edit_data->persentase_komisi_penjualan ?? '0'); ?>" class="small-text"> %
+                                <p class="description">Persentase pendapatan yang masuk ke kas desa dari setiap transaksi.</p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th><label for="nama_bank_desa">Nama Bank</label></th>
+                            <td><input name="nama_bank_desa" id="nama_bank_desa" type="text" value="<?php echo esc_attr($edit_data->nama_bank_desa ?? ''); ?>" class="regular-text" placeholder="Contoh: Bank Jatim / BRI"></td>
+                        </tr>
+                        <tr>
+                            <th><label for="no_rekening_desa">Nomor Rekening</label></th>
+                            <td><input name="no_rekening_desa" id="no_rekening_desa" type="text" value="<?php echo esc_attr($edit_data->no_rekening_desa ?? ''); ?>" class="regular-text" placeholder="Contoh: 123-456-7890"></td>
+                        </tr>
+                        <tr>
+                            <th><label for="atas_nama_rekening_desa">Atas Nama</label></th>
+                            <td><input name="atas_nama_rekening_desa" id="atas_nama_rekening_desa" type="text" value="<?php echo esc_attr($edit_data->atas_nama_rekening_desa ?? ''); ?>" class="regular-text" placeholder="Nama pemilik rekening desa/BUMDes"></td>
+                        </tr>
+                        <tr>
+                            <th><label>QRIS Desa (Opsional)</label></th>
+                            <td>
+                                <div style="display: flex; align-items: start; gap: 10px;">
+                                    <?php 
+                                    $qris_url = $edit_data->qris_image_url_desa ?? ''; 
+                                    $qris_preview = $qris_url ? $qris_url : 'https://placehold.co/150x150/e2e8f0/64748b?text=QRIS';
+                                    ?>
+                                    <img src="<?php echo esc_url($qris_preview); ?>" id="preview_qris" style="width: 120px; height: 120px; object-fit: contain; border: 1px solid #ddd; padding: 2px; border-radius: 4px;">
+                                    <div>
+                                        <input type="text" name="qris_image_url_desa" id="qris_image_url_desa" value="<?php echo esc_attr($qris_url); ?>" class="regular-text" style="display:block; margin-bottom:5px;">
+                                        <button type="button" class="button" id="btn_upload_qris">Upload QRIS</button>
+                                        <button type="button" class="button button-link-delete" id="btn_hapus_qris" <?php echo empty($qris_url) ? 'style="display:none;"' : ''; ?>>Hapus</button>
+                                    </div>
+                                </div>
+                                <p class="description">Upload gambar kode QRIS resmi desa untuk penerimaan pembayaran digital.</p>
+                            </td>
+                        </tr>
+
+                        <!-- BAGIAN 3: ALAMAT LENGKAP -->
                         <tr valign="top">
                             <th scope="row"><h3 style="margin-top:20px;">Lokasi & Alamat</h3></th>
                             <td><hr></td>
@@ -250,7 +302,7 @@ function dw_desa_page_render() {
 
             <script>
             jQuery(document).ready(function($){
-                // 1. Media Uploader
+                // --- MEDIA UPLOADER (FOTO DESA) ---
                 var mediaUploader;
                 $('#btn_upload_foto').click(function(e) {
                     e.preventDefault();
@@ -265,9 +317,29 @@ function dw_desa_page_render() {
                     mediaUploader.open();
                 });
 
-                // PERBAIKAN: Menghapus logika Address/Wilayah inline karena sudah ditangani
-                // secara otomatis oleh assets/js/admin-scripts.js menggunakan ID yang sama 
-                // (#dw_provinsi, #dw_kabupaten, dll) dan mekanisme admin-ajax.php yang lebih stabil.
+                // --- MEDIA UPLOADER (QRIS) ---
+                var qrisUploader;
+                $('#btn_upload_qris').click(function(e) {
+                    e.preventDefault();
+                    if (qrisUploader) { qrisUploader.open(); return; }
+                    qrisUploader = wp.media.frames.file_frame = wp.media({
+                        title: 'Upload Gambar QRIS', button: { text: 'Gunakan Gambar Ini' }, multiple: false
+                    });
+                    qrisUploader.on('select', function() {
+                        var attachment = qrisUploader.state().get('selection').first().toJSON();
+                        $('#qris_image_url_desa').val(attachment.url);
+                        $('#preview_qris').attr('src', attachment.url);
+                        $('#btn_hapus_qris').show();
+                    });
+                    qrisUploader.open();
+                });
+
+                $('#btn_hapus_qris').click(function(e){
+                    e.preventDefault();
+                    $('#qris_image_url_desa').val('');
+                    $('#preview_qris').attr('src', 'https://placehold.co/150x150/e2e8f0/64748b?text=QRIS');
+                    $(this).hide();
+                });
             });
             </script>
         <?php else: ?>
