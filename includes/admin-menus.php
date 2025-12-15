@@ -22,6 +22,8 @@
  * --- PERBAIKAN (REQUEST PENGGUNA) ---
  * - Memperbaiki kondisi `if` untuk menampilkan menu Produk agar Administrator
  * (yang memiliki 'manage_options') juga dapat melihatnya.
+ * * --- PERBAIKAN (FATAL ERROR REDECLARE) ---
+ * - Menghapus fungsi dw_get_pending_reviews_count() yang duplikat dengan helpers.php.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -91,25 +93,7 @@ function dw_get_pending_orders_count() {
     return $count;
 }
 
-/**
- * BARU: Mendapatkan jumlah ulasan yang menunggu moderasi.
- * @return int
- */
-function dw_get_pending_reviews_count() {
-    global $wpdb;
-    $table_name = $wpdb->prefix . 'dw_ulasan';
-    // Gunakan cache
-    $count = wp_cache_get('dw_pending_reviews_count', 'desa_wisata_core');
-    if (false === $count) {
-        $count = (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(id) FROM $table_name WHERE status_moderasi = %s",
-            'pending'
-        ));
-        // Cache selama 5 menit
-        wp_cache_set('dw_pending_reviews_count', $count, 'desa_wisata_core', MINUTE_IN_SECONDS * 5);
-    }
-    return $count;
-}
+// dw_get_pending_reviews_count() DIHAPUS - Sudah ada di includes/helpers.php
 
 /**
  * BARU (MODEL 3): Mendapatkan jumlah pembelian paket yang menunggu verifikasi.

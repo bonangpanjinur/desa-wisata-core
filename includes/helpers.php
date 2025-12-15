@@ -9,6 +9,8 @@
  * * --- UPDATE v3.3 (FITUR PENGEMBALIAN STOK) ---
  * 1. Added: dw_restore_sub_order_stock() untuk mengembalikan stok.
  * 2. Modified: dw_update_sub_order_status() memanggil restore stock saat batal.
+ * * --- PERBAIKAN FATAL ERROR (REDECLARE) ---
+ * - dw_get_pending_reviews_count: Logika caching dipindahkan ke sini.
  *
  * @package DesaWisataCore
  */
@@ -395,21 +397,31 @@ function dw_get_embed_video_url_helper($url) {
 /**
  * Get Pending Reviews Count
  * Menghitung jumlah ulasan yang statusnya pending.
- * Dilengkapi pengecekan tabel untuk menghindari error jika tabel belum dibuat.
- * * Safe declaration added to prevent redeclare error.
+ * Safe declaration added to prevent redeclare error.
+ * UPDATE: Menggunakan caching (diambil dari admin-menus.php)
  */
 if ( ! function_exists( 'dw_get_pending_reviews_count' ) ) {
     function dw_get_pending_reviews_count() {
         global $wpdb;
         $table_name = $wpdb->prefix . 'dw_ulasan';
         
-        // Cek apakah tabel ada sebelum query untuk mencegah error database
-        if($wpdb->get_var("SHOW TABLES LIKE '$table_name'") != $table_name) {
-            return 0; // Return 0 jika tabel tidak ada
-        }
+        // Gunakan cache
+        $count = wp_cache_get('dw_pending_reviews_count', 'desa_wisata_core');
+        
+        if (false === $count) {
+            // Cek apakah tabel ada sebelum query untuk mencegah error database
+            if($wpdb->get_var("SHOW TABLES LIKE '$table_name'") != $table_name) {
+                return 0; // Return 0 jika tabel tidak ada
+            }
 
-        // Ambil jumlah ulasan pending
-        return (int) $wpdb->get_var("SELECT COUNT(id) FROM $table_name WHERE status_moderasi = 'pending'");
+            // Ambil jumlah ulasan pending
+            $count = (int) $wpdb->get_var("SELECT COUNT(id) FROM $table_name WHERE status_moderasi = 'pending'");
+            
+            // Cache selama 5 menit
+            wp_cache_set('dw_pending_reviews_count', $count, 'desa_wisata_core', MINUTE_IN_SECONDS * 5);
+        }
+        
+        return $count;
     }
 }
 
