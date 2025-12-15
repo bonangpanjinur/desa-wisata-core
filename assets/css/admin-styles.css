@@ -1,9 +1,5 @@
 /* * File Name:   admin-styles.css
- * File Folder: assets/css/
- * File Path:   assets/css/admin-styles.css
- * * Description: 
- * Stylesheet utama untuk mempercantik halaman Admin Plugin.
- * Berisi definisi variabel warna, Card UI, dan Grafik CSS-Only.
+ * Description: Stylesheet utama untuk Dashboard Admin (Classic Style).
  */
 
 :root {
@@ -24,6 +20,20 @@
 }
 
 /* --- Header & Titles --- */
+.dw-welcome-banner {
+    background: #fff; 
+    padding: 25px; 
+    border-radius: 8px; 
+    border-left: 5px solid #2271b1; 
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05); 
+    margin-bottom: 25px; 
+    display: flex; 
+    align-items: center; 
+    justify-content: space-between; 
+    flex-wrap: wrap; 
+    gap: 15px;
+}
+
 .dw-header {
     background: var(--dw-card-bg);
     padding: 20px;
@@ -33,7 +43,6 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-left: 4px solid var(--dw-primary);
 }
 
 .dw-header h1 {
@@ -53,46 +62,45 @@
 
 .dw-card {
     background: var(--dw-card-bg);
-    border-radius: 12px;
+    border-radius: 8px;
     padding: 25px;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.05);
-    transition: transform 0.2s, box-shadow 0.2s;
-    border: 1px solid rgba(0,0,0,0.02);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    border: 1px solid #dcdcde;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
+    transition: transform 0.2s, box-shadow 0.2s;
 }
 
 .dw-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.05);
 }
 
 .dw-card-icon {
     margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
 }
 
 .dw-card-icon .dashicons {
-    font-size: 32px;
-    width: 32px;
-    height: 32px;
-    color: var(--dw-primary);
-    background: #e6f0f8;
-    padding: 10px;
-    border-radius: 50%;
-    box-sizing: content-box;
+    font-size: 28px;
+    width: 28px;
+    height: 28px;
+    color: #646970;
 }
 
 .dw-card h3 {
     margin: 0 0 5px 0;
-    font-size: 14px;
+    font-size: 13px;
     color: #646970;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    font-weight: 600;
 }
 
 .dw-card-number {
-    font-size: 36px;
+    font-size: 32px;
     font-weight: 700;
     color: #1d2327;
     margin: 0;
@@ -101,88 +109,85 @@
 
 .dw-card-action {
     margin-top: 15px;
-    padding-top: 15px;
-    border-top: 1px solid #f0f0f1;
-    text-align: right;
+    font-size: 13px;
 }
 
 .dw-card-action a {
     text-decoration: none;
     font-weight: 500;
-    font-size: 13px;
     color: var(--dw-primary);
 }
 
-/* --- ANALYTICS CHART (CSS Only) --- */
-.dw-chart-container {
-    background: #fff;
-    border-radius: 8px;
-    padding: 20px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    margin-bottom: 25px;
-    border: 1px solid rgba(0,0,0,0.02);
+/* --- Charts & Activity --- */
+.dw-dashboard-columns {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
 }
 
-.dw-chart-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+.dw-chart-container, .dw-recent-activity {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    border: 1px solid #dcdcde;
+    padding: 20px;
+}
+
+.dw-chart-header, .dw-activity-header {
+    border-bottom: 1px solid #f0f0f1;
+    padding-bottom: 15px;
     margin-bottom: 20px;
 }
 
-.dw-chart-header h3 {
+.dw-chart-header h3, .dw-activity-header h3 {
     margin: 0;
     font-size: 16px;
     color: #1d2327;
 }
 
+/* Chart Bars CSS */
 .dw-chart-bars {
     display: flex;
     align-items: flex-end;
-    justify-content: space-around;
-    height: 200px;
-    border-bottom: 1px solid #e0e0e0;
-    padding-bottom: 5px;
-    gap: 10px;
+    gap: 2%;
+    height: 250px;
 }
 
 .dw-bar-group {
+    flex: 1;
     display: flex;
     flex-direction: column;
+    justify-content: flex-end;
     align-items: center;
-    flex: 1;
     position: relative;
-    cursor: pointer;
+    height: 100%;
 }
 
 .dw-bar {
-    width: 60%;
-    background: #2271b1;
+    width: 70%;
+    background: var(--dw-primary);
     border-radius: 4px 4px 0 0;
-    transition: height 0.5s ease, background 0.2s;
+    transition: height 0.5s ease;
     min-height: 2px;
-    position: relative;
 }
 
 .dw-bar:hover {
-    background: #135e96;
+    opacity: 0.8;
 }
 
 .dw-bar-tooltip {
     position: absolute;
     bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%);
+    margin-bottom: 5px;
     background: #1d2327;
     color: #fff;
-    padding: 4px 8px;
+    padding: 5px 8px;
     border-radius: 4px;
     font-size: 11px;
-    margin-bottom: 5px;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.2s;
     white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
     z-index: 10;
 }
 
@@ -197,15 +202,43 @@
     text-align: center;
 }
 
-/* Status Badges */
-.dw-status-badge {
-    display: inline-block;
-    padding: 4px 10px;
-    border-radius: 20px;
-    font-size: 12px;
-    font-weight: 600;
-    text-transform: uppercase;
+/* Activity List */
+.dw-activity-list ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
 }
-.status-aktif { background-color: #d1e7dd; color: #0f5132; }
-.status-pending { background-color: #fff3cd; color: #664d03; }
-.status-nonaktif { background-color: #f8d7da; color: #842029; }
+
+.dw-activity-list li {
+    padding: 12px 0;
+    border-bottom: 1px solid #f0f0f1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.dw-activity-list li:last-child {
+    border-bottom: none;
+}
+
+/* Form Styles */
+.dw-form-card {
+    background: #fff;
+    padding: 20px;
+    border: 1px solid #c3c4c7;
+    box-shadow: 0 1px 1px rgba(0,0,0,.04);
+    margin-top: 20px;
+    max-width: 800px;
+}
+
+.dw-form-table th {
+    width: 200px;
+}
+
+.dw-image-uploader-wrapper {
+    margin-top: 10px;
+}
+
+.dw-upload-button {
+    margin-top: 10px !important;
+    margin-right: 10px !important;
+}
