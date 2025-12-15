@@ -1,211 +1,307 @@
 /* * File Name:   admin-styles.css
- * File Folder: assets/css/
- * File Path:   assets/css/admin-styles.css
- * * Description: 
- * Stylesheet utama untuk mempercantik halaman Admin Plugin.
- * Berisi definisi variabel warna, Card UI, dan Grafik CSS-Only.
+ * Description: Stylesheet Premium Dashboard (Clean Style).
  */
 
 :root {
-    --dw-primary: #2271b1;
-    --dw-primary-hover: #135e96;
-    --dw-bg: #f0f2f5;
-    --dw-card-bg: #ffffff;
-    --dw-border: #dcdcde;
-    --dw-text: #3c434a;
-    --dw-success: #00a32a;
-    --dw-warning: #dba617;
-    --dw-danger: #d63638;
+    --dw-brand-blue: #1e40af;      /* Biru Gelap (Header) */
+    --dw-brand-light: #eff6ff;     /* Biru Sangat Muda (Background Icon) */
+    --dw-text-dark: #1e293b;       /* Slate 800 */
+    --dw-text-grey: #64748b;       /* Slate 500 */
+    --dw-border-color: #e2e8f0;
+    --dw-white: #ffffff;
+    --dw-success: #10b981;
+    --dw-warning: #f59e0b;
+    --dw-danger: #ef4444;
 }
 
 .dw-wrap {
     margin: 20px 20px 0 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--dw-text-dark);
 }
 
-/* --- Header & Titles --- */
-.dw-header {
-    background: var(--dw-card-bg);
-    padding: 20px;
-    border-radius: 8px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    margin-bottom: 25px;
+/* --- 1. HERO BANNER (Blue Box) --- */
+.dw-dashboard-hero {
+    background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%); /* Gradient Biru Profesional */
+    color: #fff;
+    padding: 40px;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(37, 99, 235, 0.15);
+    margin-bottom: 30px;
+    position: relative;
+    overflow: hidden;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-left: 4px solid var(--dw-primary);
 }
 
-.dw-header h1 {
-    margin: 0;
-    font-size: 24px;
-    font-weight: 600;
-    color: #1d2327;
+/* Pola background halus */
+.dw-dashboard-hero::before {
+    content: '';
+    position: absolute;
+    right: 0; bottom: 0;
+    width: 300px; height: 100%;
+    background: radial-gradient(circle at bottom right, rgba(255,255,255,0.1) 0%, transparent 60%);
+    pointer-events: none;
 }
 
-/* --- Dashboard Cards (Grid System) --- */
-.dw-dashboard-cards {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    gap: 20px;
-    margin-bottom: 30px;
-}
-
-.dw-card {
-    background: var(--dw-card-bg);
-    border-radius: 12px;
-    padding: 25px;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.05);
-    transition: transform 0.2s, box-shadow 0.2s;
-    border: 1px solid rgba(0,0,0,0.02);
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-}
-
-.dw-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 5px 15px rgba(0,0,0,0.08);
-}
-
-.dw-card-icon {
-    margin-bottom: 15px;
-}
-
-.dw-card-icon .dashicons {
-    font-size: 32px;
-    width: 32px;
-    height: 32px;
-    color: var(--dw-primary);
-    background: #e6f0f8;
-    padding: 10px;
-    border-radius: 50%;
-    box-sizing: content-box;
-}
-
-.dw-card h3 {
-    margin: 0 0 5px 0;
-    font-size: 14px;
-    color: #646970;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.dw-card-number {
-    font-size: 36px;
+.dw-hero-content h2 {
+    color: #fff !important;
+    font-size: 28px;
     font-weight: 700;
-    color: #1d2327;
-    margin: 0;
+    margin: 0 0 10px 0;
     line-height: 1.2;
 }
 
-.dw-card-action {
-    margin-top: 15px;
-    padding-top: 15px;
-    border-top: 1px solid #f0f0f1;
+.dw-hero-content p {
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 15px;
+    margin: 0;
+    max-width: 600px;
+}
+
+.dw-hero-date {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 10px 20px;
+    border-radius: 12px;
+    backdrop-filter: blur(5px);
     text-align: right;
+    border: 1px solid rgba(255,255,255,0.2);
 }
 
-.dw-card-action a {
-    text-decoration: none;
+.dw-hero-date span {
+    display: block;
+    font-size: 12px;
+    text-transform: uppercase;
+    opacity: 0.8;
+    margin-bottom: 4px;
+}
+
+.dw-hero-date strong {
+    font-size: 16px;
+    font-weight: 600;
+}
+
+/* --- 2. STATS GRID (Clean Cards) --- */
+.dw-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); /* Responsif */
+    gap: 24px;
+    margin-bottom: 32px;
+}
+
+.dw-stat-card {
+    background: var(--dw-white);
+    border-radius: 16px;
+    padding: 24px;
+    border: 1px solid var(--dw-border-color);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    height: 140px; /* Tinggi seragam */
+}
+
+.dw-stat-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+    border-color: #cbd5e1;
+}
+
+.dw-stat-icon-wrapper {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 16px;
+    font-size: 24px;
+}
+
+/* Warna-warni Icon Background */
+.bg-blue { background: #eff6ff; color: #2563eb; }
+.bg-green { background: #f0fdf4; color: #16a34a; }
+.bg-purple { background: #f3e8ff; color: #9333ea; }
+.bg-orange { background: #fff7ed; color: #ea580c; }
+.bg-teal { background: #ccfbf1; color: #0d9488; }
+
+.dw-stat-value {
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--dw-text-dark);
+    margin: 0;
+    line-height: 1;
+}
+
+.dw-stat-label {
+    font-size: 14px;
+    color: var(--dw-text-grey);
     font-weight: 500;
-    font-size: 13px;
-    color: var(--dw-primary);
+    margin-top: 8px;
 }
 
-/* --- ANALYTICS CHART (CSS Only) --- */
-.dw-chart-container {
-    background: #fff;
-    border-radius: 8px;
-    padding: 20px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    margin-bottom: 25px;
-    border: 1px solid rgba(0,0,0,0.02);
+/* --- 3. MAIN CONTENT (Chart & List) --- */
+.dw-dashboard-split {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 24px;
 }
 
-.dw-chart-header {
+@media (max-width: 1024px) {
+    .dw-dashboard-split { grid-template-columns: 1fr; }
+}
+
+.dw-panel {
+    background: var(--dw-white);
+    border-radius: 16px;
+    border: 1px solid var(--dw-border-color);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+    overflow: hidden;
+}
+
+.dw-panel-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--dw-border-color);
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
+    background: #f8fafc;
 }
 
-.dw-chart-header h3 {
+.dw-panel-header h3 {
     margin: 0;
     font-size: 16px;
-    color: #1d2327;
+    font-weight: 700;
+    color: var(--dw-text-dark);
 }
 
-.dw-chart-bars {
+.dw-panel-body {
+    padding: 24px;
+}
+
+/* --- CHART STYLE (CSS Bar Chart) --- */
+.dw-css-chart {
     display: flex;
     align-items: flex-end;
-    justify-content: space-around;
-    height: 200px;
-    border-bottom: 1px solid #e0e0e0;
-    padding-bottom: 5px;
-    gap: 10px;
+    justify-content: space-between;
+    height: 250px;
+    gap: 12px;
+    padding-top: 20px;
 }
 
-.dw-bar-group {
+.dw-chart-column {
+    flex: 1;
     display: flex;
     flex-direction: column;
     align-items: center;
-    flex: 1;
-    position: relative;
-    cursor: pointer;
-}
-
-.dw-bar {
-    width: 60%;
-    background: #2271b1;
-    border-radius: 4px 4px 0 0;
-    transition: height 0.5s ease, background 0.2s;
-    min-height: 2px;
+    justify-content: flex-end;
+    height: 100%;
     position: relative;
 }
 
-.dw-bar:hover {
-    background: #135e96;
+.dw-chart-bar {
+    width: 100%;
+    background-color: #e2e8f0;
+    border-radius: 6px 6px 0 0;
+    transition: height 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    min-height: 4px;
 }
 
-.dw-bar-tooltip {
+/* Hover Effect pada Bar */
+.dw-chart-column:hover .dw-chart-bar {
+    background-color: #2563eb; /* Biru */
+}
+
+/* Tooltip Angka */
+.dw-chart-tooltip {
     position: absolute;
     bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    background: #1d2327;
+    margin-bottom: 8px;
+    background: #1e293b;
     color: #fff;
     padding: 4px 8px;
     border-radius: 4px;
     font-size: 11px;
-    margin-bottom: 5px;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.2s;
+    font-weight: 600;
     white-space: nowrap;
+    opacity: 0;
+    transform: translateY(5px);
+    transition: all 0.2s;
+    pointer-events: none;
     z-index: 10;
 }
 
-.dw-bar-group:hover .dw-bar-tooltip {
+.dw-chart-column:hover .dw-chart-tooltip {
     opacity: 1;
+    transform: translateY(0);
 }
 
-.dw-bar-label {
+.dw-chart-label {
     margin-top: 10px;
     font-size: 11px;
-    color: #646970;
-    text-align: center;
+    color: var(--dw-text-grey);
+    font-weight: 600;
 }
 
-/* Status Badges */
-.dw-status-badge {
-    display: inline-block;
-    padding: 4px 10px;
-    border-radius: 20px;
-    font-size: 12px;
-    font-weight: 600;
-    text-transform: uppercase;
+/* --- RECENT ACTIVITY LIST --- */
+.dw-activity-list .activity-item {
+    padding: 16px 0;
+    border-bottom: 1px solid var(--dw-border-color);
+    display: flex;
+    align-items: center;
 }
-.status-aktif { background-color: #d1e7dd; color: #0f5132; }
-.status-pending { background-color: #fff3cd; color: #664d03; }
-.status-nonaktif { background-color: #f8d7da; color: #842029; }
+.dw-activity-list .activity-item:last-child {
+    border-bottom: none;
+}
+
+.activity-icon {
+    width: 40px; height: 40px;
+    border-radius: 10px;
+    background: #f1f5f9;
+    color: #64748b;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 15px;
+    flex-shrink: 0;
+}
+
+.activity-info h4 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--dw-text-dark);
+}
+
+.activity-info p {
+    margin: 2px 0 0;
+    font-size: 12px;
+    color: var(--dw-text-grey);
+}
+
+.activity-meta {
+    margin-left: auto;
+    text-align: right;
+}
+
+.activity-amount {
+    display: block;
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--dw-text-dark);
+}
+
+.activity-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    margin-top: 4px;
+}
+.badge-paid { background: #dcfce7; color: #166534; }
+.badge-pending { background: #fef9c3; color: #854d0e; }
+.badge-failed { background: #fee2e2; color: #991b1b; }
