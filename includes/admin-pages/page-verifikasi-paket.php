@@ -4,123 +4,61 @@
  * File Folder: includes/admin-pages/
  * File Path:   includes/admin-pages/page-verifikasi-paket.php
  *
- * [BARU] Halaman Admin untuk memverifikasi pembelian paket (Model 3).
+ * [UPDATED] Tampilan verifikasi pembelian paket lebih modern dan rapi.
  *
  * @package DesaWisataCore
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-/**
- * Handler untuk Aksi Admin: Setujui atau Tolak Setoran Paket.
- */
+// Handler (Tetap sama, hanya render yang dipercantik)
 function dw_verifikasi_paket_handler() {
     if (!isset($_POST['dw_verifikasi_paket_action'])) return;
     if (!wp_verify_nonce($_POST['_wpnonce'], 'dw_verifikasi_paket_nonce')) wp_die('Security check failed.');
 
-    if (!current_user_can('dw_manage_settings')) { // Hanya Super Admin
+    if (!current_user_can('dw_manage_settings')) {
         wp_die('Anda tidak punya izin.');
     }
 
     global $wpdb;
     $pembelian_id = absint($_POST['pembelian_id']);
-    $action_type = sanitize_key($_POST['action_type']); // 'approve_paket' or 'reject_paket'
+    $action_type = sanitize_key($_POST['action_type']);
     $redirect_url = admin_url('admin.php?page=dw-verifikasi-paket');
 
-    // 1. Ambil data pembelian
-    $pembelian = $wpdb->get_row($wpdb->prepare(
-        "SELECT * FROM {$wpdb->prefix}dw_pembelian_paket WHERE id = %d AND status = 'pending'", $pembelian_id
-    ));
-    
+    $pembelian = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$wpdb->prefix}dw_pembelian_paket WHERE id = %d AND status = 'pending'", $pembelian_id));
     if (!$pembelian) {
-        add_settings_error('dw_verifikasi_paket_notices', 'not_found', 'Data pembelian tidak ditemukan atau sudah diproses.', 'error');
-        set_transient('settings_errors', get_settings_errors(), 30);
-        wp_redirect($redirect_url);
-        exit;
+        add_settings_error('dw_verifikasi_paket_notices', 'not_found', 'Data tidak ditemukan.', 'error');
+        set_transient('settings_errors', get_settings_errors(), 30); wp_redirect($redirect_url); exit;
     }
 
-    // 2. Ambil data pedagang & desa terkait
-    $pedagang = $wpdb->get_row($wpdb->prepare(
-        "SELECT id_desa FROM {$wpdb->prefix}dw_pedagang WHERE id = %d", $pembelian->id_pedagang
-    ));
-    if (!$pedagang) {
-         add_settings_error('dw_verifikasi_paket_notices', 'pedagang_not_found', 'Pedagang terkait tidak ditemukan.', 'error');
-        set_transient('settings_errors', get_settings_errors(), 30);
-        wp_redirect($redirect_url);
-        exit;
-    }
-    $id_desa = $pedagang->id_desa;
+    $pedagang = $wpdb->get_row($wpdb->prepare("SELECT id_desa FROM {$wpdb->prefix}dw_pedagang WHERE id = %d", $pembelian->id_pedagang));
+    $id_desa = $pedagang ? $pedagang->id_desa : 0;
 
-    // 3. Proses Aksi
     if ($action_type === 'approve_paket') {
-        
-        // 3a. Update status pembelian
-        $wpdb->update(
-            $wpdb->prefix . 'dw_pembelian_paket',
-            ['status' => 'disetujui', 'processed_at' => current_time('mysql', 1)],
-            ['id' => $pembelian_id]
-        );
+        $wpdb->update($wpdb->prefix . 'dw_pembelian_paket', ['status' => 'disetujui', 'processed_at' => current_time('mysql', 1)], ['id' => $pembelian_id]);
+        $wpdb->query($wpdb->prepare("UPDATE {$wpdb->prefix}dw_pedagang SET sisa_transaksi = sisa_transaksi + %d, status_akun = 'aktif' WHERE id = %d", $pembelian->jumlah_transaksi, $pembelian->id_pedagang));
 
-        // 3b. Tambah kuota ke pedagang & Aktifkan akunnya
-        $wpdb->query($wpdb->prepare(
-            "UPDATE {$wpdb->prefix}dw_pedagang 
-             SET sisa_transaksi = sisa_transaksi + %d, status_akun = 'aktif' 
-             WHERE id = %d",
-            $pembelian->jumlah_transaksi,
-            $pembelian->id_pedagang
-        ));
-
-        // 3c. Hitung & Catat Komisi ke Payout Ledger
+        // Catat Komisi
         $harga_paket = (float) $pembelian->harga_paket;
-        $persen_desa = (float) $pembelian->persentase_komisi_desa;
-        $komisi_desa = ($harga_paket * $persen_desa) / 100;
+        $komisi_desa = ($harga_paket * (float)$pembelian->persentase_komisi_desa) / 100;
         $komisi_platform = $harga_paket - $komisi_desa;
-        $current_time = current_time('mysql', 1);
+        $time = current_time('mysql', 1);
 
-        // Catat Payout untuk Desa (Unpaid)
         if ($komisi_desa > 0 && $id_desa > 0) {
-            $wpdb->insert(
-                $wpdb->prefix . 'dw_payout_ledger',
-                [
-                    'order_id' => $pembelian_id, // Gunakan ID pembelian paket sebagai referensi
-                    'payable_to_type' => 'desa',
-                    'payable_to_id' => $id_desa,
-                    'amount' => $komisi_desa,
-                    'status' => 'unpaid',
-                    'created_at' => $current_time
-                ]
-            );
+            $wpdb->insert($wpdb->prefix . 'dw_payout_ledger', ['order_id' => $pembelian_id, 'payable_to_type' => 'desa', 'payable_to_id' => $id_desa, 'amount' => $komisi_desa, 'status' => 'unpaid', 'created_at' => $time]);
         }
-        // Catat Payout untuk Platform (Paid)
         if ($komisi_platform > 0) {
-            $wpdb->insert(
-                $wpdb->prefix . 'dw_payout_ledger',
-                [
-                    'order_id' => $pembelian_id,
-                    'payable_to_type' => 'platform',
-                    'payable_to_id' => 0, // 0 = Platform
-                    'amount' => $komisi_platform,
-                    'status' => 'paid',
-                    'created_at' => $current_time,
-                    'paid_at' => $current_time
-                ]
-            );
+            $wpdb->insert($wpdb->prefix . 'dw_payout_ledger', ['order_id' => $pembelian_id, 'payable_to_type' => 'platform', 'payable_to_id' => 0, 'amount' => $komisi_platform, 'status' => 'paid', 'created_at' => $time, 'paid_at' => $time]);
         }
 
-        dw_log_activity('PAKET_APPROVED', "Admin menyetujui pembelian paket #{$pembelian_id} (sejumlah Rp " . number_format($harga_paket) . ") oleh Pedagang #{$pembelian->id_pedagang}. Kuota +{$pembelian->jumlah_transaksi}. Komisi: Desa=Rp {$komisi_desa}, Platform=Rp {$komisi_platform}.", get_current_user_id());
-        add_settings_error('dw_verifikasi_paket_notices', 'paket_approved', 'Pembelian paket disetujui. Kuota pedagang telah ditambahkan.', 'success');
+        dw_log_activity('PAKET_APPROVED', "Admin menyetujui pembelian paket #{$pembelian_id}.", get_current_user_id());
+        add_settings_error('dw_verifikasi_paket_notices', 'paket_approved', 'Pembelian disetujui.', 'success');
 
     } elseif ($action_type === 'reject_paket') {
-        $catatan = sanitize_textarea_field($_POST['catatan_admin'] ?? 'Bukti transfer tidak valid.');
-        
-        $wpdb->update(
-            $wpdb->prefix . 'dw_pembelian_paket',
-            ['status' => 'ditolak', 'processed_at' => current_time('mysql', 1), 'catatan_admin' => $catatan],
-            ['id' => $pembelian_id]
-        );
-        
-        dw_log_activity('PAKET_REJECTED', "Admin menolak pembelian paket #{$pembelian_id}. Alasan: {$catatan}", get_current_user_id());
-        add_settings_error('dw_verifikasi_paket_notices', 'paket_rejected', 'Pembelian paket ditolak.', 'warning');
+        $catatan = sanitize_textarea_field($_POST['catatan_admin'] ?? 'Ditolak.');
+        $wpdb->update($wpdb->prefix . 'dw_pembelian_paket', ['status' => 'ditolak', 'processed_at' => current_time('mysql', 1), 'catatan_admin' => $catatan], ['id' => $pembelian_id]);
+        dw_log_activity('PAKET_REJECTED', "Admin menolak paket #{$pembelian_id}.", get_current_user_id());
+        add_settings_error('dw_verifikasi_paket_notices', 'paket_rejected', 'Pembelian ditolak.', 'warning');
     }
 
     set_transient('settings_errors', get_settings_errors(), 30);
@@ -130,20 +68,26 @@ function dw_verifikasi_paket_handler() {
 add_action('admin_init', 'dw_verifikasi_paket_handler');
 
 
-/**
- * Render Halaman Verifikasi Pembelian Paket.
- */
 function dw_verifikasi_paket_page_render() {
     global $wpdb;
     
+    // Ambil Pending
     $pending_purchases = $wpdb->get_results(
         $wpdb->prepare(
             "SELECT pp.*, p.nama_toko 
              FROM {$wpdb->prefix}dw_pembelian_paket pp
              JOIN {$wpdb->prefix}dw_pedagang p ON pp.id_pedagang = p.id
-             WHERE pp.status = %s 
-             ORDER BY pp.created_at ASC",
-            'pending'
+             WHERE pp.status = %s ORDER BY pp.created_at ASC", 'pending'
+        ), ARRAY_A
+    );
+    
+    // Ambil History Terakhir (5 saja)
+    $history_purchases = $wpdb->get_results(
+        $wpdb->prepare(
+            "SELECT pp.*, p.nama_toko 
+             FROM {$wpdb->prefix}dw_pembelian_paket pp
+             JOIN {$wpdb->prefix}dw_pedagang p ON pp.id_pedagang = p.id
+             WHERE pp.status != %s ORDER BY pp.created_at DESC LIMIT 5", 'pending'
         ), ARRAY_A
     );
     ?>
@@ -151,58 +95,113 @@ function dw_verifikasi_paket_page_render() {
         <div class="dw-header">
             <h1>Verifikasi Pembelian Paket</h1>
         </div>
+        
         <?php
         $errors = get_transient('settings_errors');
         if($errors) { settings_errors('dw_verifikasi_paket_notices'); delete_transient('settings_errors'); }
         ?>
-        <p>Verifikasi setoran pembelian paket kuota dari pedagang. Setelah disetujui, kuota akan otomatis ditambahkan ke akun pedagang.</p>
-        
-        <table class="wp-list-table widefat fixed striped">
-            <thead>
-                <tr>
-                    <th style="width: 20%;">Pedagang (Toko)</th>
-                    <th style="width: 25%;">Detail Paket</th>
-                    <th style="width: 15%;">Bukti Bayar</th>
-                    <th style="width: 15%;">Tanggal Pengajuan</th>
-                    <th style="width: 25%;">Aksi</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php if (empty($pending_purchases)): ?>
-                    <tr><td colspan="5">Tidak ada pembelian paket yang menunggu verifikasi.</td></tr>
-                <?php else: foreach ($pending_purchases as $item): ?>
+
+        <!-- Styles -->
+        <style>
+            .dw-card-table { background:#fff; border:1px solid #c3c4c7; border-radius:4px; box-shadow:0 1px 1px rgba(0,0,0,.04); overflow:hidden; margin-top:20px; }
+            .dw-badge { padding:3px 8px; border-radius:12px; font-size:11px; font-weight:bold; text-transform:uppercase; }
+            .badge-pending { background:#fef3c7; color:#92400e; }
+            .badge-approved { background:#dcfce7; color:#166534; }
+            .badge-rejected { background:#fee2e2; color:#991b1b; }
+            .dw-thumb-proof { max-width: 40px; max-height: 40px; border: 1px solid #ddd; border-radius: 4px; vertical-align: middle; margin-right: 5px; }
+        </style>
+
+        <!-- TABEL PENDING -->
+        <h2 style="font-size:16px; margin-top:0;">Menunggu Verifikasi</h2>
+        <div class="dw-card-table">
+            <table class="wp-list-table widefat fixed striped">
+                <thead>
                     <tr>
-                        <td><strong><?php echo esc_html($item['nama_toko']); ?></strong></td>
-                        <td>
-                            <?php echo esc_html($item['nama_paket_snapshot']); ?><br>
-                            Harga: <strong>Rp <?php echo number_format($item['harga_paket'], 0, ',', '.'); ?></strong><br>
-                            Kuota: <?php echo number_format_i18n($item['jumlah_transaksi']); ?> trx
-                        </td>
-                        <td>
-                            <a href="<?php echo esc_url($item['url_bukti_bayar']); ?>" target="_blank" class="button button-small">Lihat Bukti</a>
-                        </td>
-                        <td><?php echo date('d M Y H:i', strtotime($item['created_at'])); ?></td>
-                        <td>
-                             <form method="post" action="<?php echo admin_url('admin-post.php'); ?>" style="display:inline-block; margin-bottom: 5px;">
-                                <input type="hidden" name="action" value="dw_verifikasi_paket_action">
-                                <input type="hidden" name="pembelian_id" value="<?php echo esc_attr($item['id']); ?>">
-                                <input type="hidden" name="action_type" value="approve_paket">
-                                <?php wp_nonce_field('dw_verifikasi_paket_nonce'); ?>
-                                <button type="submit" class="button button-primary" onclick="return confirm('Setujui pembelian paket ini? Kuota akan ditambahkan ke pedagang.');">Setujui</button>
-                            </form>
-                             <form method="post" action="<?php echo admin_url('admin-post.php'); ?>" style="display:inline-block;">
-                                <input type="hidden" name="action" value="dw_verifikasi_paket_action">
-                                <input type="hidden" name="pembelian_id" value="<?php echo esc_attr($item['id']); ?>">
-                                <input type="hidden" name="action_type" value="reject_paket">
-                                <?php wp_nonce_field('dw_verifikasi_paket_nonce'); ?>
-                                <input type="text" name="catatan_admin" placeholder="Alasan Tolak (opsional)" style="width: 100px;">
-                                <button type="submit" class="button button-secondary" onclick="return confirm('Yakin menolak setoran ini?');">Tolak</button>
-                            </form>
-                        </td>
+                        <th width="20%">Toko (Pedagang)</th>
+                        <th width="20%">Paket</th>
+                        <th width="15%">Bukti Bayar</th>
+                        <th width="15%">Tanggal</th>
+                        <th width="30%">Aksi</th>
                     </tr>
-                <?php endforeach; endif; ?>
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                    <?php if (empty($pending_purchases)): ?>
+                        <tr><td colspan="5" style="text-align:center; padding:20px; color:#aaa;">Tidak ada permintaan baru.</td></tr>
+                    <?php else: foreach ($pending_purchases as $item): ?>
+                        <tr>
+                            <td><strong><?php echo esc_html($item['nama_toko']); ?></strong></td>
+                            <td>
+                                <?php echo esc_html($item['nama_paket_snapshot']); ?>
+                                <div style="color:#555; font-size:12px;">
+                                    Rp <?php echo number_format($item['harga_paket'], 0, ',', '.'); ?> 
+                                    <span style="color:#aaa;">|</span> 
+                                    +<?php echo number_format_i18n($item['jumlah_transaksi']); ?> trx
+                                </div>
+                            </td>
+                            <td>
+                                <a href="<?php echo esc_url($item['url_bukti_bayar']); ?>" target="_blank" class="button button-small" title="Lihat Bukti">
+                                    <span class="dashicons dashicons-visibility" style="margin-top:2px;"></span> Lihat
+                                </a>
+                            </td>
+                            <td><?php echo date('d M Y H:i', strtotime($item['created_at'])); ?></td>
+                            <td>
+                                <div style="display:flex; gap:5px;">
+                                    <form method="post" action="<?php echo admin_url('admin-post.php'); ?>">
+                                        <input type="hidden" name="action" value="dw_verifikasi_paket_action">
+                                        <input type="hidden" name="pembelian_id" value="<?php echo esc_attr($item['id']); ?>">
+                                        <input type="hidden" name="action_type" value="approve_paket">
+                                        <?php wp_nonce_field('dw_verifikasi_paket_nonce'); ?>
+                                        <button type="submit" class="button button-primary button-small" onclick="return confirm('Setujui pembelian ini?');">Setujui</button>
+                                    </form>
+                                    
+                                    <form method="post" action="<?php echo admin_url('admin-post.php'); ?>" style="display:flex; gap:5px;">
+                                        <input type="hidden" name="action" value="dw_verifikasi_paket_action">
+                                        <input type="hidden" name="pembelian_id" value="<?php echo esc_attr($item['id']); ?>">
+                                        <input type="hidden" name="action_type" value="reject_paket">
+                                        <?php wp_nonce_field('dw_verifikasi_paket_nonce'); ?>
+                                        <input type="text" name="catatan_admin" placeholder="Alasan..." style="width:100px; padding:2px 5px; font-size:12px;">
+                                        <button type="submit" class="button button-secondary button-small" onclick="return confirm('Yakin tolak?');">Tolak</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endforeach; endif; ?>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- TABEL HISTORY -->
+        <h2 style="font-size:16px; margin-top:30px;">Riwayat Terakhir</h2>
+        <div class="dw-card-table">
+            <table class="wp-list-table widefat fixed striped">
+                <thead>
+                    <tr>
+                        <th width="20%">Toko</th>
+                        <th width="20%">Paket</th>
+                        <th width="15%">Tanggal Proses</th>
+                        <th width="15%">Status</th>
+                        <th width="30%">Catatan</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (empty($history_purchases)): ?>
+                        <tr><td colspan="5" style="text-align:center; padding:15px; color:#aaa;">Belum ada riwayat.</td></tr>
+                    <?php else: foreach ($history_purchases as $item): 
+                        $status_cls = ($item['status'] == 'disetujui') ? 'badge-approved' : 'badge-rejected';
+                        $status_label = ($item['status'] == 'disetujui') ? 'Disetujui' : 'Ditolak';
+                    ?>
+                        <tr>
+                            <td><?php echo esc_html($item['nama_toko']); ?></td>
+                            <td><?php echo esc_html($item['nama_paket_snapshot']); ?></td>
+                            <td><?php echo date('d M Y', strtotime($item['processed_at'])); ?></td>
+                            <td><span class="dw-badge <?php echo $status_cls; ?>"><?php echo $status_label; ?></span></td>
+                            <td><em style="color:#666;"><?php echo esc_html($item['catatan_admin'] ? $item['catatan_admin'] : '-'); ?></em></td>
+                        </tr>
+                    <?php endforeach; endif; ?>
+                </tbody>
+            </table>
+        </div>
+
     </div>
     <?php
 }

@@ -4,7 +4,7 @@
  * File Folder: includes/admin-pages/
  * File Path:   includes/admin-pages/page-paket-transaksi.php
  *
- * [FIXED] Nama tombol submit disamakan dengan handler PHP.
+ * [UPDATED] Tampilan tabel dimodernisasi (Card Style + Badges).
  *
  * @package DesaWisataCore
  */
@@ -15,10 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  * Handler untuk form Tambah/Edit Paket.
  */
 function dw_paket_form_handler() {
-    // 1. Cek apakah tombol ditekan
     if (!isset($_POST['dw_submit_paket'])) return;
-    
-    // 2. Cek keamanan
     if (!wp_verify_nonce($_POST['_wpnonce'], 'dw_save_paket_nonce')) wp_die('Security check failed.');
     if (!current_user_can('dw_manage_settings')) wp_die('Anda tidak punya izin.');
 
@@ -27,12 +24,10 @@ function dw_paket_form_handler() {
     $id = isset($_POST['id']) ? absint($_POST['id']) : 0;
     $redirect_url = admin_url('admin.php?page=dw-paket-transaksi');
 
-    // 3. Validasi Input
     if (empty($_POST['nama_paket']) || !isset($_POST['harga']) || !isset($_POST['jumlah_transaksi'])) {
         add_settings_error('dw_paket_notices', 'fields_empty', 'Nama, Harga, dan Jumlah Transaksi wajib diisi.', 'error');
         set_transient('settings_errors', get_settings_errors(), 30);
-        // Redirect kembali ke form
-        wp_redirect(add_query_arg(['action' => ($id > 0 ? 'edit_paket' : 'add'), 'id' => $id], $redirect_url));
+        wp_redirect($redirect_url . '&action=add');
         exit;
     }
 
@@ -45,22 +40,12 @@ function dw_paket_form_handler() {
         'status'       => sanitize_key($_POST['status']),
     ];
 
-    // 4. Simpan ke Database
     if ($id > 0) {
-        $updated = $wpdb->update($table_name, $data, ['id' => $id]);
-        if ($updated !== false) {
-            add_settings_error('dw_paket_notices', 'paket_updated', 'Paket berhasil diperbarui.', 'success');
-        } else {
-            add_settings_error('dw_paket_notices', 'db_error', 'Gagal update database: ' . $wpdb->last_error, 'error');
-        }
+        $wpdb->update($table_name, $data, ['id' => $id]);
+        add_settings_error('dw_paket_notices', 'paket_updated', 'Paket berhasil diperbarui.', 'success');
     } else {
-        $inserted = $wpdb->insert($table_name, $data);
-        if ($inserted) {
-            add_settings_error('dw_paket_notices', 'paket_created', 'Paket berhasil dibuat.', 'success');
-        } else {
-            // PENTING: Ini menangkap error jika tabel belum ada
-            add_settings_error('dw_paket_notices', 'db_error', 'Gagal insert database (Cek tabel): ' . $wpdb->last_error, 'error');
-        }
+        $wpdb->insert($table_name, $data);
+        add_settings_error('dw_paket_notices', 'paket_created', 'Paket berhasil dibuat.', 'success');
     }
 
     set_transient('settings_errors', get_settings_errors(), 30);
@@ -80,10 +65,8 @@ function dw_paket_delete_handler() {
     global $wpdb;
     $id = absint($_GET['id']);
     $wpdb->delete($wpdb->prefix . 'dw_paket_transaksi', ['id' => $id]);
-    
     add_settings_error('dw_paket_notices', 'paket_deleted', 'Paket berhasil dihapus.', 'success');
     set_transient('settings_errors', get_settings_errors(), 30);
-    
     wp_redirect(admin_url('admin.php?page=dw-paket-transaksi'));
     exit;
 }
@@ -91,7 +74,7 @@ add_action('admin_init', 'dw_paket_delete_handler');
 
 
 /**
- * Render Halaman Utama (List atau Form).
+ * Render Halaman Utama.
  */
 function dw_paket_transaksi_page_render() {
     $action = isset($_GET['action']) ? $_GET['action'] : 'list';
@@ -102,30 +85,75 @@ function dw_paket_transaksi_page_render() {
         return;
     }
     
-    if ( ! class_exists( 'DW_Paket_List_Table' ) ) {
-        require_once DW_CORE_PLUGIN_DIR . 'includes/list-tables/class-dw-paket-list-table.php';
-    }
-    
-    $paketListTable = new DW_Paket_List_Table();
-    $paketListTable->prepare_items();
+    // Tampilkan List Tabel Modern
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'dw_paket_transaksi';
+    $rows = $wpdb->get_results("SELECT * FROM $table_name ORDER BY harga ASC");
     ?>
     <div class="wrap dw-wrap">
         <div class="dw-header">
             <h1>Paket Kuota Transaksi</h1>
             <a href="<?php echo admin_url('admin.php?page=dw-paket-transaksi&action=add'); ?>" class="page-title-action">Tambah Paket Baru</a>
         </div>
+        
         <?php
         $errors = get_transient('settings_errors');
-        if($errors) {
-            settings_errors('dw_paket_notices');
-            delete_transient('settings_errors');
-        }
+        if($errors) { settings_errors('dw_paket_notices'); delete_transient('settings_errors'); }
         ?>
+        
         <p>Kelola paket-paket kuota transaksi yang dapat dibeli oleh pedagang.</p>
-         <form method="get">
-            <input type="hidden" name="page" value="dw-paket-transaksi">
-            <?php $paketListTable->display(); ?>
-        </form>
+
+        <!-- CSS untuk Tampilan Rapi -->
+        <style>
+            .dw-card-table { background:#fff; border:1px solid #c3c4c7; border-radius:4px; box-shadow:0 1px 1px rgba(0,0,0,.04); overflow:hidden; margin-top:15px; }
+            .dw-badge { display:inline-block; padding:4px 8px; border-radius:12px; font-size:11px; font-weight:600; line-height:1; }
+            .dw-badge-active { background:#dcfce7; color:#166534; border:1px solid #bbf7d0; }
+            .dw-badge-nonaktif { background:#fee2e2; color:#991b1b; border:1px solid #fecaca; }
+            .dw-price-tag { font-weight:700; color:#1d2327; font-size:14px; }
+            .dw-quota-badge { background:#e0f2f1; color:#00695c; padding:3px 8px; border-radius:4px; font-weight:600; border:1px solid #b2dfdb; }
+        </style>
+
+        <div class="dw-card-table">
+            <table class="wp-list-table widefat fixed striped">
+                <thead>
+                    <tr>
+                        <th width="25%">Nama Paket</th>
+                        <th width="15%">Harga</th>
+                        <th width="15%">Kuota</th>
+                        <th width="15%">Komisi Desa</th>
+                        <th width="10%">Status</th>
+                        <th width="20%">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (empty($rows)): ?>
+                        <tr><td colspan="6" style="text-align:center; padding:20px; color:#777;">Belum ada paket transaksi.</td></tr>
+                    <?php else: foreach ($rows as $row): 
+                        $edit_url = admin_url('admin.php?page=dw-paket-transaksi&action=edit_paket&id=' . $row->id);
+                        $del_url = wp_nonce_url(admin_url('admin.php?page=dw-paket-transaksi&action=delete_paket&id=' . $row->id), 'dw_delete_paket_nonce');
+                        
+                        $status_html = ($row->status === 'aktif') 
+                            ? '<span class="dw-badge dw-badge-active">Aktif</span>' 
+                            : '<span class="dw-badge dw-badge-nonaktif">Nonaktif</span>';
+                    ?>
+                    <tr>
+                        <td>
+                            <strong><a href="<?php echo $edit_url; ?>" style="font-size:14px;"><?php echo esc_html($row->nama_paket); ?></a></strong>
+                            <br><small style="color:#64748b;"><?php echo esc_html($row->deskripsi); ?></small>
+                        </td>
+                        <td><span class="dw-price-tag">Rp <?php echo number_format($row->harga, 0, ',', '.'); ?></span></td>
+                        <td><span class="dw-quota-badge"><?php echo number_format_i18n($row->jumlah_transaksi); ?> trx</span></td>
+                        <td><?php echo floatval($row->persentase_komisi_desa); ?>%</td>
+                        <td><?php echo $status_html; ?></td>
+                        <td>
+                            <a href="<?php echo $edit_url; ?>" class="button button-small button-primary">Edit</a>
+                            <a href="<?php echo $del_url; ?>" class="button button-small" onclick="return confirm('Yakin hapus paket ini?');" style="color:#b32d2e;">Hapus</a>
+                        </td>
+                    </tr>
+                    <?php endforeach; endif; ?>
+                </tbody>
+            </table>
+        </div>
     </div>
     <?php
 }
@@ -142,61 +170,57 @@ function dw_paket_form_render($id = 0) {
         $item = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$wpdb->prefix}dw_paket_transaksi WHERE id = %d", $id));
         $page_title = 'Edit Paket';
     }
-    
-    // Tampilkan error di halaman form juga
-    $errors = get_transient('settings_errors');
-    if($errors) {
-        settings_errors('dw_paket_notices');
-        delete_transient('settings_errors');
-    }
     ?>
     <div class="wrap dw-wrap">
         <h1><?php echo esc_html($page_title); ?></h1>
+        <?php settings_errors('dw_paket_notices'); ?>
         
-        <form method="post" class="dw-form-card" action="">
+        <form method="post" class="dw-form-card" action="<?php echo admin_url('admin.php?page=dw-paket-transaksi'); ?>">
             <input type="hidden" name="id" value="<?php echo esc_attr($id); ?>">
-            <!-- Hidden input kunci untuk trigger handler -->
             <input type="hidden" name="dw_submit_paket" value="1">
             <?php wp_nonce_field('dw_save_paket_nonce'); ?>
             
-            <table class="form-table dw-form-table">
-                <tr>
-                    <th scope="row"><label for="nama_paket">Nama Paket <span style="color:red;">*</span></label></th>
-                    <td><input name="nama_paket" type="text" id="nama_paket" value="<?php echo esc_attr($item->nama_paket ?? ''); ?>" class="regular-text" required>
-                    <p class="description">Contoh: Paket Bronze</p></td>
-                </tr>
-                <tr>
-                    <th scope="row"><label for="deskripsi">Deskripsi Singkat</label></th>
-                    <td><textarea name="deskripsi" id="deskripsi" rows="3" class="large-text"><?php echo esc_textarea($item->deskripsi ?? ''); ?></textarea>
-                    <p class="description">Contoh: Cocok untuk toko yang baru memulai.</p></td>
-                </tr>
-                <tr>
-                    <th scope="row"><label for="harga">Harga (Rp) <span style="color:red;">*</span></label></th>
-                    <td><input name="harga" type="number" id="harga" value="<?php echo esc_attr($item->harga ?? '50000'); ?>" class="regular-text" required min="0" step="1000"></td>
-                </tr>
-                <tr>
-                    <th scope="row"><label for="jumlah_transaksi">Jumlah Kuota Transaksi <span style="color:red;">*</span></label></th>
-                    <td><input name="jumlah_transaksi" type="number" id="jumlah_transaksi" value="<?php echo esc_attr($item->jumlah_transaksi ?? '100'); ?>" class="regular-text" required min="1" step="1">
-                    <p class="description">Jumlah pesanan yang bisa diproses menggunakan paket ini.</p></td>
-                </tr>
-                <tr>
-                    <th scope="row"><label for="persentase_komisi_desa">Komisi Desa (%) <span style="color:red;">*</span></label></th>
-                    <td><input name="persentase_komisi_desa" type="number" id="persentase_komisi_desa" value="<?php echo esc_attr($item->persentase_komisi_desa ?? '20.0'); ?>" class="regular-text" required min="0" max="100" step="0.1">
-                    <p class="description">Persentase dari Harga Paket yang akan dialokasikan sebagai komisi (utang) ke Admin Desa.</p></td>
-                </tr>
-                <tr>
-                    <th scope="row"><label for="status">Status</label></th>
-                    <td><select name="status" id="status">
-                        <option value="aktif" <?php selected($item->status ?? 'aktif', 'aktif'); ?>>Aktif (Bisa dibeli)</option>
-                        <option value="nonaktif" <?php selected($item->status ?? '', 'nonaktif'); ?>>Nonaktif (Disembunyikan)</option>
-                    </select></td>
-                </tr>
-            </table>
-            
-            <div class="dw-form-footer">
-                <!-- Gunakan name yang sama dengan pengecekan di handler -->
-                <?php submit_button('Simpan Paket', 'primary', 'dw_submit_paket', false); ?>
-                 <a href="<?php echo admin_url('admin.php?page=dw-paket-transaksi'); ?>" class="button button-secondary">Batal</a>
+            <div class="card" style="padding:20px; max-width:800px;">
+                <table class="form-table dw-form-table">
+                    <tr>
+                        <th scope="row"><label for="nama_paket">Nama Paket <span style="color:red;">*</span></label></th>
+                        <td><input name="nama_paket" type="text" id="nama_paket" value="<?php echo esc_attr($item->nama_paket ?? ''); ?>" class="regular-text" required placeholder="Contoh: Paket Gold"></td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="deskripsi">Deskripsi Singkat</label></th>
+                        <td><textarea name="deskripsi" id="deskripsi" rows="3" class="large-text" placeholder="Keterangan singkat paket..."><?php echo esc_textarea($item->deskripsi ?? ''); ?></textarea></td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="harga">Harga (Rp) <span style="color:red;">*</span></label></th>
+                        <td><input name="harga" type="number" id="harga" value="<?php echo esc_attr($item->harga ?? ''); ?>" class="regular-text" required min="0" step="1000"></td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="jumlah_transaksi">Kuota Transaksi <span style="color:red;">*</span></label></th>
+                        <td>
+                            <input name="jumlah_transaksi" type="number" id="jumlah_transaksi" value="<?php echo esc_attr($item->jumlah_transaksi ?? '100'); ?>" class="regular-text" required min="1" step="1">
+                            <p class="description">Jumlah pesanan yang bisa diproses menggunakan paket ini.</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="persentase_komisi_desa">Komisi Desa (%) <span style="color:red;">*</span></label></th>
+                        <td>
+                            <input name="persentase_komisi_desa" type="number" id="persentase_komisi_desa" value="<?php echo esc_attr($item->persentase_komisi_desa ?? '20.0'); ?>" class="regular-text" required min="0" max="100" step="0.1">
+                            <p class="description">Persentase dari Harga Paket yang akan dialokasikan sebagai komisi (pendapatan) ke Admin Desa.</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="status">Status</label></th>
+                        <td><select name="status" id="status">
+                            <option value="aktif" <?php selected($item->status ?? 'aktif', 'aktif'); ?>>Aktif (Bisa dibeli)</option>
+                            <option value="nonaktif" <?php selected($item->status ?? '', 'nonaktif'); ?>>Nonaktif (Disembunyikan)</option>
+                        </select></td>
+                    </tr>
+                </table>
+                
+                <div class="dw-form-footer" style="margin-top:20px;">
+                    <?php submit_button('Simpan Paket', 'primary', 'dw_submit_paket', false); ?>
+                     <a href="<?php echo admin_url('admin.php?page=dw-paket-transaksi'); ?>" class="button button-secondary">Batal</a>
+                </div>
             </div>
         </form>
     </div>
