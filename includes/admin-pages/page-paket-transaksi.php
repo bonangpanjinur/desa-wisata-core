@@ -4,7 +4,9 @@
  * File Folder: includes/admin-pages/
  * File Path:   includes/admin-pages/page-paket-transaksi.php
  *
- * [BARU] Halaman Admin untuk CRUD Paket Transaksi (Model 3).
+ * [FIXED] 
+ * - Memperbaiki nama tombol submit agar sesuai dengan handler PHP.
+ * - Memastikan data tersimpan ke tabel dw_paket_transaksi.
  *
  * @package DesaWisataCore
  */
@@ -15,7 +17,9 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  * Handler untuk form Tambah/Edit Paket.
  */
 function dw_paket_form_handler() {
+    // FIX: Mengecek nama tombol yang benar ('dw_submit_paket')
     if (!isset($_POST['dw_submit_paket'])) return;
+    
     if (!wp_verify_nonce($_POST['_wpnonce'], 'dw_save_paket_nonce')) wp_die('Security check failed.');
     if (!current_user_can('dw_manage_settings')) wp_die('Anda tidak punya izin.');
 
@@ -27,7 +31,7 @@ function dw_paket_form_handler() {
     if (empty($_POST['nama_paket']) || !isset($_POST['harga']) || !isset($_POST['jumlah_transaksi'])) {
         add_settings_error('dw_paket_notices', 'fields_empty', 'Nama, Harga, dan Jumlah Transaksi wajib diisi.', 'error');
         set_transient('settings_errors', get_settings_errors(), 30);
-        wp_redirect($redirect_url . '&action=add');
+        wp_redirect($redirect_url . ($id == 0 ? '&action=add' : '&action=edit_paket&id='.$id));
         exit;
     }
 
@@ -41,11 +45,19 @@ function dw_paket_form_handler() {
     ];
 
     if ($id > 0) {
-        $wpdb->update($table_name, $data, ['id' => $id]);
-        add_settings_error('dw_paket_notices', 'paket_updated', 'Paket berhasil diperbarui.', 'success');
+        $updated = $wpdb->update($table_name, $data, ['id' => $id]);
+        if ($updated === false) {
+             add_settings_error('dw_paket_notices', 'db_error', 'Gagal update database: ' . $wpdb->last_error, 'error');
+        } else {
+             add_settings_error('dw_paket_notices', 'paket_updated', 'Paket berhasil diperbarui.', 'success');
+        }
     } else {
-        $wpdb->insert($table_name, $data);
-        add_settings_error('dw_paket_notices', 'paket_created', 'Paket berhasil dibuat.', 'success');
+        $inserted = $wpdb->insert($table_name, $data);
+        if ($inserted) {
+            add_settings_error('dw_paket_notices', 'paket_created', 'Paket berhasil dibuat.', 'success');
+        } else {
+            add_settings_error('dw_paket_notices', 'db_error', 'Gagal insert database: ' . $wpdb->last_error, 'error');
+        }
     }
 
     set_transient('settings_errors', get_settings_errors(), 30);
@@ -85,7 +97,6 @@ function dw_paket_transaksi_page_render() {
         return;
     }
     
-    // --- PERBAIKAN: Memuat class List Table jika belum ada ---
     if ( ! class_exists( 'DW_Paket_List_Table' ) ) {
         require_once DW_CORE_PLUGIN_DIR . 'includes/list-tables/class-dw-paket-list-table.php';
     }
@@ -131,8 +142,10 @@ function dw_paket_form_render($id = 0) {
         <h1><?php echo esc_html($page_title); ?></h1>
         <?php settings_errors('dw_paket_notices'); ?>
         
-        <form method="post" class="dw-form-card" action="<?php echo admin_url('admin.php?page=dw-paket-transaksi'); ?>">
+        <!-- FIX: Action form diarahkan ke halaman yang sama agar handler admin_init tertangkap -->
+        <form method="post" class="dw-form-card" action="">
             <input type="hidden" name="id" value="<?php echo esc_attr($id); ?>">
+            <!-- FIX: Name input hidden ini harus sama dengan yang dicek di handler -->
             <input type="hidden" name="dw_submit_paket" value="1">
             <?php wp_nonce_field('dw_save_paket_nonce'); ?>
             
@@ -171,7 +184,8 @@ function dw_paket_form_render($id = 0) {
             </table>
             
             <div class="dw-form-footer">
-                <?php submit_button('Simpan Paket', 'primary', 'dw_submit_paket_btn', false); // Gunakan name berbeda untuk hindari konflik ?>
+                <!-- FIX: Name tombol disesuaikan, atau gunakan input hidden seperti di atas -->
+                <?php submit_button('Simpan Paket', 'primary', 'dw_submit_paket', false); ?>
                  <a href="<?php echo admin_url('admin.php?page=dw-paket-transaksi'); ?>" class="button button-secondary">Batal</a>
             </div>
         </form>

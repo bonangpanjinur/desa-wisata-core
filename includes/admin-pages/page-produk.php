@@ -1,7 +1,7 @@
 <?php
 /**
  * File Name:   page-produk.php
- * Description: CRUD Produk dengan Smart Context (Admin bisa pilih, Pedagang otomatis terkunci).
+ * Description: CRUD Produk dengan penyesuaian kolom database (Berat & Kondisi).
  */
 
 if (!defined('ABSPATH')) exit;
@@ -41,6 +41,8 @@ function dw_produk_page_info_render() {
         }
 
         $nama = sanitize_text_field($_POST['nama_produk']);
+        
+        // FIX: Menambahkan field Berat dan Kondisi sesuai database
         $data = [
             'id_pedagang'  => $id_pedagang_input,
             'nama_produk'  => $nama,
@@ -48,6 +50,8 @@ function dw_produk_page_info_render() {
             'deskripsi'    => wp_kses_post($_POST['deskripsi']),
             'harga'        => floatval($_POST['harga']),
             'stok'         => intval($_POST['stok']),
+            'berat_gram'   => intval($_POST['berat_gram']), // Field Baru
+            'kondisi'      => sanitize_key($_POST['kondisi']), // Field Baru
             'kategori'     => sanitize_text_field($_POST['kategori']),
             'foto_utama'   => esc_url_raw($_POST['foto_utama']),
             'status'       => sanitize_text_field($_POST['status']),
@@ -143,6 +147,16 @@ function dw_produk_page_info_render() {
                             <tr><th>Nama Produk</th><td><input name="nama_produk" type="text" value="<?php echo esc_attr($edit_data->nama_produk ?? ''); ?>" class="regular-text" required></td></tr>
                             <tr><th>Deskripsi</th><td><?php wp_editor($edit_data->deskripsi ?? '', 'deskripsi', ['textarea_rows'=>5, 'media_buttons'=>false]); ?></td></tr>
                             <tr><th>Harga (Rp)</th><td><input name="harga" type="number" value="<?php echo esc_attr($edit_data->harga ?? 0); ?>" class="regular-text"></td></tr>
+                            
+                            <!-- FIX: Menambahkan Berat dan Kondisi -->
+                            <tr><th>Berat (Gram)</th><td><input name="berat_gram" type="number" value="<?php echo esc_attr($edit_data->berat_gram ?? 0); ?>" class="small-text"> <span class="description">gram</span></td></tr>
+                            <tr><th>Kondisi</th><td>
+                                <select name="kondisi">
+                                    <option value="baru" <?php selected($edit_data ? $edit_data->kondisi : '', 'baru'); ?>>Baru</option>
+                                    <option value="bekas" <?php selected($edit_data ? $edit_data->kondisi : '', 'bekas'); ?>>Bekas</option>
+                                </select>
+                            </td></tr>
+
                             <tr><th>Stok</th><td><input name="stok" type="number" value="<?php echo esc_attr($edit_data->stok ?? 0); ?>" class="small-text"></td></tr>
                             <tr><th>Kategori</th><td><input name="kategori" type="text" value="<?php echo esc_attr($edit_data->kategori ?? ''); ?>" class="regular-text" placeholder="Contoh: Makanan"></td></tr>
                             
@@ -238,3 +252,4 @@ function dw_produk_page_info_render() {
     </div>
     <?php
 }
+?>

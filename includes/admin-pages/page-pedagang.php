@@ -2,9 +2,9 @@
 /**
  * File: includes/admin-pages/page-pedagang.php
  * Description: Manajemen CRUD Toko (Pedagang) + Auto Relasi Desa Wisata.
- * * PERBAIKAN PENTING:
- * 1. Menambahkan Transient Notices (set_transient) agar pesan error TIDAK HILANG saat redirect.
- * 2. Memperbaiki nama Action AJAX di script JS ('dw_get_wilayah' bukan 'dw_get_region_options').
+ * * PERBAIKAN:
+ * 1. Memastikan semua field (shipping, status) tersimpan dengan benar.
+ * 2. Menghindari error JSON pada zona ongkir.
  * 3. Memastikan logika Admin Desa memaksa ID Desa yang benar.
  */
 
@@ -61,10 +61,13 @@ function dw_pedagang_form_handler() {
         wp_redirect(dw_get_redirect_url($id)); exit;
     }
 
-    // 3. Persiapan Data
+    // 3. Persiapan Data JSON & Cleaning
     $kel_id = sanitize_text_field($_POST['kelurahan_id_mirror'] ?? '');
-    $zona_json = isset($_POST['shipping_ojek_lokal_zona']) ? wp_unslash($_POST['shipping_ojek_lokal_zona']) : '[]';
-    if (is_null(json_decode($zona_json))) $zona_json = '[]';
+    
+    // FIX: Handling JSON agar tidak error saat unslash
+    $raw_zona = isset($_POST['shipping_ojek_lokal_zona']) ? wp_unslash($_POST['shipping_ojek_lokal_zona']) : '[]';
+    $json_test = json_decode($raw_zona);
+    $zona_json = ($json_test !== null) ? $raw_zona : '[]';
 
     $data = [
         'id_user'       => $id_user,
@@ -80,10 +83,10 @@ function dw_pedagang_form_handler() {
         'nik'           => sanitize_text_field($_POST['nik']),
         'url_ktp'       => esc_url_raw($_POST['url_ktp']),
         'foto_profil'   => esc_url_raw($_POST['foto_profil']),
-        'no_rekening'   => sanitize_text_field($_POST['bank_rekening']),
-        'nama_bank'     => sanitize_text_field($_POST['bank_nama']),
-        'atas_nama_rekening' => sanitize_text_field($_POST['bank_atas_nama']),
-        'qris_image_url'     => esc_url_raw($_POST['qris_url']),
+        'no_rekening'   => sanitize_text_field($_POST['no_rekening']), // Sesuaikan name di form
+        'nama_bank'     => sanitize_text_field($_POST['nama_bank']),
+        'atas_nama_rekening' => sanitize_text_field($_POST['atas_nama_rekening']),
+        'qris_image_url'     => esc_url_raw($_POST['qris_image_url']),
         'shipping_ojek_lokal_aktif' => isset($_POST['shipping_ojek_lokal_aktif']) ? 1 : 0,
         'shipping_nasional_aktif'   => isset($_POST['shipping_nasional_aktif']) ? 1 : 0,
         'shipping_ojek_lokal_zona'  => $zona_json
@@ -302,6 +305,7 @@ function dw_pedagang_form_render($id) {
                             <tr><th>Nama Toko</th><td><input type="text" name="nama_toko" value="<?php echo esc_attr($item->nama_toko ?? ''); ?>" class="regular-text" required></td></tr>
                             <tr><th>Nama Pemilik</th><td><input type="text" name="nama_pemilik" value="<?php echo esc_attr($item->nama_pemilik ?? ''); ?>" class="regular-text" required></td></tr>
                             <tr><th>WhatsApp</th><td><input type="text" name="nomor_wa" value="<?php echo esc_attr($item->nomor_wa ?? ''); ?>" class="regular-text" placeholder="0812..."></td></tr>
+                            <tr><th>NIK KTP</th><td><input type="text" name="nik" value="<?php echo esc_attr($item->nik ?? ''); ?>" class="regular-text"></td></tr>
                             <tr><th>Deskripsi</th><td><textarea name="deskripsi_toko" class="large-text" rows="3"><?php echo esc_textarea($item->deskripsi_toko ?? ''); ?></textarea></td></tr>
                         </table>
                     </div>
@@ -371,11 +375,16 @@ function dw_pedagang_form_render($id) {
                     </div>
                 </div>
 
-                <!-- BOX 3 & 4 (STATUS & BANK) -->
+                <!-- BOX 3 (STATUS & BANK) -->
                 <div class="postbox">
-                    <div class="postbox-header"><h2 class="hndle">3. Pengiriman & Status</h2></div>
+                    <div class="postbox-header"><h2 class="hndle">3. Data Keuangan & Status</h2></div>
                     <div class="inside">
                         <table class="form-table">
+                            <tr><th>Bank</th><td><input type="text" name="nama_bank" value="<?php echo esc_attr($item->nama_bank ?? ''); ?>" class="regular-text" placeholder="BCA / BRI"></td></tr>
+                            <tr><th>No. Rekening</th><td><input type="text" name="no_rekening" value="<?php echo esc_attr($item->no_rekening ?? ''); ?>" class="regular-text"></td></tr>
+                            <tr><th>Atas Nama</th><td><input type="text" name="atas_nama_rekening" value="<?php echo esc_attr($item->atas_nama_rekening ?? ''); ?>" class="regular-text"></td></tr>
+                            <tr><th>QRIS URL</th><td><input type="text" name="qris_image_url" value="<?php echo esc_attr($item->qris_image_url ?? ''); ?>" class="regular-text"></td></tr>
+                            <tr><td colspan="2"><hr></td></tr>
                             <tr><th>Status Pendaftaran</th><td>
                                 <select name="status_pendaftaran">
                                     <option value="menunggu_desa" <?php selected($item->status_pendaftaran ?? '', 'menunggu_desa'); ?>>Menunggu Desa</option>
@@ -409,14 +418,14 @@ function dw_pedagang_form_render($id) {
     <?php if ($is_super_admin): ?>
     <script>
     jQuery(document).ready(function($){
-        // PERBAIKAN: Menggunakan action 'dw_get_wilayah' bukan 'dw_get_region_options'
+        // MENGGUNAKAN ACTION AJAX YANG BENAR ('dw_get_wilayah')
         function loadRegion(type, parentId, targetSelector) {
             if(!parentId) return;
             $(targetSelector).prop('disabled', true).html('<option>Loading...</option>');
             $.get(dw_admin_vars.ajax_url, { 
-                action: 'dw_get_wilayah', // <-- ACTION YANG BENAR
+                action: 'dw_get_wilayah', 
                 type: type, 
-                id: parentId, // <-- PARAM YANG BENAR (id bukan parent_id)
+                id: parentId, 
                 nonce: dw_admin_vars.nonce 
             }, function(res) {
                 if(res.success) {
