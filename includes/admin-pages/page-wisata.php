@@ -1,7 +1,12 @@
 <?php
 /**
  * File Name:   page-wisata.php
- * Description: CRUD Wisata Lengkap (Search, Pagination, Slug, Galeri, Fasilitas).
+ * Description: CRUD Wisata dengan Tampilan Modern (Premium UI).
+ * * UPDATE UI:
+ * - Menggunakan gaya tabel 'Card' seperti halaman Produk.
+ * - Thumbnail foto lebih besar dan rapi.
+ * - Badge status dan harga lebih menarik.
+ * - Penambahan ikon untuk lokasi dan kontak.
  */
 
 if (!defined('ABSPATH')) exit;
@@ -48,7 +53,7 @@ function dw_wisata_page_render() {
             }
 
             $wpdb->delete($table_wisata, ['id' => $del_id]);
-            $message = 'Data Wisata berhasil dihapus permanen.'; 
+            $message = 'Objek wisata berhasil dihapus.'; 
             $msg_type = 'success';
         
         // --- B. SAVE / UPDATE ---
@@ -67,7 +72,7 @@ function dw_wisata_page_render() {
 
             $nama = sanitize_text_field($_POST['nama_wisata']);
             
-            // Logic Slug: Jika diedit manual pakai itu, jika kosong generate dari nama
+            // Logic Slug
             $slug = sanitize_title($_POST['slug']);
             if (empty($slug)) {
                 $slug = sanitize_title($nama);
@@ -150,12 +155,12 @@ function dw_wisata_page_render() {
                         <div id="post-body-content">
                             <!-- Title -->
                             <div class="dw-input-group" style="margin-bottom: 20px;">
-                                <input type="text" name="nama_wisata" size="30" value="<?php echo esc_attr($edit_data->nama_wisata ?? ''); ?>" id="title" placeholder="Masukkan nama objek wisata" required style="width:100%; padding:10px; font-size:20px; border:1px solid #ddd;">
+                                <input type="text" name="nama_wisata" size="30" value="<?php echo esc_attr($edit_data->nama_wisata ?? ''); ?>" id="title" placeholder="Nama objek wisata (misal: Air Terjun Bidadari)" required style="width:100%; padding:10px; font-size:20px; border:1px solid #ddd;">
                                 
-                                <!-- Slug Edit (Fitur Tambahan) -->
+                                <!-- Slug Edit -->
                                 <?php if($edit_data): ?>
                                 <div style="margin-top:5px; font-size:13px; color:#666;">
-                                    Permalink/Slug: <input type="text" name="slug" value="<?php echo esc_attr($edit_data->slug); ?>" style="font-size:12px; padding:2px 5px; width:300px; border:none; background:#f9f9f9; border-bottom:1px dashed #ccc;">
+                                    Permalink: <input type="text" name="slug" value="<?php echo esc_attr($edit_data->slug); ?>" style="font-size:12px; padding:2px 5px; width:300px; border:none; background:#f9f9f9; border-bottom:1px dashed #ccc;">
                                 </div>
                                 <?php endif; ?>
                             </div>
@@ -214,16 +219,15 @@ function dw_wisata_page_render() {
                                     <p>
                                         <label><strong>Status:</strong></label>
                                         <select name="status" class="widefat" style="margin-top:5px;">
-                                            <option value="aktif" <?php selected($edit_data->status ?? '', 'aktif'); ?>>Aktif (Tampil)</option>
-                                            <option value="nonaktif" <?php selected($edit_data->status ?? '', 'nonaktif'); ?>>Nonaktif (Sembunyi)</option>
+                                            <option value="aktif" <?php selected($edit_data ? $edit_data->status : '', 'aktif'); ?>>Aktif (Tampil)</option>
+                                            <option value="nonaktif" <?php selected($edit_data ? $edit_data->status : '', 'nonaktif'); ?>>Nonaktif (Sembunyi)</option>
                                         </select>
                                     </p>
                                     <!-- Statistik Read Only -->
                                     <?php if($edit_data): ?>
                                     <div style="background:#f0f0f1; padding:10px; margin-bottom:10px; font-size:12px; border-radius:4px;">
-                                        <strong>Rating:</strong> <?php echo esc_html($edit_data->rating_avg); ?> / 5.0<br>
-                                        <strong>Ulasan:</strong> <?php echo esc_html($edit_data->total_ulasan); ?> review<br>
-                                        <strong>Dilihat:</strong> - kali
+                                        <strong>Rating:</strong> <span style="color:orange;">★</span> <?php echo esc_html($edit_data->rating_avg); ?> / 5.0<br>
+                                        <strong>Ulasan:</strong> <?php echo esc_html($edit_data->total_ulasan); ?> review
                                     </div>
                                     <?php endif; ?>
 
@@ -243,7 +247,7 @@ function dw_wisata_page_render() {
                                         <select name="id_desa" class="widefat" required>
                                             <option value="">-- Pilih Desa --</option>
                                             <?php $ds = $wpdb->get_results("SELECT id, nama_desa FROM $table_desa WHERE status='aktif'"); 
-                                            foreach($ds as $d) echo "<option value='{$d->id}' ".selected($edit_data->id_desa??'', $d->id, false).">{$d->nama_desa}</option>"; ?>
+                                            foreach($ds as $d) echo "<option value='{$d->id}' ".selected($edit_data ? $edit_data->id_desa : '', $d->id, false).">{$d->nama_desa}</option>"; ?>
                                         </select>
                                     <?php else: ?>
                                         <label>Desa:</label>
@@ -309,7 +313,7 @@ function dw_wisata_page_render() {
 
         <?php else: ?>
             
-            <!-- === LIST TABLE VIEW (SEARCH & PAGINATION ADDED) === -->
+            <!-- === LIST TABLE VIEW MODERN (CARD STYLE) === -->
             <?php
             // 1. Setup Pagination & Search
             $paged   = isset($_GET['paged']) ? absint($_GET['paged']) : 1;
@@ -341,44 +345,93 @@ function dw_wisata_page_render() {
             ?>
 
             <!-- Search Box -->
-            <form method="get" action="">
-                <input type="hidden" name="page" value="dw-wisata">
-                <p class="search-box" style="margin-bottom:10px;">
-                    <label class="screen-reader-text" for="post-search-input">Cari Wisata:</label>
-                    <input type="search" id="post-search-input" name="s" value="<?php echo esc_attr($search); ?>">
-                    <input type="submit" id="search-submit" class="button" value="Cari Wisata">
-                </p>
-            </form>
+            <div class="tablenav top" style="display:flex; justify-content:flex-end; margin-bottom:15px;">
+                <form method="get" action="">
+                    <input type="hidden" name="page" value="dw-wisata">
+                    <p class="search-box">
+                        <input type="search" id="post-search-input" name="s" value="<?php echo esc_attr($search); ?>" placeholder="Cari Wisata...">
+                        <input type="submit" id="search-submit" class="button" value="Cari">
+                    </p>
+                </form>
+            </div>
+
+            <!-- Styles untuk Tabel Cantik -->
+            <style>
+                .dw-card-table { background:#fff; border:1px solid #c3c4c7; border-radius:4px; box-shadow:0 1px 1px rgba(0,0,0,.04); overflow:hidden; }
+                .dw-thumb-wisata { width:60px; height:60px; border-radius:6px; object-fit:cover; border:1px solid #eee; background:#f9f9f9; display:block; }
+                
+                .dw-badge { display:inline-block; padding:4px 8px; border-radius:12px; font-size:11px; font-weight:600; line-height:1; }
+                .dw-badge-active { background:#dcfce7; color:#166534; border:1px solid #bbf7d0; }
+                .dw-badge-nonaktif { background:#fee2e2; color:#991b1b; border:1px solid #fecaca; }
+                
+                .dw-price-tag { font-weight:700; color:#1e293b; font-size:13px; }
+                .dw-price-free { color:#166534; background:#dcfce7; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; }
+                
+                .dw-rating-pill { background:#fffbeb; color:#b45309; border:1px solid #fcd34d; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; display:inline-flex; align-items:center; gap:3px; }
+                
+                .column-foto { width: 80px; text-align:center; }
+            </style>
 
             <!-- Table -->
-            <div class="card" style="padding:0; overflow:hidden; border:1px solid #ccd0d4; box-shadow:0 1px 1px rgba(0,0,0,.04);">
+            <div class="dw-card-table">
                 <table class="wp-list-table widefat fixed striped">
-                    <thead><tr><th width="70">Foto</th><th>Nama Wisata</th><th>Desa</th><th>Harga Tiket</th><th>Statistik</th><th>Status</th><th>Aksi</th></tr></thead>
+                    <thead>
+                        <tr>
+                            <th class="column-foto">Foto</th>
+                            <th width="25%">Nama Wisata</th>
+                            <th width="20%">Desa & Lokasi</th>
+                            <th width="15%">Harga Tiket</th>
+                            <th width="15%">Statistik</th>
+                            <th width="10%">Status</th>
+                            <th width="10%">Aksi</th>
+                        </tr>
+                    </thead>
                     <tbody>
                         <?php if($rows): foreach($rows as $r):
                             $edit_link = "?page=dw-wisata&action=edit&id={$r->id}";
-                            $img_src = !empty($r->foto_utama) ? $r->foto_utama : 'https://placehold.co/100x70?text=No+Img';
+                            $img_src = !empty($r->foto_utama) ? $r->foto_utama : 'https://placehold.co/100x100/e2e8f0/64748b?text=Wisata';
+                            
+                            // Badge Status
+                            $status_class = ($r->status == 'aktif') ? 'dw-badge-active' : 'dw-badge-nonaktif';
+                            
+                            // Harga
+                            $harga_html = ($r->harga_tiket > 0) 
+                                ? '<span class="dw-price-tag">Rp ' . number_format($r->harga_tiket, 0, ',', '.') . '</span>' 
+                                : '<span class="dw-price-free">GRATIS</span>';
                         ?>
                         <tr>
-                            <td><img src="<?php echo esc_url($img_src); ?>" style="width:60px; height:40px; object-fit:cover; border-radius:3px; background:#eee;"></td>
-                            <td>
-                                <strong><a href="<?php echo $edit_link; ?>"><?php echo esc_html($r->nama_wisata); ?></a></strong>
-                                <br><small style="color:#666;">Slug: <?php echo esc_html($r->slug); ?></small>
-                            </td>
-                            <td><?php echo esc_html($r->nama_desa); ?></td>
-                            <td>Rp <?php echo number_format($r->harga_tiket, 0, ',', '.'); ?></td>
-                            <td>
-                                <span class="dashicons dashicons-star-filled" style="font-size:14px; color:orange;"></span> <?php echo $r->rating_avg; ?>
-                                <span style="color:#999;">(<?php echo $r->total_ulasan; ?> ulasan)</span>
+                            <td class="column-foto" style="vertical-align:middle;">
+                                <img src="<?php echo esc_url($img_src); ?>" class="dw-thumb-wisata">
                             </td>
                             <td>
-                                <?php echo ($r->status == 'aktif') 
-                                    ? '<span style="background:#dcfce7; color:#166534; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:bold;">Aktif</span>' 
-                                    : '<span style="background:#fee2e2; color:#991b1b; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:bold;">Nonaktif</span>'; ?>
+                                <strong><a href="<?php echo $edit_link; ?>" style="font-size:14px;"><?php echo esc_html($r->nama_wisata); ?></a></strong>
+                                <br><small style="color:#64748b;">/<?php echo esc_html($r->slug); ?></small>
                             </td>
                             <td>
-                                <a href="<?php echo $edit_link; ?>" class="button button-small button-primary">Edit</a>
-                                <form method="post" action="" style="display:inline-block;" onsubmit="return confirm('Hapus permanen?');">
+                                <div style="font-weight:600; color:#2271b1;"><span class="dashicons dashicons-location"></span> <?php echo esc_html($r->nama_desa); ?></div>
+                                <?php if($r->lokasi_maps): ?>
+                                    <div style="margin-top:2px;">
+                                        <a href="<?php echo esc_url($r->lokasi_maps); ?>" target="_blank" style="font-size:11px; text-decoration:none; color:#64748b;">
+                                            <span class="dashicons dashicons-map"></span> Lihat Peta
+                                        </a>
+                                    </div>
+                                <?php endif; ?>
+                            </td>
+                            <td><?php echo $harga_html; ?></td>
+                            <td>
+                                <div style="margin-bottom:4px;">
+                                    <span class="dw-rating-pill" title="Rating Rata-rata">
+                                        <span class="dashicons dashicons-star-filled" style="font-size:12px;"></span> <?php echo $r->rating_avg; ?>
+                                    </span>
+                                </div>
+                                <small style="color:#64748b;"><?php echo $r->total_ulasan; ?> Ulasan</small>
+                            </td>
+                            <td>
+                                <span class="dw-badge <?php echo $status_class; ?>"><?php echo ucfirst($r->status); ?></span>
+                            </td>
+                            <td>
+                                <a href="<?php echo $edit_link; ?>" class="button button-small button-primary" style="margin-bottom:4px;">Edit</a>
+                                <form method="post" action="" style="display:inline-block;" onsubmit="return confirm('Yakin ingin menghapus wisata <?php echo esc_js($r->nama_wisata); ?>?');">
                                     <input type="hidden" name="action_wisata" value="delete">
                                     <input type="hidden" name="wisata_id" value="<?php echo $r->id; ?>">
                                     <?php wp_nonce_field('dw_wisata_save'); ?>
@@ -387,7 +440,7 @@ function dw_wisata_page_render() {
                             </td>
                         </tr>
                         <?php endforeach; else: ?>
-                            <tr><td colspan="7" style="text-align:center; padding:30px;">Tidak ada data ditemukan.</td></tr>
+                            <tr><td colspan="7" style="text-align:center; padding:30px; color:#777;">Belum ada data objek wisata. Silakan tambah baru.</td></tr>
                         <?php endif; ?>
                     </tbody>
                 </table>
@@ -399,7 +452,7 @@ function dw_wisata_page_render() {
                 <div class="tablenav-pages">
                     <span class="displaying-num"><?php echo $total_items; ?> item</span>
                     <?php
-                    $page_links = paginate_links([
+                    echo paginate_links([
                         'base' => add_query_arg('paged', '%#%'),
                         'format' => '',
                         'prev_text' => '&laquo;',
@@ -407,9 +460,6 @@ function dw_wisata_page_render() {
                         'total' => $total_pages,
                         'current' => $paged
                     ]);
-                    if ($page_links) {
-                        echo '<span class="pagination-links">' . $page_links . '</span>';
-                    }
                     ?>
                 </div>
             </div>
