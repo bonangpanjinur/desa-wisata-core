@@ -16,6 +16,11 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Merender halaman Logs.
  */
 function dw_logs_page_render() {
+    // --- PERBAIKAN: Memuat class List Table jika belum ada ---
+    if ( ! class_exists( 'DW_Logs_List_Table' ) ) {
+        require_once DW_CORE_PLUGIN_DIR . 'includes/list-tables/class-dw-logs-list-table.php';
+    }
+
     $logsListTable = new DW_Logs_List_Table();
     $logsListTable->prepare_items();
     ?>
@@ -30,3 +35,4 @@ function dw_logs_page_render() {
     </div>
     <?php
 }
+?>

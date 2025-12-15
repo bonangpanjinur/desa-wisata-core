@@ -85,6 +85,11 @@ function dw_paket_transaksi_page_render() {
         return;
     }
     
+    // --- PERBAIKAN: Memuat class List Table jika belum ada ---
+    if ( ! class_exists( 'DW_Paket_List_Table' ) ) {
+        require_once DW_CORE_PLUGIN_DIR . 'includes/list-tables/class-dw-paket-list-table.php';
+    }
+    
     $paketListTable = new DW_Paket_List_Table();
     $paketListTable->prepare_items();
     ?>

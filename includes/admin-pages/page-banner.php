@@ -86,6 +86,11 @@ function dw_banner_page_render() {
         return;
     }
     
+    // --- PERBAIKAN: Memuat class List Table jika belum ada ---
+    if ( ! class_exists( 'DW_Banner_List_Table' ) ) {
+        require_once DW_CORE_PLUGIN_DIR . 'includes/list-tables/class-dw-banner-list-table.php';
+    }
+
     $bannerListTable = new DW_Banner_List_Table();
     $bannerListTable->prepare_items();
     ?>
@@ -176,10 +181,4 @@ function dw_banner_form_render($id = 0) {
     </div>
     <?php
 }
-
-// Perlu require List Table Class jika file ini dimuat sebelum admin-menus.php
-// (Tapi dalam kasus ini, admin-menus.php memuat ini, jadi aman)
-// if ( ! class_exists( 'DW_Banner_List_Table' ) ) {
-// 	require_once DW_CORE_PLUGIN_DIR . 'includes/list-tables/class-dw-banner-list-table.php';
-// }
 ?>
