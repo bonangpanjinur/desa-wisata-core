@@ -265,80 +265,9 @@ function dw_desa_page_render() {
                     mediaUploader.open();
                 });
 
-                // 2. Logic Alamat Cepat (Menggunakan API Internal Plugin)
-                var apiBase = '<?php echo esc_url_raw(rest_url('dw/v1/alamat')); ?>';
-
-                function loadRegion(type, parentId, targetSelector) {
-                    var url = '';
-                    if (type === 'kabupaten') url = apiBase + '/provinsi/' + parentId + '/kabupaten';
-                    if (type === 'kecamatan') url = apiBase + '/kabupaten/' + parentId + '/kecamatan';
-                    if (type === 'kelurahan') url = apiBase + '/kecamatan/' + parentId + '/kelurahan';
-
-                    if(!url) return;
-
-                    $(targetSelector).html('<option value="">Loading...</option>').prop('disabled', true);
-
-                    $.ajax({
-                        url: url,
-                        method: 'GET',
-                        beforeSend: function ( xhr ) {
-                            xhr.setRequestHeader( 'X-WP-Nonce', dw_admin_vars.nonce ); // Gunakan nonce jika perlu (umumnya publik tidak perlu, tapi aman)
-                        },
-                        success: function(response) {
-                            var html = '<option value="">-- Pilih --</option>';
-                            // Handle response dari API Internal (biasanya langsung array atau object)
-                            // Jika response JSON murni array: response
-                            // Jika WP_REST_Response: response (jQuery otomatis parse JSON)
-                            
-                            var data = response;
-                            // Kadang response dibungkus data
-                            if(response.data) data = response.data; 
-
-                            $.each(data, function(index, item){
-                                html += '<option value="' + item.id + '">' + item.name + '</option>';
-                            });
-                            $(targetSelector).html(html).prop('disabled', false);
-                        },
-                        error: function() {
-                            $(targetSelector).html('<option value="">Gagal memuat data</option>');
-                        }
-                    });
-                }
-
-                // Event Listeners (ID: dw_provinsi, dw_kabupaten, dw_kecamatan, dw_desa)
-                $('#dw_provinsi').change(function(){
-                    var id = $(this).val();
-                    $('.dw-provinsi-nama').val($(this).find('option:selected').text());
-                    
-                    $('#dw_kabupaten').html('<option value="">-- Pilih Kabupaten --</option>').prop('disabled', true);
-                    $('#dw_kecamatan').html('<option value="">-- Pilih Kecamatan --</option>').prop('disabled', true);
-                    $('#dw_desa').html('<option value="">-- Pilih Kelurahan --</option>').prop('disabled', true);
-
-                    if(id) loadRegion('kabupaten', id, '#dw_kabupaten');
-                });
-
-                $('#dw_kabupaten').change(function(){
-                    var id = $(this).val();
-                    $('.dw-kabupaten-nama').val($(this).find('option:selected').text());
-                    
-                    $('#dw_kecamatan').html('<option value="">-- Pilih Kecamatan --</option>').prop('disabled', true);
-                    $('#dw_desa').html('<option value="">-- Pilih Kelurahan --</option>').prop('disabled', true);
-
-                    if(id) loadRegion('kecamatan', id, '#dw_kecamatan');
-                });
-
-                $('#dw_kecamatan').change(function(){
-                    var id = $(this).val();
-                    $('.dw-kecamatan-nama').val($(this).find('option:selected').text());
-                    
-                    $('#dw_desa').html('<option value="">-- Pilih Kelurahan --</option>').prop('disabled', true);
-
-                    if(id) loadRegion('kelurahan', id, '#dw_desa');
-                });
-
-                $('#dw_desa').change(function(){
-                    $('.dw-desa-nama').val($(this).find('option:selected').text());
-                });
+                // PERBAIKAN: Menghapus logika Address/Wilayah inline karena sudah ditangani
+                // secara otomatis oleh assets/js/admin-scripts.js menggunakan ID yang sama 
+                // (#dw_provinsi, #dw_kabupaten, dll) dan mekanisme admin-ajax.php yang lebih stabil.
             });
             </script>
         <?php else: ?>
