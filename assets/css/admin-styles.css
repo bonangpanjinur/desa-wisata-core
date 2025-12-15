@@ -1,211 +1,325 @@
 /* * File Name:   admin-styles.css
- * File Folder: assets/css/
- * File Path:   assets/css/admin-styles.css
- * * Description: 
- * Stylesheet utama untuk mempercantik halaman Admin Plugin.
- * Berisi definisi variabel warna, Card UI, dan Grafik CSS-Only.
+ * Description: Stylesheet modern untuk Dashboard ala SaaS.
  */
 
 :root {
-    --dw-primary: #2271b1;
-    --dw-primary-hover: #135e96;
-    --dw-bg: #f0f2f5;
-    --dw-card-bg: #ffffff;
-    --dw-border: #dcdcde;
-    --dw-text: #3c434a;
-    --dw-success: #00a32a;
-    --dw-warning: #dba617;
-    --dw-danger: #d63638;
+    /* Color Palette - SaaS Style */
+    --saas-primary: #2563eb;       /* Royal Blue */
+    --saas-primary-dark: #1e40af;
+    --saas-secondary: #64748b;     /* Slate Gray */
+    --saas-bg: #f1f5f9;            /* Light Blue-Gray Background */
+    --saas-card-bg: #ffffff;
+    --saas-text-main: #0f172a;     /* Dark Slate */
+    --saas-text-muted: #64748b;
+    --saas-border: #e2e8f0;
+    
+    /* Status Colors */
+    --saas-green-bg: #dcfce7;
+    --saas-green-text: #166534;
+    --saas-blue-bg: #dbeafe;
+    --saas-blue-text: #1e40af;
+    --saas-orange-bg: #ffedd5;
+    --saas-orange-text: #9a3412;
+    --saas-red-bg: #fee2e2;
+    --saas-red-text: #991b1b;
 }
 
+/* Reset & Layout */
 .dw-wrap {
     margin: 20px 20px 0 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--saas-text-main);
 }
 
-/* --- Header & Titles --- */
-.dw-header {
-    background: var(--dw-card-bg);
-    padding: 20px;
-    border-radius: 8px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    margin-bottom: 25px;
+/* --- HEADER SECTION --- */
+.dw-saas-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-left: 4px solid var(--dw-primary);
+    margin-bottom: 24px;
 }
 
-.dw-header h1 {
-    margin: 0;
+.dw-saas-title h1 {
     font-size: 24px;
-    font-weight: 600;
-    color: #1d2327;
-}
-
-/* --- Dashboard Cards (Grid System) --- */
-.dw-dashboard-cards {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    gap: 20px;
-    margin-bottom: 30px;
-}
-
-.dw-card {
-    background: var(--dw-card-bg);
-    border-radius: 12px;
-    padding: 25px;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.05);
-    transition: transform 0.2s, box-shadow 0.2s;
-    border: 1px solid rgba(0,0,0,0.02);
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-}
-
-.dw-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 5px 15px rgba(0,0,0,0.08);
-}
-
-.dw-card-icon {
-    margin-bottom: 15px;
-}
-
-.dw-card-icon .dashicons {
-    font-size: 32px;
-    width: 32px;
-    height: 32px;
-    color: var(--dw-primary);
-    background: #e6f0f8;
-    padding: 10px;
-    border-radius: 50%;
-    box-sizing: content-box;
-}
-
-.dw-card h3 {
-    margin: 0 0 5px 0;
-    font-size: 14px;
-    color: #646970;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.dw-card-number {
-    font-size: 36px;
     font-weight: 700;
-    color: #1d2327;
+    color: var(--saas-text-main);
     margin: 0;
+    letter-spacing: -0.5px;
+}
+
+.dw-saas-title p {
+    margin: 4px 0 0;
+    color: var(--saas-text-muted);
+    font-size: 14px;
+}
+
+.dw-user-profile {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--saas-card-bg);
+    padding: 8px 16px;
+    border-radius: 30px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    border: 1px solid var(--saas-border);
+}
+
+.dw-user-avatar img {
+    border-radius: 50%;
+    display: block;
+}
+
+.dw-user-info span {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
     line-height: 1.2;
 }
 
-.dw-card-action {
-    margin-top: 15px;
-    padding-top: 15px;
-    border-top: 1px solid #f0f0f1;
-    text-align: right;
+.dw-user-info small {
+    font-size: 11px;
+    color: var(--saas-text-muted);
 }
 
-.dw-card-action a {
-    text-decoration: none;
+/* --- HERO BANNER (Gradient Blue) --- */
+.dw-saas-banner {
+    background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+    color: #fff;
+    padding: 40px;
+    border-radius: 16px;
+    margin-bottom: 32px;
+    box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.2);
+    position: relative;
+    overflow: hidden;
+}
+
+/* Dekorasi background banner */
+.dw-saas-banner::before {
+    content: '';
+    position: absolute;
+    top: -50px; right: -50px;
+    width: 200px; height: 200px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 50%;
+}
+.dw-saas-banner::after {
+    content: '';
+    position: absolute;
+    bottom: -30px; left: 50px;
+    width: 100px; height: 100px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 50%;
+}
+
+.dw-saas-banner h2 {
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0 0 8px 0;
+    color: #fff !important;
+}
+
+.dw-saas-banner p {
+    font-size: 15px;
+    opacity: 0.9;
+    margin: 0;
+    max-width: 600px;
+}
+
+/* --- STATS CARDS --- */
+.dw-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 24px;
+    margin-bottom: 32px;
+}
+
+.dw-stat-card {
+    background: var(--saas-card-bg);
+    border-radius: 16px;
+    padding: 24px;
+    border: 1px solid var(--saas-border);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+    transition: transform 0.2s, box-shadow 0.2s;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    height: 100%;
+}
+
+.dw-stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+}
+
+.dw-stat-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 16px;
+}
+
+.dw-stat-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+}
+
+.icon-blue { background: #eff6ff; color: #2563eb; }
+.icon-green { background: #f0fdf4; color: #16a34a; }
+.icon-purple { background: #f3e8ff; color: #9333ea; }
+.icon-orange { background: #fff7ed; color: #ea580c; }
+
+.dw-stat-value {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--saas-text-main);
+    margin: 0;
+    line-height: 1;
+    margin-bottom: 8px;
+}
+
+.dw-stat-label {
+    font-size: 14px;
+    color: var(--saas-text-muted);
     font-weight: 500;
-    font-size: 13px;
-    color: var(--dw-primary);
 }
 
-/* --- ANALYTICS CHART (CSS Only) --- */
-.dw-chart-container {
-    background: #fff;
-    border-radius: 8px;
-    padding: 20px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    margin-bottom: 25px;
-    border: 1px solid rgba(0,0,0,0.02);
+.dw-trend-badge {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 12px;
+    display: inline-block;
+}
+.trend-up { background: var(--saas-green-bg); color: var(--saas-green-text); }
+.trend-neutral { background: var(--saas-bg); color: var(--saas-text-muted); }
+
+/* --- CONTENT GRID (Chart & List) --- */
+.dw-content-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 24px;
 }
 
-.dw-chart-header {
+@media (max-width: 1024px) {
+    .dw-content-grid { grid-template-columns: 1fr; }
+}
+
+.dw-panel {
+    background: var(--saas-card-bg);
+    border-radius: 16px;
+    border: 1px solid var(--saas-border);
+    overflow: hidden;
+}
+
+.dw-panel-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--saas-border);
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
 }
 
-.dw-chart-header h3 {
+.dw-panel-header h3 {
     margin: 0;
     font-size: 16px;
-    color: #1d2327;
+    font-weight: 700;
 }
 
-.dw-chart-bars {
+.dw-panel-body {
+    padding: 24px;
+}
+
+/* Custom Chart Bars */
+.dw-saas-chart {
+    height: 250px;
     display: flex;
     align-items: flex-end;
-    justify-content: space-around;
-    height: 200px;
-    border-bottom: 1px solid #e0e0e0;
-    padding-bottom: 5px;
-    gap: 10px;
+    gap: 12px;
+    padding-top: 20px;
 }
 
-.dw-bar-group {
+.dw-chart-col {
+    flex: 1;
     display: flex;
     flex-direction: column;
     align-items: center;
+    height: 100%;
+    justify-content: flex-end;
+    position: relative;
+}
+
+.dw-chart-bar {
+    width: 100%;
+    background: #e2e8f0;
+    border-radius: 6px;
+    transition: height 0.6s cubic-bezier(0.4, 0, 0.2, 1), background 0.3s;
+    min-height: 4px;
+}
+
+.dw-chart-col:hover .dw-chart-bar {
+    background: var(--saas-primary);
+}
+
+.dw-chart-label {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--saas-text-muted);
+}
+
+/* List Items */
+.dw-list-item {
+    display: flex;
+    align-items: center;
+    padding: 16px 0;
+    border-bottom: 1px solid var(--saas-border);
+}
+.dw-list-item:last-child { border-bottom: none; }
+
+.dw-list-icon {
+    width: 40px; height: 40px;
+    border-radius: 10px;
+    background: var(--saas-bg);
+    color: var(--saas-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 16px;
+    font-size: 20px;
+}
+
+.dw-list-content {
     flex: 1;
-    position: relative;
-    cursor: pointer;
 }
 
-.dw-bar {
-    width: 60%;
-    background: #2271b1;
-    border-radius: 4px 4px 0 0;
-    transition: height 0.5s ease, background 0.2s;
-    min-height: 2px;
-    position: relative;
+.dw-list-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--saas-text-main);
+    display: block;
 }
 
-.dw-bar:hover {
-    background: #135e96;
+.dw-list-sub {
+    font-size: 12px;
+    color: var(--saas-text-muted);
+    display: block;
+    margin-top: 2px;
 }
 
-.dw-bar-tooltip {
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    background: #1d2327;
-    color: #fff;
-    padding: 4px 8px;
-    border-radius: 4px;
+.dw-list-action {
+    text-align: right;
+}
+
+.dw-badge-pill {
     font-size: 11px;
-    margin-bottom: 5px;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.2s;
-    white-space: nowrap;
-    z-index: 10;
-}
-
-.dw-bar-group:hover .dw-bar-tooltip {
-    opacity: 1;
-}
-
-.dw-bar-label {
-    margin-top: 10px;
-    font-size: 11px;
-    color: #646970;
-    text-align: center;
-}
-
-/* Status Badges */
-.dw-status-badge {
-    display: inline-block;
+    font-weight: 700;
     padding: 4px 10px;
     border-radius: 20px;
-    font-size: 12px;
-    font-weight: 600;
     text-transform: uppercase;
 }
-.status-aktif { background-color: #d1e7dd; color: #0f5132; }
-.status-pending { background-color: #fff3cd; color: #664d03; }
-.status-nonaktif { background-color: #f8d7da; color: #842029; }
+.badge-success { background: var(--saas-green-bg); color: var(--saas-green-text); }
+.badge-warning { background: var(--saas-orange-bg); color: var(--saas-orange-text); }
