@@ -8,6 +8,7 @@
  * - Menghapus `onclick="return confirm()"` dari link Hapus.
  * - Menambahkan `class="dw-confirm-link"` dan `data-confirm-message="..."`
  * agar ditangani oleh `admin-scripts.js` yang sudah diperbarui.
+ * - FIX ERROR: Undefined index: page (menambahkan fallback variable).
  */
 
 if ( ! class_exists( 'WP_List_Table' ) ) {
@@ -67,22 +68,29 @@ class DW_Desa_List_Table extends WP_List_Table {
 
     protected function column_nama_desa( $item ) {
         $nonce = wp_create_nonce('dw_delete_desa_nonce');
-        // --- PERBAIKAN ---
+        
+        // --- PERBAIKAN ERROR UNDEFINED INDEX: PAGE ---
+        // Gunakan nilai default 'dw-desa' jika parameter 'page' tidak ada di URL
+        $page_slug = isset($_REQUEST['page']) ? $_REQUEST['page'] : 'dw-desa';
+
+        // --- PERBAIKAN CONFIRM LINK ---
         // Menghapus onclick="return confirm(...)" dari link Hapus
         // Menambahkan class="dw-confirm-link" dan data-confirm-message
         $delete_link = sprintf(
             '<a href="?page=%s&action=%s&id=%s&_wpnonce=%s" class="dw-confirm-link" data-confirm-message="%s" style="color:#a00;">Hapus</a>', 
-            $_REQUEST['page'], 
+            esc_attr($page_slug), 
             'delete', 
             $item['id'], 
             $nonce,
             esc_attr('Anda yakin ingin menghapus desa ini? Semua relasi ke pedagang dan wisata akan dilepaskan.')
         );
+        
         $actions = [
-            'edit'   => sprintf( '<a href="?page=%s&action=%s&id=%s">Edit</a>', $_REQUEST['page'], 'edit', $item['id'] ),
+            'edit'   => sprintf( '<a href="?page=%s&action=%s&id=%s">Edit</a>', esc_attr($page_slug), 'edit', $item['id'] ),
             'delete' => $delete_link
         ];
         // --- AKHIR PERBAIKAN ---
+        
         return sprintf( '<strong>%1$s</strong> %2$s', esc_html($item['nama_desa']), $this->row_actions( $actions ) );
     }
     
@@ -126,3 +134,4 @@ class DW_Desa_List_Table extends WP_List_Table {
         ]);
     }
 }
+?>
