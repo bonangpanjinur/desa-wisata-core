@@ -236,7 +236,6 @@ function dw_desa_page_render() {
                     </table>
 
                     <!-- HIDDEN INPUTS UNTUK MENYIMPAN NAMA TEXT WILAYAH -->
-                    <!-- Class 'dw-provinsi-nama' dll digunakan oleh JS untuk auto-fill value saat select berubah -->
                     <input type="hidden" class="dw-provinsi-nama" name="provinsi_nama" value="<?php echo esc_attr($edit_data->provinsi ?? ''); ?>">
                     <input type="hidden" class="dw-kabupaten-nama" name="kabupaten_nama" value="<?php echo esc_attr($edit_data->kabupaten ?? ''); ?>">
                     <input type="hidden" class="dw-kecamatan-nama" name="kecamatan_nama" value="<?php echo esc_attr($edit_data->kecamatan ?? ''); ?>">
@@ -266,19 +265,77 @@ function dw_desa_page_render() {
                     mediaUploader.open();
                 });
 
-                // 2. JS untuk API Wilayah (Fallback jika admin-scripts.js belum meload ini)
-                // Karena kita menggunakan ID #dw_provinsi dll, seharusnya script global di admin-scripts.js sudah jalan.
-                // Namun, untuk memastikan nama wilayah tersimpan, kita tambahkan listener sederhana di sini juga.
-                
+                // 2. Logic Alamat Cepat (Menggunakan API Internal Plugin)
+                var apiBase = '<?php echo esc_url_raw(rest_url('dw/v1/alamat')); ?>';
+
+                function loadRegion(type, parentId, targetSelector) {
+                    var url = '';
+                    if (type === 'kabupaten') url = apiBase + '/provinsi/' + parentId + '/kabupaten';
+                    if (type === 'kecamatan') url = apiBase + '/kabupaten/' + parentId + '/kecamatan';
+                    if (type === 'kelurahan') url = apiBase + '/kecamatan/' + parentId + '/kelurahan';
+
+                    if(!url) return;
+
+                    $(targetSelector).html('<option value="">Loading...</option>').prop('disabled', true);
+
+                    $.ajax({
+                        url: url,
+                        method: 'GET',
+                        beforeSend: function ( xhr ) {
+                            xhr.setRequestHeader( 'X-WP-Nonce', dw_admin_vars.nonce ); // Gunakan nonce jika perlu (umumnya publik tidak perlu, tapi aman)
+                        },
+                        success: function(response) {
+                            var html = '<option value="">-- Pilih --</option>';
+                            // Handle response dari API Internal (biasanya langsung array atau object)
+                            // Jika response JSON murni array: response
+                            // Jika WP_REST_Response: response (jQuery otomatis parse JSON)
+                            
+                            var data = response;
+                            // Kadang response dibungkus data
+                            if(response.data) data = response.data; 
+
+                            $.each(data, function(index, item){
+                                html += '<option value="' + item.id + '">' + item.name + '</option>';
+                            });
+                            $(targetSelector).html(html).prop('disabled', false);
+                        },
+                        error: function() {
+                            $(targetSelector).html('<option value="">Gagal memuat data</option>');
+                        }
+                    });
+                }
+
+                // Event Listeners (ID: dw_provinsi, dw_kabupaten, dw_kecamatan, dw_desa)
                 $('#dw_provinsi').change(function(){
+                    var id = $(this).val();
                     $('.dw-provinsi-nama').val($(this).find('option:selected').text());
+                    
+                    $('#dw_kabupaten').html('<option value="">-- Pilih Kabupaten --</option>').prop('disabled', true);
+                    $('#dw_kecamatan').html('<option value="">-- Pilih Kecamatan --</option>').prop('disabled', true);
+                    $('#dw_desa').html('<option value="">-- Pilih Kelurahan --</option>').prop('disabled', true);
+
+                    if(id) loadRegion('kabupaten', id, '#dw_kabupaten');
                 });
+
                 $('#dw_kabupaten').change(function(){
+                    var id = $(this).val();
                     $('.dw-kabupaten-nama').val($(this).find('option:selected').text());
+                    
+                    $('#dw_kecamatan').html('<option value="">-- Pilih Kecamatan --</option>').prop('disabled', true);
+                    $('#dw_desa').html('<option value="">-- Pilih Kelurahan --</option>').prop('disabled', true);
+
+                    if(id) loadRegion('kecamatan', id, '#dw_kecamatan');
                 });
+
                 $('#dw_kecamatan').change(function(){
+                    var id = $(this).val();
                     $('.dw-kecamatan-nama').val($(this).find('option:selected').text());
+                    
+                    $('#dw_desa').html('<option value="">-- Pilih Kelurahan --</option>').prop('disabled', true);
+
+                    if(id) loadRegion('kelurahan', id, '#dw_desa');
                 });
+
                 $('#dw_desa').change(function(){
                     $('.dw-desa-nama').val($(this).find('option:selected').text());
                 });
