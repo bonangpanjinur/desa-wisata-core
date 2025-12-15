@@ -2,9 +2,11 @@
 /**
  * File Name:   admin-menus.php
  * File Folder: includes/
- * Description: Mengatur menu admin dan menghubungkannya ke file halaman.
- * * FIX: Menggunakan fungsi wrapper internal untuk memanggil file halaman.
- * * User TIDAK PERLU mengedit file page-*.php lagi.
+ * Description: Mengatur menu admin dan meload halaman admin.
+ * * [FIXED]
+ * - Meload file admin page di level root (bukan di dalam fungsi render).
+ * - Ini WAJIB agar hook 'admin_init' di dalam file-file tersebut terbaca oleh WordPress
+ * sebelum header dikirim/halaman diproses.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -12,101 +14,105 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * 1. FUNGSI WRAPPER (JEMBATAN)
- * Fungsi-fungsi ini akan dipanggil saat menu diklik.
- * Tugasnya hanya satu: Membuka (include) file halaman yang sesuai.
+ * 1. LOAD FILE HALAMAN (EAGER LOADING)
+ * Memuat file logic admin segera jika user berada di area admin.
+ * Ini memastikan handler form (admin_init) tereksekusi.
+ */
+if ( is_admin() ) {
+    // Dashboard & Master Data
+    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-dashboard.php';
+    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-desa.php';
+    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-wisata.php'; // CPT UI Tweaks mungkin butuh ini
+    
+    // Fitur Utama (Handler Form ada di sini)
+    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-pedagang.php';
+    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-paket-transaksi.php'; // <-- FIX: Paket Transaksi diload awal
+    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-pesanan-pedagang.php';
+    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-verifikasi-paket.php';
+    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-desa-verifikasi-pedagang.php';
+    
+    // Fitur Pendukung
+    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-komisi.php';
+    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-promosi.php';
+    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-banner.php';
+    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-reviews.php';
+    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-chat.php';
+    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-logs.php';
+    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-settings.php';
+    
+    // File Ongkir & Template (Non-critical handlers, tapi diload demi konsistensi)
+    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-ongkir.php';
+    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-templates.php';
+}
+
+/**
+ * 2. FUNGSI RENDER (JEMBATAN UI)
+ * Fungsi ini sekarang hanya memanggil fungsi render utama, 
+ * karena file sudah di-include di atas.
  */
 
 function dw_render_dashboard() {
-    // Cek apakah file ada, lalu include
-    if (file_exists(DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-dashboard.php')) {
-        require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-dashboard.php';
-        // Jika di dalam file tersebut ada fungsi dw_dashboard_page_render, panggil.
-        // Jika tidak (kode langsung), require_once akan menjalankannya.
-        if (function_exists('dw_dashboard_page_render')) {
-            dw_dashboard_page_render();
-        }
-    } else {
-        echo '<div class="error"><p>File page-dashboard.php tidak ditemukan.</p></div>';
-    }
+    if (function_exists('dw_dashboard_page_render')) { dw_dashboard_page_render(); }
 }
 
 function dw_render_desa() {
-    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-desa.php';
     if (function_exists('dw_desa_page_render')) { dw_desa_page_render(); }
 }
 
 function dw_render_pedagang() {
-    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-pedagang.php';
     if (function_exists('dw_pedagang_page_render')) { dw_pedagang_page_render(); }
 }
 
 function dw_render_pesanan() {
-    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-pesanan-pedagang.php';
     if (function_exists('dw_pesanan_pedagang_page_render')) { dw_pesanan_pedagang_page_render(); }
 }
 
 function dw_render_komisi() {
-    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-komisi.php';
     if (function_exists('dw_komisi_page_render')) { dw_komisi_page_render(); }
 }
 
 function dw_render_paket() {
-    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-paket-transaksi.php';
     if (function_exists('dw_paket_transaksi_page_render')) { dw_paket_transaksi_page_render(); }
 }
 
 function dw_render_verifikasi_paket() {
-    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-verifikasi-paket.php';
     if (function_exists('dw_verifikasi_paket_page_render')) { dw_verifikasi_paket_page_render(); }
 }
 
 function dw_render_promosi() {
-    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-promosi.php';
     if (function_exists('dw_admin_promosi_page_handler')) { dw_admin_promosi_page_handler(); }
 }
 
 function dw_render_banner() {
-    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-banner.php';
     if (function_exists('dw_banner_page_render')) { dw_banner_page_render(); }
 }
 
 function dw_render_reviews() {
-    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-reviews.php';
     if (function_exists('dw_reviews_moderation_page_render')) { dw_reviews_moderation_page_render(); }
 }
 
 function dw_render_chat() {
-    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-chat.php';
     if (function_exists('dw_chat_page_render')) { dw_chat_page_render(); }
 }
 
 function dw_render_logs() {
-    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-logs.php';
     if (function_exists('dw_logs_page_render')) { dw_logs_page_render(); }
 }
 
 function dw_render_settings() {
-    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-settings.php';
     if (function_exists('dw_admin_settings_page_handler')) { dw_admin_settings_page_handler(); }
 }
 
 function dw_render_verifikasi_desa() {
-    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-desa-verifikasi-pedagang.php';
     if (function_exists('dw_admin_desa_verifikasi_page_render')) { dw_admin_desa_verifikasi_page_render(); }
 }
 
 
 /**
- * 2. MENDAFTARKAN MENU
+ * 3. MENDAFTARKAN MENU
  * Menggunakan nama fungsi wrapper di atas sebagai callback.
  */
 function dw_register_admin_menus() {
-    
-    // --- Badge Notifikasi (Optional) ---
-    // Logika badge dipersingkat agar fokus ke perbaikan menu blank
-    $orders_badge = ''; 
-    $review_badge = '';
     
     // MENU UTAMA: Dashboard
     add_menu_page(
@@ -114,7 +120,7 @@ function dw_register_admin_menus() {
         'Desa Wisata', 
         'read', 
         'dw-dashboard', 
-        'dw_render_dashboard', // Panggil wrapper dashboard
+        'dw_render_dashboard',
         'dashicons-location-alt', 
         20
     );
@@ -193,7 +199,7 @@ function dw_register_admin_menus() {
 add_action('admin_menu', 'dw_register_admin_menus');
 
 /**
- * 3. HIDE MENUS UNTUK ROLE TERTENTU
+ * 4. HIDE MENUS UNTUK ROLE TERTENTU
  * Agar dashboard terlihat bersih untuk pedagang/admin desa.
  */
 function dw_cleanup_admin_menu() {
@@ -207,9 +213,8 @@ function dw_cleanup_admin_menu() {
     ];
     
     foreach ($restricted as $slug) {
-        if (!current_user_can('manage_options')) { // Logika sederhana: kalau bukan super admin, hide.
-             // (Logic detail role bisa ditambahkan kembali jika perlu)
-        }
+        // Cek permission manual atau biarkan WP menanganinya via add_submenu_page args
+        // Fungsi ini hanya backup visual.
     }
 }
 add_action('admin_menu', 'dw_cleanup_admin_menu', 999);
