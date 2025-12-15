@@ -1,33 +1,139 @@
 <?php
 /**
  * File Name:   page-wisata.php
- * File Folder: includes/admin-pages/
- * File Path:   includes/admin-pages/page-wisata.php
- * * Description: 
- * Halaman instruksi untuk mengarahkan pengguna ke menu CPT Wisata yang benar.
- * Mencegah penggunaan form manual yang usang.
+ * Description: CRUD Wisata Custom Table (Bukan CPT) agar relasi Desa terjalin.
  */
 
-if ( ! defined( 'ABSPATH' ) ) exit;
+if (!defined('ABSPATH')) exit;
 
-?>
-<div class="wrap dw-wrap">
-    <div class="dw-header">
-        <h1>Manajemen Objek Wisata</h1>
+function dw_wisata_page_render() {
+    global $wpdb;
+    $table_wisata = $wpdb->prefix . 'dw_wisata';
+    $table_desa   = $wpdb->prefix . 'dw_desa';
+    
+    $message = ''; $msg_type = '';
+
+    // --- HANDLE ACTION ---
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_wisata'])) {
+        if (!isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'dw_wisata_save')) {
+            echo '<div class="notice notice-error"><p>Security Fail.</p></div>'; return;
+        }
+
+        $nama = sanitize_text_field($_POST['nama_wisata']);
+        $data = [
+            'id_desa'      => intval($_POST['id_desa']),
+            'nama_wisata'  => $nama,
+            'slug'         => sanitize_title($nama),
+            'deskripsi'    => wp_kses_post($_POST['deskripsi']),
+            'harga_tiket'  => floatval($_POST['harga_tiket']),
+            'jam_buka'     => sanitize_text_field($_POST['jam_buka']),
+            'foto_utama'   => esc_url_raw($_POST['foto_utama']),
+            'status'       => sanitize_text_field($_POST['status']),
+            'updated_at'   => current_time('mysql')
+        ];
+
+        if (!empty($_POST['wisata_id'])) {
+            $wpdb->update($table_wisata, $data, ['id' => intval($_POST['wisata_id'])]);
+            $message = 'Wisata diperbarui.'; $msg_type = 'success';
+        } else {
+            $data['created_at'] = current_time('mysql');
+            $wpdb->insert($table_wisata, $data);
+            $message = 'Wisata berhasil ditambahkan.'; $msg_type = 'success';
+        }
+    }
+
+    // --- VIEW ---
+    $is_edit = isset($_GET['action']) && ($_GET['action'] == 'new' || $_GET['action'] == 'edit');
+    $edit_data = null;
+    if ($is_edit && isset($_GET['id'])) {
+        $edit_data = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_wisata WHERE id = %d", intval($_GET['id'])));
+    }
+
+    // Ambil list desa untuk relasi
+    $list_desa = $wpdb->get_results("SELECT id, nama_desa FROM $table_desa WHERE status='aktif'");
+
+    ?>
+    <div class="wrap dw-wrap">
+        <h1 class="wp-heading-inline">Objek Wisata (Custom Table)</h1>
+        <?php if(!$is_edit): ?><a href="?page=dw-wisata&action=new" class="page-title-action">Tambah Baru</a><?php endif; ?>
+        <hr class="wp-header-end">
+
+        <?php if($message): ?><div class="notice notice-<?php echo $msg_type; ?> is-dismissible"><p><?php echo $message; ?></p></div><?php endif; ?>
+
+        <?php if($is_edit): ?>
+            <div class="card" style="padding:20px; margin-top:10px;">
+                <form method="post">
+                    <?php wp_nonce_field('dw_wisata_save'); ?>
+                    <input type="hidden" name="action_wisata" value="save">
+                    <?php if($edit_data): ?><input type="hidden" name="wisata_id" value="<?php echo $edit_data->id; ?>"><?php endif; ?>
+
+                    <table class="form-table">
+                        <!-- RELASI PENTING -->
+                        <tr>
+                            <th><label>Pilih Desa *</label></th>
+                            <td>
+                                <select name="id_desa" required>
+                                    <option value="">-- Pilih Desa --</option>
+                                    <?php foreach($list_desa as $d): ?>
+                                        <option value="<?php echo $d->id; ?>" <?php selected($edit_data ? $edit_data->id_desa : '', $d->id); ?>>
+                                            <?php echo esc_html($d->nama_desa); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <p class="description">Wisata ini milik desa mana?</p>
+                            </td>
+                        </tr>
+
+                        <tr><th>Nama Wisata</th><td><input name="nama_wisata" type="text" value="<?php echo esc_attr($edit_data->nama_wisata ?? ''); ?>" class="regular-text" required></td></tr>
+                        <tr><th>Deskripsi</th><td><?php wp_editor($edit_data->deskripsi ?? '', 'deskripsi', ['textarea_rows'=>5, 'media_buttons'=>false]); ?></td></tr>
+                        <tr><th>Harga Tiket (Rp)</th><td><input name="harga_tiket" type="number" value="<?php echo esc_attr($edit_data->harga_tiket ?? 0); ?>" class="regular-text"></td></tr>
+                        <tr><th>Jam Buka</th><td><input name="jam_buka" type="text" value="<?php echo esc_attr($edit_data->jam_buka ?? '08:00 - 17:00'); ?>" class="regular-text"></td></tr>
+                        
+                        <tr><th>Foto Utama</th><td>
+                            <input type="text" name="foto_utama" id="foto_utama" value="<?php echo esc_attr($edit_data->foto_utama ?? ''); ?>" class="regular-text">
+                            <button type="button" class="button" id="btn_upl">Upload</button>
+                        </td></tr>
+
+                        <tr><th>Status</th><td>
+                            <select name="status">
+                                <option value="aktif" <?php selected($edit_data ? $edit_data->status : '', 'aktif'); ?>>Aktif</option>
+                                <option value="nonaktif" <?php selected($edit_data ? $edit_data->status : '', 'nonaktif'); ?>>Nonaktif</option>
+                            </select>
+                        </td></tr>
+                    </table>
+                    <p class="submit"><input type="submit" class="button button-primary" value="Simpan Wisata"></p>
+                </form>
+            </div>
+            <script>
+            jQuery(document).ready(function($){
+                $('#btn_upl').click(function(e){
+                    e.preventDefault(); var frame = wp.media({title:'Foto Wisata', multiple:false});
+                    frame.on('select', function(){ $('#foto_utama').val(frame.state().get('selection').first().toJSON().url); });
+                    frame.open();
+                });
+            });
+            </script>
+        <?php else: ?>
+            <!-- SIMPLE TABLE VIEW -->
+            <table class="wp-list-table widefat fixed striped">
+                <thead><tr><th>Nama Wisata</th><th>Desa</th><th>Harga</th><th>Status</th><th>Aksi</th></tr></thead>
+                <tbody>
+                    <?php 
+                    $rows = $wpdb->get_results("SELECT w.*, d.nama_desa FROM $table_wisata w LEFT JOIN $table_desa d ON w.id_desa = d.id ORDER BY w.id DESC");
+                    foreach($rows as $r): 
+                        $edit_url = "?page=dw-wisata&action=edit&id={$r->id}";
+                    ?>
+                    <tr>
+                        <td><strong><a href="<?php echo $edit_url; ?>"><?php echo esc_html($r->nama_wisata); ?></a></strong></td>
+                        <td><?php echo esc_html($r->nama_desa); ?></td>
+                        <td>Rp <?php echo number_format($r->harga_tiket); ?></td>
+                        <td><?php echo $r->status; ?></td>
+                        <td><a href="<?php echo $edit_url; ?>" class="button button-small">Edit</a></td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        <?php endif; ?>
     </div>
-
-    <div class="dw-card" style="max-width: 800px; text-align: center; padding: 40px;">
-        <span class="dashicons dashicons-palmtree" style="font-size: 64px; width: 64px; height: 64px; color: #2271b1; margin-bottom: 20px;"></span>
-        
-        <h2>Pengelolaan Data Wisata</h2>
-        <p>Silakan gunakan menu "Wisata" di sidebar kiri untuk menambah atau mengedit objek wisata.</p>
-
-        <div style="display: flex; gap: 20px; justify-content: center;">
-            <a href="<?php echo admin_url('edit.php?post_type=dw_wisata'); ?>" class="button button-primary button-hero">
-                Lihat Daftar Wisata
-            </a>
-        </div>
-    </div>
-</div>
-<?php
-?>
+    <?php
+}
