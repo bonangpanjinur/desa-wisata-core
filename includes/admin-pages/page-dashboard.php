@@ -3,11 +3,7 @@
  * File Name:   page-dashboard.php
  * File Folder: includes/admin-pages/
  * File Path:   includes/admin-pages/page-dashboard.php
- * * Description: 
- * Halaman utama Dashboard Admin.
- * Menampilkan statistik ringkas (Desa, Pedagang, Omset) dan Grafik Penjualan
- * menggunakan CSS-only charts.
- * * @package DesaWisataCore
+ * Description: Menampilkan halaman utama Dashboard Admin.
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -16,40 +12,55 @@ function dw_dashboard_page_render() {
     global $wpdb;
 
     // --- 1. DATA STATISTIK UTAMA ---
-    $count_desa = $wpdb->get_var("SELECT COUNT(id) FROM {$wpdb->prefix}dw_desa WHERE status = 'aktif'");
-    $count_pedagang = $wpdb->get_var("SELECT COUNT(id) FROM {$wpdb->prefix}dw_pedagang WHERE status_akun = 'aktif'");
-    $count_produk = $wpdb->get_var("SELECT COUNT(id) FROM {$wpdb->prefix}dw_produk WHERE status = 'aktif'");
-    
-    // Hitung Omset (Hanya status 'selesai' atau 'paid')
-    $omset_sql = "SELECT SUM(total_bayar) FROM {$wpdb->prefix}dw_transaksi WHERE status_pembayaran = 'paid'";
-    $omset = $wpdb->get_var($omset_sql) ?: 0;
+    // Pastikan tabel ada sebelum query untuk menghindari error fatal
+    $count_desa = 0;
+    if ($wpdb->get_var("SHOW TABLES LIKE '{$wpdb->prefix}dw_desa'") == $wpdb->prefix . 'dw_desa') {
+        $count_desa = $wpdb->get_var("SELECT COUNT(id) FROM {$wpdb->prefix}dw_desa WHERE status = 'aktif'");
+    }
 
+    $count_pedagang = 0;
+    if ($wpdb->get_var("SHOW TABLES LIKE '{$wpdb->prefix}dw_pedagang'") == $wpdb->prefix . 'dw_pedagang') {
+        $count_pedagang = $wpdb->get_var("SELECT COUNT(id) FROM {$wpdb->prefix}dw_pedagang WHERE status_akun = 'aktif'");
+    }
+    
+    $count_produk = 0;
+    if ($wpdb->get_var("SHOW TABLES LIKE '{$wpdb->prefix}dw_produk'") == $wpdb->prefix . 'dw_produk') {
+        $count_produk = $wpdb->get_var("SELECT COUNT(id) FROM {$wpdb->prefix}dw_produk WHERE status = 'aktif'");
+    }
+    
+    // Hitung Omset
+    $omset = 0;
+    if ($wpdb->get_var("SHOW TABLES LIKE '{$wpdb->prefix}dw_transaksi'") == $wpdb->prefix . 'dw_transaksi') {
+        $omset = $wpdb->get_var("SELECT SUM(total_bayar) FROM {$wpdb->prefix}dw_transaksi WHERE status_pembayaran = 'paid'") ?: 0;
+    }
 
     // --- 2. DATA GRAFIK (7 HARI TERAKHIR) ---
     $chart_data = [];
     $max_value = 0;
     
-    for ($i = 6; $i >= 0; $i--) {
-        $date = date('Y-m-d', strtotime("-$i days"));
-        $label = date('D', strtotime("-$i days")); // Mon, Tue...
-        
-        $day_omset = $wpdb->get_var($wpdb->prepare(
-            "SELECT SUM(total_bayar) FROM {$wpdb->prefix}dw_transaksi 
-             WHERE DATE(tanggal_transaksi) = %s AND status_pembayaran = 'paid'",
-            $date
-        ));
-        $day_omset = $day_omset ?: 0;
-        
-        if ($day_omset > $max_value) $max_value = $day_omset;
-        
-        $chart_data[] = [
-            'label' => $label,
-            'date' => $date, // Full date for tooltip
-            'value' => $day_omset
-        ];
+    // Hanya generate chart jika tabel transaksi ada
+    if ($wpdb->get_var("SHOW TABLES LIKE '{$wpdb->prefix}dw_transaksi'") == $wpdb->prefix . 'dw_transaksi') {
+        for ($i = 6; $i >= 0; $i--) {
+            $date = date('Y-m-d', strtotime("-$i days"));
+            $label = date('D', strtotime("-$i days")); 
+            
+            $day_omset = $wpdb->get_var($wpdb->prepare(
+                "SELECT SUM(total_bayar) FROM {$wpdb->prefix}dw_transaksi 
+                 WHERE DATE(tanggal_transaksi) = %s AND status_pembayaran = 'paid'",
+                $date
+            ));
+            $day_omset = $day_omset ?: 0;
+            
+            if ($day_omset > $max_value) $max_value = $day_omset;
+            
+            $chart_data[] = [
+                'label' => $label,
+                'date' => $date,
+                'value' => $day_omset
+            ];
+        }
     }
     
-    // Hindari pembagian dengan nol
     if ($max_value == 0) $max_value = 1;
 
     ?>
@@ -66,7 +77,6 @@ function dw_dashboard_page_render() {
 
         <!-- STAT CARDS -->
         <div class="dw-dashboard-cards">
-            <!-- Omset -->
             <div class="dw-card">
                 <div class="dw-card-icon"><span class="dashicons dashicons-money-alt"></span></div>
                 <div class="dw-card-content">
@@ -75,7 +85,6 @@ function dw_dashboard_page_render() {
                 </div>
             </div>
             
-            <!-- Desa -->
             <div class="dw-card">
                 <div class="dw-card-icon"><span class="dashicons dashicons-location"></span></div>
                 <div class="dw-card-content">
@@ -85,7 +94,6 @@ function dw_dashboard_page_render() {
                 <div class="dw-card-action"><a href="?page=dw-desa">Kelola &rarr;</a></div>
             </div>
 
-            <!-- Pedagang -->
             <div class="dw-card">
                 <div class="dw-card-icon"><span class="dashicons dashicons-store"></span></div>
                 <div class="dw-card-content">
@@ -95,7 +103,6 @@ function dw_dashboard_page_render() {
                 <div class="dw-card-action"><a href="?page=dw-pedagang">Kelola &rarr;</a></div>
             </div>
 
-            <!-- Produk -->
             <div class="dw-card">
                 <div class="dw-card-icon"><span class="dashicons dashicons-cart"></span></div>
                 <div class="dw-card-content">
@@ -109,26 +116,26 @@ function dw_dashboard_page_render() {
         <div class="dw-chart-container">
             <div class="dw-chart-header">
                 <h3>Statistik Penjualan (7 Hari Terakhir)</h3>
-                <select style="font-size:12px; border:1px solid #ddd;">
-                    <option>Minggu Ini</option>
-                    <option>Bulan Ini</option>
-                </select>
             </div>
             
-            <div class="dw-chart-bars">
-                <?php foreach ($chart_data as $data): 
-                    $height_percent = ($data['value'] / $max_value) * 100;
-                    if ($data['value'] > 0 && $height_percent < 5) $height_percent = 5;
-                ?>
-                    <div class="dw-bar-group">
-                        <div class="dw-bar-tooltip">
-                            <?php echo $data['date']; ?>: Rp <?php echo number_format($data['value'], 0, ',', '.'); ?>
+            <?php if (empty($chart_data)): ?>
+                <p>Belum ada data transaksi.</p>
+            <?php else: ?>
+                <div class="dw-chart-bars">
+                    <?php foreach ($chart_data as $data): 
+                        $height_percent = ($data['value'] / $max_value) * 100;
+                        if ($data['value'] > 0 && $height_percent < 5) $height_percent = 5;
+                    ?>
+                        <div class="dw-bar-group">
+                            <div class="dw-bar-tooltip">
+                                <?php echo $data['date']; ?>: Rp <?php echo number_format($data['value'], 0, ',', '.'); ?>
+                            </div>
+                            <div class="dw-bar" style="height: <?php echo $height_percent; ?>%;"></div>
+                            <div class="dw-bar-label"><?php echo $data['label']; ?></div>
                         </div>
-                        <div class="dw-bar" style="height: <?php echo $height_percent; ?>%;"></div>
-                        <div class="dw-bar-label"><?php echo $data['label']; ?></div>
-                    </div>
-                <?php endforeach; ?>
-            </div>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
         </div>
     </div>
     <?php

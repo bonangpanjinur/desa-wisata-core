@@ -2,26 +2,30 @@
 /**
  * File Name:   page-settings.php
  * File Folder: includes/admin-pages/
- * File Path:   includes/admin-pages/page-settings.php
- * * Description: 
- * Halaman Pengaturan Plugin.
- * Termasuk tab "Tools" untuk mengeksekusi Seeder Data Dummy.
- * * @package DesaWisataCore
+ * Description: Halaman Pengaturan Plugin.
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-// Handler Form Submit
 function dw_admin_settings_page_handler() {
-    // Handle Seeder Action
+    // Handle Seeder
     if ( isset($_POST['dw_action']) && $_POST['dw_action'] === 'run_seeder' ) {
         if ( ! current_user_can('manage_options') ) return;
         check_admin_referer('dw_run_seeder_action');
         
-        require_once DW_CORE_PLUGIN_DIR . 'includes/class-dw-seeder.php';
-        DW_Seeder::run();
-        
-        echo '<div class="notice notice-success is-dismissible"><p>Data Dummy berhasil ditambahkan! Cek Dashboard sekarang.</p></div>';
+        if (class_exists('DW_Seeder')) {
+            DW_Seeder::run();
+            echo '<div class="notice notice-success is-dismissible"><p>Data Dummy berhasil ditambahkan!</p></div>';
+        } else {
+            // Coba load manual jika class belum ada
+             if (file_exists(DW_CORE_PLUGIN_DIR . 'includes/class-dw-seeder.php')) {
+                require_once DW_CORE_PLUGIN_DIR . 'includes/class-dw-seeder.php';
+                DW_Seeder::run();
+                echo '<div class="notice notice-success is-dismissible"><p>Data Dummy berhasil ditambahkan!</p></div>';
+             } else {
+                 echo '<div class="notice notice-error"><p>Gagal: Class Seeder tidak ditemukan.</p></div>';
+             }
+        }
     }
 
     dw_settings_page_render();
@@ -38,32 +42,21 @@ function dw_settings_page_render() {
         <h2 class="nav-tab-wrapper">
             <a href="?page=dw-settings&tab=general" class="nav-tab <?php echo $active_tab == 'general' ? 'nav-tab-active' : ''; ?>">Umum</a>
             <a href="?page=dw-settings&tab=payment" class="nav-tab <?php echo $active_tab == 'payment' ? 'nav-tab-active' : ''; ?>">Pembayaran</a>
-            <a href="?page=dw-settings&tab=tools" class="nav-tab <?php echo $active_tab == 'tools' ? 'nav-tab-active' : ''; ?>">Tools (Developer)</a>
+            <a href="?page=dw-settings&tab=tools" class="nav-tab <?php echo $active_tab == 'tools' ? 'nav-tab-active' : ''; ?>">Tools</a>
         </h2>
 
         <div class="dw-card" style="margin-top: 20px;">
             <?php if ($active_tab == 'general'): ?>
-                <p>Pengaturan umum plugin akan ada di sini.</p>
-            
+                <p>Pengaturan umum plugin.</p>
             <?php elseif ($active_tab == 'payment'): ?>
-                <p>Konfigurasi Payment Gateway & Rekening.</p>
-
+                <p>Konfigurasi pembayaran.</p>
             <?php elseif ($active_tab == 'tools'): ?>
                 <h3>Generator Data Dummy</h3>
-                <p>Gunakan fitur ini untuk mengisi database dengan data palsu (Desa, Produk, Transaksi). Berguna untuk melihat tampilan Dashboard yang penuh.</p>
-                
                 <form method="post" action="">
                     <?php wp_nonce_field('dw_run_seeder_action'); ?>
                     <input type="hidden" name="dw_action" value="run_seeder">
-                    <button type="submit" class="button button-primary" onclick="return confirm('Yakin ingin menambahkan data dummy?');">
-                        Generate Dummy Data
-                    </button>
+                    <button type="submit" class="button button-primary">Generate Data Dummy</button>
                 </form>
-
-                <hr>
-
-                <h3>System Status</h3>
-                <p>Database Version: <strong><?php echo get_option('dw_core_db_version', '1.0.0'); ?></strong></p>
             <?php endif; ?>
         </div>
     </div>
