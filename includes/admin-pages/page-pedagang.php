@@ -2,9 +2,11 @@
 /**
  * File Path: includes/admin-pages/page-pedagang.php
  *
- * --- PERBAIKAN (ADMIN LOGIC v3.2.6) ---
- * - `dw_pedagang_form_handler`: Menambahkan logika otomatis pemberian role 'pedagang'
- * kepada Pengguna Baru saat Admin mengganti "Pengguna WordPress" (id_user) pada toko yang Aktif.
+ * --- UPDATE FITUR (AUTO-RELASI DESA) ---
+ * - Saat Admin menyimpan data Toko, sistem otomatis mengecek apakah Alamat (Kelurahan)
+ * yang dipilih cocok dengan salah satu Desa Wisata Aktif.
+ * - Jika cocok, Toko otomatis dihubungkan ke Desa tersebut (kolom id_desa terisi).
+ * - Menambahkan feedback visual AJAX di form agar Admin tahu status koneksinya sebelum menyimpan.
  *
  * @package DesaWisataCore
  */
@@ -38,21 +40,23 @@ function dw_pedagang_form_handler() {
     // Validasi input dasar
     if (empty($_POST['id_user']) || empty($_POST['nama_toko']) || empty($_POST['nama_pemilik'])) {
         add_settings_error('dw_pedagang_notices', 'empty_fields', 'User, Nama Toko, dan Nama Pemilik wajib diisi.', 'error');
-        set_transient('dw_pedagang_form_data', $_POST, 60); // Simpan data input
+        set_transient('dw_pedagang_form_data', $_POST, 60);
         set_transient('settings_errors', get_settings_errors(), 30); wp_redirect($redirect_url); exit;
     }
     $nomor_wa = sanitize_text_field($_POST['nomor_wa']);
+    
+    // Validasi sederhana WA
     if (!empty($nomor_wa) && !preg_match('/^[0-9+ ]{8,15}$/', preg_replace('/[^0-9+]/', '', $nomor_wa))) {
         add_settings_error('dw_pedagang_notices', 'invalid_wa', 'Format Nomor WhatsApp tidak valid.', 'error');
-        set_transient('dw_pedagang_form_data', $_POST, 60); // Simpan data input
+        set_transient('dw_pedagang_form_data', $_POST, 60);
         set_transient('settings_errors', get_settings_errors(), 30); wp_redirect($redirect_url); exit;
     }
 
     $id_user_baru = intval($_POST['id_user']);
-    $status_akun_input = sanitize_text_field($_POST['status_akun']); // 'aktif', 'nonaktif', 'nonaktif_habis_kuota'
+    $status_akun_input = sanitize_text_field($_POST['status_akun']); 
     $status_pendaftaran_input = isset($_POST['status_pendaftaran']) && current_user_can('administrator') ? sanitize_text_field($_POST['status_pendaftaran']) : null;
     
-    // Jika status pendaftaran BUKAN 'disetujui', paksa status_akun menjadi 'nonaktif'
+    // Logika Status Akun vs Pendaftaran
     if ($status_pendaftaran_input !== null && $status_pendaftaran_input !== 'disetujui') {
         $status_akun_input = 'nonaktif';
     } 
@@ -70,39 +74,53 @@ function dw_pedagang_form_handler() {
     $data = [
         'id_user' => $id_user_baru, 
         'nama_toko' => sanitize_text_field($_POST['nama_toko']),
-        'nama_pemilik' => sanitize_text_field($_POST['nama_pemilik']), 'nomor_wa' => $nomor_wa,
-        'url_gmaps' => esc_url_raw($_POST['url_gmaps'] ?? null), 'url_ktp' => esc_url_raw($_POST['url_ktp'] ?? null),
+        'nama_pemilik' => sanitize_text_field($_POST['nama_pemilik']), 
+        'nomor_wa' => $nomor_wa,
+        'url_gmaps' => esc_url_raw($_POST['url_gmaps'] ?? null), 
+        'url_ktp' => esc_url_raw($_POST['url_ktp'] ?? null),
         'deskripsi_toko'=> sanitize_textarea_field($_POST['deskripsi_toko'] ?? null), 
-        'status_akun' => $status_akun_input, // Gunakan status akun yang sudah divalidasi
-        'no_rekening' => sanitize_text_field($_POST['bank_rekening'] ?? null), 'nama_bank' => sanitize_text_field($_POST['bank_nama'] ?? null),
-        'atas_nama_rekening'=> sanitize_text_field($_POST['bank_atas_nama'] ?? null), 'qris_image_url' => esc_url_raw($_POST['qris_url'] ?? null),
+        'status_akun' => $status_akun_input,
+        'no_rekening' => sanitize_text_field($_POST['bank_rekening'] ?? null), 
+        'nama_bank' => sanitize_text_field($_POST['bank_nama'] ?? null),
+        'atas_nama_rekening'=> sanitize_text_field($_POST['bank_atas_nama'] ?? null), 
+        'qris_image_url' => esc_url_raw($_POST['qris_url'] ?? null),
     ];
     
-    // --- DATA ALAMAT BARU DARI FORM ADMIN ---
+    // --- DATA ALAMAT DARI FORM ADMIN ---
     $data['api_provinsi_id'] = isset($_POST['provinsi_id']) ? sanitize_text_field($_POST['provinsi_id']) : null;
     $data['api_kabupaten_id'] = isset($_POST['kabupaten_id']) ? sanitize_text_field($_POST['kabupaten_id']) : null;
     $data['api_kecamatan_id'] = isset($_POST['kecamatan_id']) ? sanitize_text_field($_POST['kecamatan_id']) : null;
     $data['api_kelurahan_id'] = isset($_POST['kelurahan_id']) ? sanitize_text_field($_POST['kelurahan_id']) : null;
+    
+    // Simpan nama wilayah juga (cache)
     $data['provinsi_nama'] = isset($_POST['provinsi_nama']) ? sanitize_text_field($_POST['provinsi_nama']) : null;
     $data['kabupaten_nama'] = isset($_POST['kabupaten_nama']) ? sanitize_text_field($_POST['kabupaten_nama']) : null;
     $data['kecamatan_nama'] = isset($_POST['kecamatan_nama']) ? sanitize_text_field($_POST['kecamatan_nama']) : null;
     $data['kelurahan_nama'] = isset($_POST['desa_nama']) ? sanitize_text_field($_POST['desa_nama']) : null;
     $data['alamat_lengkap'] = isset($_POST['alamat_lengkap_manual']) ? sanitize_textarea_field($_POST['alamat_lengkap_manual']) : ''; 
 
-    // --- Logika Auto-match id_desa dari Alamat ---
+    // =====================================================================
+    // LOGIKA PENTING: AUTO-MATCH DESA (RELASI OTOMATIS)
+    // =====================================================================
     $matched_desa_id = NULL;
     if (!empty($data['api_kelurahan_id']) && !empty($data['api_kecamatan_id']) && !empty($data['api_kabupaten_id'])) {
+        // Cari di tabel dw_desa, apakah ada desa yang memiliki ID wilayah API yang sama
+        // Dan pastikan desa tersebut statusnya 'aktif'
         $matched_desa_id = $wpdb->get_var($wpdb->prepare(
             "SELECT id FROM {$wpdb->prefix}dw_desa 
              WHERE api_kelurahan_id = %s 
              AND api_kecamatan_id = %s 
-             AND api_kabupaten_id = %s",
+             AND api_kabupaten_id = %s
+             AND status = 'aktif'", // Pastikan desa aktif
             $data['api_kelurahan_id'],
             $data['api_kecamatan_id'],
             $data['api_kabupaten_id']
         ));
     }
+    
+    // Jika ketemu, set id_desa. Jika tidak, set NULL (toko berdiri sendiri).
     $data['id_desa'] = $matched_desa_id ? (int)$matched_desa_id : null;
+    // =====================================================================
 
     // Hanya Super Admin yang bisa edit 'sisa_transaksi' secara manual
     if (current_user_can('administrator') && isset($_POST['sisa_transaksi'])) {
@@ -119,59 +137,48 @@ function dw_pedagang_form_handler() {
         $updated = $wpdb->update($table_name, $data, ['id' => $id]);
 
         if ($updated !== false) {
-             add_settings_error('dw_pedagang_notices', 'pedagang_updated', 'Data Toko berhasil diperbarui.', 'success');
+             $success_msg = 'Data Toko berhasil diperbarui.';
+             if ($data['id_desa']) {
+                 $success_msg .= ' Toko terhubung dengan Desa ID #' . $data['id_desa'] . '.';
+             } else {
+                 $success_msg .= ' (Toko tidak terhubung ke Desa Wisata manapun).';
+             }
+             add_settings_error('dw_pedagang_notices', 'pedagang_updated', $success_msg, 'success');
 
-             // Handle perubahan User ID
+             // Handle perubahan User ID & Role
              if ($id_user_lama > 0 && $id_user_baru !== $id_user_lama) {
-                 // User Lama: Cabut role pedagang
                  $user_lama = get_userdata($id_user_lama);
                  if ($user_lama && !$user_lama->has_cap('administrator')) {
                      $user_lama->remove_role('pedagang');
                      if (empty($user_lama->roles)) { $user_lama->add_role('subscriber'); }
                  }
                  
-                 // User Baru: Cek role
                  $user_baru = get_userdata($id_user_baru);
-                 
-                 // --- PERBAIKAN LOGIKA ADMIN v3.2.6 ---
-                 // Jika Status Akun = Aktif, otomatis berikan role Pedagang ke user baru
                  if ($status_akun_input === 'aktif' && $user_baru) {
                      $user_baru->add_role('pedagang');
                  } 
-                 // Jika tidak aktif, set ke subscriber (jika tidak ada role lain)
                  elseif ($user_baru && !$user_baru->has_cap('administrator') && !$user_baru->has_cap('pedagang')) {
                       if (empty($user_baru->roles)) { $user_baru->set_role('subscriber'); }
                  }
-                 // --- AKHIR PERBAIKAN ---
-
-                 if (function_exists('dw_log_activity')) dw_log_activity('PEDAGANG_USER_CHANGED', "User WP untuk Toko #{$id} diubah dari #{$id_user_lama} ke #{$id_user_baru} oleh Admin #".get_current_user_id().".", get_current_user_id());
+                 if (function_exists('dw_log_activity')) dw_log_activity('PEDAGANG_USER_CHANGED', "User Toko #{$id} diubah dari #{$id_user_lama} ke #{$id_user_baru}.", get_current_user_id());
              }
 
-             // Logika nonaktifkan akun (Jika User ID TIDAK berubah)
-            if ($id_user_baru === $id_user_lama && $pedagang_data_lama && $pedagang_data_lama->status_akun !== $status_akun_input && ($status_akun_input === 'nonaktif' || $status_akun_input === 'nonaktif_habis_kuota')) {
-                 $user = get_userdata($id_user_baru);
+             // Handle Aktivasi/Deaktivasi Role
+            if ($id_user_baru === $id_user_lama && $pedagang_data_lama) {
+                $user = get_userdata($id_user_baru);
                 if ($user) {
-                    $user->remove_role('pedagang');
-                     if (empty($user->roles)) { $user->add_role('subscriber'); }
-                     if (function_exists('dw_log_activity')) dw_log_activity('PEDAGANG_ACCOUNT_DEACTIVATED', "Akun Toko #{$id} dinonaktifkan (status: {$status_akun_input}) oleh Admin #".get_current_user_id().".", get_current_user_id());
+                    if ($status_akun_input === 'aktif' && $pedagang_data_lama->status_akun !== 'aktif') {
+                        $user->add_role('pedagang');
+                    } elseif ($status_akun_input !== 'aktif' && $pedagang_data_lama->status_akun === 'aktif') {
+                        $user->remove_role('pedagang');
+                        if (empty($user->roles)) { $user->add_role('subscriber'); }
+                    }
                 }
-            } elseif ($id_user_baru === $id_user_lama && $pedagang_data_lama && $pedagang_data_lama->status_akun !== $status_akun_input && $status_akun_input === 'aktif') {
-                 // Logika AKTIFKAN akun
-                 $user = get_userdata($id_user_baru);
-                 if ($user) {
-                     $user->add_role('pedagang');
-                     if (function_exists('dw_log_activity')) dw_log_activity('PEDAGANG_ACCOUNT_ACTIVATED_MANUAL', "Akun Toko #{$id} diaktifkan manual oleh Admin #".get_current_user_id().".", get_current_user_id());
-                 }
             }
-
-            // Logika perubahan status pendaftaran manual
-             if ($pedagang_data_lama && $status_pendaftaran_input !== null && $pedagang_data_lama->status_pendaftaran !== $status_pendaftaran_input) {
-                 if (function_exists('dw_log_activity')) dw_log_activity('PEDAGANG_REG_STATUS_MANUAL_UPDATE', "Status Pendaftaran Toko #{$id} diubah manual menjadi '{$status_pendaftaran_input}' oleh Admin #".get_current_user_id().".", get_current_user_id());
-             }
 
         } else {
              error_log("[DW Plugin] DB Update failed for Pedagang ID {$id}. Error: " . $wpdb->last_error);
-             add_settings_error('dw_pedagang_notices', 'update_failed', 'Gagal memperbarui data toko. Error: '.$wpdb->last_error, 'error');
+             add_settings_error('dw_pedagang_notices', 'update_failed', 'Gagal memperbarui data toko.', 'error');
         }
 
     } else { // Jika TAMBAH BARU
@@ -181,26 +188,25 @@ function dw_pedagang_form_handler() {
         $data['status_pendaftaran'] = $status_pendaftaran_input ?? 'menunggu_desa'; 
         $data['status_akun'] = $status_akun_input ?? 'nonaktif'; 
         $data['sisa_transaksi'] = $default_kuota; 
+        $data['created_at'] = current_time('mysql');
 
         $inserted_pedagang = $wpdb->insert($table_name, $data);
         if ($inserted_pedagang === false) {
-            error_log("[DW Plugin] DB Insert failed for new Pedagang. Error: " . $wpdb->last_error);
-            add_settings_error('dw_pedagang_notices', 'insert_failed', 'Gagal menyimpan data toko baru. Error: '.$wpdb->last_error, 'error');
-            set_transient('dw_pedagang_form_data', $_POST, 60); // Simpan data input
+            add_settings_error('dw_pedagang_notices', 'insert_failed', 'Gagal menyimpan toko baru.', 'error');
+            set_transient('dw_pedagang_form_data', $_POST, 60);
             set_transient('settings_errors', get_settings_errors(), 30); wp_redirect($redirect_url); exit;
         }
         $id = $wpdb->insert_id;
 
-        add_settings_error('dw_pedagang_notices', 'pedagang_created', 'Data Toko berhasil dibuat. Menunggu verifikasi kelayakan.', 'success');
+        $msg = 'Data Toko berhasil dibuat.';
+        if ($data['id_desa']) $msg .= ' Otomatis terhubung ke Desa Wisata setempat.';
+        add_settings_error('dw_pedagang_notices', 'pedagang_created', $msg, 'success');
 
+        // Setup Role Awal
         $user = get_userdata($id_user_baru);
         if ($user && !user_can($user, 'administrator') && !$user->has_cap('pedagang')) {
             if (empty($user->roles)) { $user->set_role('subscriber'); }
-        } elseif ($user && !user_can($user, 'administrator') && $user->has_cap('pedagang') && $data['status_akun'] === 'nonaktif') {
-            $user->remove_role('pedagang');
-            if (empty($user->roles)) { $user->add_role('subscriber'); }
         }
-
     }
 
     delete_transient('dw_pedagang_form_data');
@@ -223,23 +229,21 @@ function dw_pedagang_form_handler() {
      $action = isset($_GET['action']) ? $_GET['action'] : 'list';
      $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
 
-     // Panggil handler hapus di sini jika action=dw_delete
+     // Handler Hapus
      if ('dw_delete' === $action && $id > 0) {
           $nonce = $_GET['_wpnonce'] ?? '';
           if (!wp_verify_nonce($nonce, 'dw_delete_pedagang_action')) {
-               add_settings_error('dw_pedagang_notices', 'security_failed', 'Verifikasi keamanan gagal saat penghapusan (Nonce invalid). Coba muat ulang halaman dan klik hapus lagi.', 'error');
+               add_settings_error('dw_pedagang_notices', 'security_failed', 'Nonce invalid.', 'error');
                set_transient('settings_errors', get_settings_errors(), 30);
-               wp_redirect(admin_url('admin.php?page=dw-pedagang'));
-               exit;
+               wp_redirect(admin_url('admin.php?page=dw-pedagang')); exit;
           }
           if (function_exists('dw_pedagang_delete_handler')) {
-               dw_pedagang_delete_handler(); // Panggil fungsi hapus
+               dw_pedagang_delete_handler(); 
           } else {
-                add_settings_error('dw_pedagang_notices', 'handler_missing', 'Error: Fungsi penghapusan tidak ditemukan.', 'error');
+                add_settings_error('dw_pedagang_notices', 'handler_missing', 'Fungsi hapus tidak ditemukan.', 'error');
                 set_transient('settings_errors', get_settings_errors(), 30);
           }
-          wp_redirect(admin_url('admin.php?page=dw-pedagang'));
-          exit;
+          wp_redirect(admin_url('admin.php?page=dw-pedagang')); exit;
      }
 
      if ('add' === $action || ('edit' === $action && $id > 0)) {
@@ -274,7 +278,6 @@ function dw_pedagang_form_handler() {
      $page_title = 'Tambah Toko Baru';
      $is_super_admin = current_user_can('administrator');
 
-     // Cek transient dulu, baru query DB
      $transient_data = get_transient('dw_pedagang_form_data');
      if ($transient_data) {
          $item = (object) $transient_data; 
@@ -287,7 +290,7 @@ function dw_pedagang_form_handler() {
          $page_title = 'Edit Toko';
      }
 
-     // --- Logika pengambilan $users ---
+     // List User
      $current_pedagang_user_id = $item->id_user ?? 0;
      $existing_pedagang_user_ids = $wpdb->get_col( "SELECT id_user FROM {$wpdb->prefix}dw_pedagang WHERE id_user > 0" );
      $args = [ 'orderby' => 'display_name' ];
@@ -298,34 +301,23 @@ function dw_pedagang_form_handler() {
          $exclude_ids = $existing_pedagang_user_ids;
      }
      $exclude_ids = array_filter(array_map('absint', $exclude_ids), function($val) { return $val > 0; });
-     if (!empty($exclude_ids)) {
-         $args['exclude'] = $exclude_ids;
-     }
+     if (!empty($exclude_ids)) { $args['exclude'] = $exclude_ids; }
      $users = get_users($args);
      if ($id > 0 && $current_pedagang_user_id > 0) {
          $current_user_obj = get_userdata($current_pedagang_user_id);
          if ($current_user_obj) {
              $user_exists = false;
-             foreach ($users as $u) {
-                 if ($u->ID == $current_pedagang_user_id) {
-                     $user_exists = true;
-                     break;
-                 }
-             }
-             if (!$user_exists) {
-                 array_unshift($users, $current_user_obj);
-             }
+             foreach ($users as $u) { if ($u->ID == $current_pedagang_user_id) { $user_exists = true; break; } }
+             if (!$user_exists) { array_unshift($users, $current_user_obj); }
          }
      }
 
      $qris_url = $item->qris_image_url ?? '';
-     
-     // Sederhanakan status
      $current_status_akun = $item->status_akun ?? 'nonaktif';
      $current_status_pendaftaran = $item->status_pendaftaran ?? ($id > 0 ? 'menunggu' : 'menunggu_desa');
      $pendaftaran_statuses = ['menunggu','menunggu_desa', 'disetujui', 'ditolak']; 
      
-    // --- AMBIL DATA ALAMAT ---
+    // Data Alamat
     $provinsi_id    = $item->api_provinsi_id ?? '';
     $kabupaten_id   = $item->api_kabupaten_id ?? '';
     $kecamatan_id   = $item->api_kecamatan_id ?? '';
@@ -336,7 +328,6 @@ function dw_pedagang_form_handler() {
     $kecamatan_list = !empty($kabupaten_id) ? dw_get_api_kecamatan($kabupaten_id) : [];
     $desa_list_api  = !empty($kecamatan_id) ? dw_get_api_desa($kecamatan_id) : [];
      
-     // --- Logika Tampilan Kuota ---
      $sisa_kuota = $item->sisa_transaksi ?? 0; 
      if ($id === 0 && !$transient_data) { 
          $options = get_option('dw_settings');
@@ -365,8 +356,9 @@ function dw_pedagang_form_handler() {
              </table>
 
              <hr>
-             <h3><span class="dashicons dashicons-location"></span> Alamat Toko</h3>
-             <p class="description">Isi alamat lengkap toko. Jika alamat (Desa/Kelurahan) cocok dengan Desa Wisata yang terdaftar, toko akan otomatis terhubung.</p>
+             <h3><span class="dashicons dashicons-location"></span> Alamat Toko & Relasi Desa</h3>
+             <p class="description">Pilih lokasi toko. Jika <strong>Desa/Kelurahan</strong> yang dipilih terdaftar sebagai Desa Wisata Aktif, toko ini akan <strong>otomatis terhubung</strong>.</p>
+             
              <div class="dw-address-wrapper">
                 <table class="form-table">
                     <tr><th><label for="dw_provinsi">Provinsi <span style="color:red;">*</span></label></th>
@@ -397,15 +389,17 @@ function dw_pedagang_form_handler() {
                                 <option value="<?php echo esc_attr($desa['code']); ?>" <?php selected($kelurahan_id, $desa['code']); ?>><?php echo esc_html($desa['name']); ?></option>
                             <?php endforeach; ?>
                         </select></td></tr>
-                    <tr><th><label for="alamat_lengkap_manual">Alamat Jalan</label></th>
+                    <tr><th><label for="alamat_lengkap_manual">Detail Jalan</label></th>
                         <td><textarea name="alamat_lengkap_manual" id="alamat_lengkap_manual" rows="2" placeholder="Contoh: Jln. Merdeka No. 10, RT 01/RW 02"><?php echo esc_textarea($item->alamat_lengkap ?? ''); ?></textarea>
                             <p class="description">Alamat jalan, RT/RW, atau patokan.</p></td>
                         </td>
                     </tr>
                 </table>
-                <!-- Notifikasi Status Pencocokan Desa -->
-                <div id="dw-desa-match-status" style="margin-top: 10px; padding: 10px; border-radius: 4px; display: none; border-width: 1px; border-style: solid;"></div>
+                
+                <!-- FEEDBACK VISUAL UNTUK AUTO-RELASI -->
+                <div id="dw-desa-match-status" style="margin-top: 15px; padding: 15px; border-radius: 6px; display: none; border: 1px solid transparent;"></div>
 
+                <!-- HIDDEN INPUTS UNTUK NAMA WILAYAH -->
                 <input type="hidden" class="dw-provinsi-nama" name="provinsi_nama" value="<?php echo esc_attr($item->provinsi_nama ?? ''); ?>">
                 <input type="hidden" class="dw-kabupaten-nama" name="kabupaten_nama" value="<?php echo esc_attr($item->kabupaten_nama ?? ''); ?>">
                 <input type="hidden" class="dw-kecamatan-nama" name="kecamatan_nama" value="<?php echo esc_attr($item->kecamatan_nama ?? ''); ?>">
@@ -413,12 +407,12 @@ function dw_pedagang_form_handler() {
             </div>
 
              <hr>
-             <h3><span class="dashicons dashicons-bank"></span> Informasi Pembayaran Pedagang</h3>
+             <h3><span class="dashicons dashicons-bank"></span> Informasi Pembayaran</h3>
              <table class="form-table dw-form-table">
                   <tr><th><label for="bank_rekening">Nomor Rekening</label></th><td><input name="bank_rekening" id="bank_rekening" type="text" value="<?php echo esc_attr($item->no_rekening ?? ''); ?>" placeholder="Contoh: 1234567890"></td></tr>
                   <tr><th><label for="bank_nama">Nama Bank</label></th><td><input name="bank_nama" id="bank_nama" type="text" value="<?php echo esc_attr($item->nama_bank ?? ''); ?>" placeholder="Contoh: BCA / Bank Mandiri"></td></tr>
-                  <tr><th><label for="bank_atas_nama">Atas Nama Rekening</label></th><td><input name="bank_atas_nama" id="bank_atas_nama" type="text" value="<?php echo esc_attr($item->atas_nama_rekening ?? ''); ?>" placeholder="Contoh: Budi Santoso"></td></tr>
-                  <tr><th><label for="qris_url">QRIS (Gambar)</label></th><td><div class="dw-image-uploader-wrapper"><img src="<?php echo esc_url($qris_url ?: 'https://placehold.co/150x150/e2e8f0/64748b?text=QRIS'); ?>" data-default-src="https://placehold.co/150x150/e2e8f0/64748b?text=QRIS" class="dw-image-preview" alt="QRIS" style="width:150px; height:150px; object-fit:contain; border-radius:4px; border:1px solid #ddd;"/><input name="qris_url" type="hidden" value="<?php echo esc_attr($qris_url); ?>" class="dw-image-url"><button type="button" class="button dw-upload-button">Pilih/Ubah Gambar QRIS</button><button type="button" class="button button-link-delete dw-remove-image-button" style="<?php echo empty($qris_url) ? 'display:none;' : ''; ?>">Hapus Gambar</button></div><p class="description">Unggah gambar QRIS.</p></td></tr>
+                  <tr><th><label for="bank_atas_nama">Atas Nama</label></th><td><input name="bank_atas_nama" id="bank_atas_nama" type="text" value="<?php echo esc_attr($item->atas_nama_rekening ?? ''); ?>" placeholder="Contoh: Budi Santoso"></td></tr>
+                  <tr><th><label for="qris_url">QRIS (Gambar)</label></th><td><div class="dw-image-uploader-wrapper"><img src="<?php echo esc_url($qris_url ?: 'https://placehold.co/150x150/e2e8f0/64748b?text=QRIS'); ?>" data-default-src="https://placehold.co/150x150/e2e8f0/64748b?text=QRIS" class="dw-image-preview" alt="QRIS" style="width:150px; height:150px; object-fit:contain; border-radius:4px; border:1px solid #ddd;"/><input name="qris_url" type="hidden" value="<?php echo esc_attr($qris_url); ?>" class="dw-image-url"><button type="button" class="button dw-upload-button">Pilih/Ubah Gambar QRIS</button><button type="button" class="button button-link-delete dw-remove-image-button" style="<?php echo empty($qris_url) ? 'display:none;' : ''; ?>">Hapus Gambar</button></div></td></tr>
              </table>
              <hr>
              <h3><span class="dashicons dashicons-admin-generic"></span> Status & Kuota</h3>
@@ -434,11 +428,9 @@ function dw_pedagang_form_handler() {
                                      </option>
                                  <?php endforeach; ?>
                              </select>
-                             <p class="description">Ubah manual status pendaftaran (Hati-hati, dapat mengganggu alur).</p>
-                         <?php else: // Non-Super Admin ?>
+                         <?php else: ?>
                               <input type="text" value="<?php echo ucfirst(str_replace('_', ' ', esc_attr($current_status_pendaftaran))); ?>" disabled style="background-color: #f0f0f1;">
                               <input type="hidden" name="status_pendaftaran" id="status_pendaftaran" value="<?php echo esc_attr($current_status_pendaftaran); ?>"> 
-                              <p class="description">Status pendaftaran dikelola oleh Admin Desa/Super Admin.</p>
                          <?php endif; ?>
                      </td>
                  </tr>
@@ -452,26 +444,18 @@ function dw_pedagang_form_handler() {
                              <option value="nonaktif_habis_kuota" <?php selected($current_status_akun, 'nonaktif_habis_kuota'); ?>>Nonaktif (Kuota Habis)</option>
                          </select>
                          <p class="description" id="status_akun_desc">
-                             <?php if ($current_status_akun === 'aktif'): ?> Akun saat ini Aktif. Bisa diubah menjadi Nonaktif (misal: banned).
-                             <?php elseif ($current_status_akun === 'nonaktif'): ?> Akun saat ini Nonaktif. 
-                             <?php elseif ($current_status_akun === 'nonaktif_habis_kuota'): ?> Akun dibekukan karena kuota transaksi habis. <?php endif; ?>
+                             <?php if ($current_status_akun === 'aktif'): ?> Akun Aktif. <?php elseif ($current_status_akun === 'nonaktif_habis_kuota'): ?> Akun dibekukan (kuota habis). <?php endif; ?>
                          </p> 
                      </td>
                  </tr>
                  
                  <tr>
-                     <th><label for="sisa_transaksi">Sisa Kuota Transaksi</label></th>
+                     <th><label for="sisa_transaksi">Sisa Kuota</label></th>
                      <td>
                          <input name="sisa_transaksi" id="sisa_transaksi" type="number" step="1" min="0" 
                                 value="<?php echo esc_attr($sisa_kuota); ?>" 
                                 <?php disabled(!$is_super_admin); ?>
                                 class="small-text">
-                         
-                         <?php if ($is_super_admin): ?>
-                             <p class="description">Super Admin dapat menambah atau mengurangi kuota transaksi secara manual.</p>
-                         <?php else: ?>
-                             <p class="description">Kuota transaksi dikelola oleh Super Admin.</p>
-                         <?php endif; ?>
                      </td>
                  </tr>
 
@@ -481,44 +465,29 @@ function dw_pedagang_form_handler() {
      </div>
      <script>
          jQuery(function($){
+             // Select2 User
              if ($('#id_user').length > 0 && typeof $.fn.select2 === 'function') {
-                  $('#id_user').select2({
-                     width: '100%',
-                     placeholder: 'Ketik untuk mencari nama atau email...',
-                     allowClear: true
-                 });
+                  $('#id_user').select2({ width: '100%', placeholder: 'Ketik nama/email...', allowClear: true });
              }
 
+            // Logic Status Akun
             var $statusPendaftaran = $('#status_pendaftaran');
             var $statusAkun = $('#status_akun');
             var $statusAkunDesc = $('#status_akun_desc');
 
             function updateStatusAkunLogic() {
                 var statusPendaftaranVal = $statusPendaftaran.val();
-                var statusAkunVal = $statusAkun.val(); 
-
                 if (statusPendaftaranVal === 'disetujui') {
                     $statusAkun.prop('disabled', false);
-                    
-                    if (statusAkunVal !== 'nonaktif_habis_kuota') {
-                         $statusAkun.val('aktif'); 
-                         $statusAkunDesc.text('Akun disetujui. Anda bisa mengatur statusnya menjadi Aktif atau Nonaktif.');
-                    } else {
-                         $statusAkunDesc.text('Akun dibekukan karena kuota habis. Beli paket atau tambahkan kuota manual.');
-                    }
-
                 } else {
                     $statusAkun.val('nonaktif').prop('disabled', true);
-                    if (statusPendaftaranVal === 'ditolak') {
-                        $statusAkunDesc.text('Pendaftaran ditolak, akun harus Nonaktif.');
-                    } else {
-                        $statusAkunDesc.text('Akun akan otomatis menjadi "Aktif" setelah pendaftaran "Disetujui".');
-                    }
+                    $statusAkunDesc.text('Akun hanya bisa aktif jika pendaftaran disetujui.');
                 }
             }
             updateStatusAkunLogic(); 
             $statusPendaftaran.on('change', updateStatusAkunLogic); 
 
+            // Logic Auto Match Desa
             var $provSelect = $('#dw_provinsi');
             var $kabSelect = $('#dw_kabupaten');
             var $kecSelect = $('#dw_kecamatan');
@@ -535,7 +504,7 @@ function dw_pedagang_form_handler() {
                     return;
                 }
                 
-                $statusBox.html('Mengecek kecocokan desa...').css('borderColor', '#ddd').css('backgroundColor', '#f9f9f9').show();
+                $statusBox.html('<span class="dashicons dashicons-update spin"></span> Mengecek ketersediaan Desa Wisata...').css({'borderColor': '#ddd', 'backgroundColor': '#f9f9f9', 'color': '#666'}).show();
 
                 $.post(dw_admin_vars.ajax_url, {
                     action: 'dw_check_desa_match_from_address',
@@ -546,27 +515,28 @@ function dw_pedagang_form_handler() {
                 }).done(function(response) {
                     if (response.success) {
                         if (response.data.matched) {
-                            $statusBox.html('✅ <strong>Terhubung Otomatis:</strong> Alamat ini cocok dengan Desa Wisata <strong>' + response.data.nama_desa + '</strong>.')
-                                      .css('borderColor', '#c3e6cb').css('backgroundColor', '#d4edda').css('color', '#155724');
+                            $statusBox.html('<span class="dashicons dashicons-yes-alt"></span> <strong>Terhubung Otomatis!</strong><br>Alamat ini terdaftar sebagai Desa Wisata <strong>' + response.data.nama_desa + '</strong>. Toko akan otomatis menjadi bagian dari desa ini.')
+                                      .css({'borderColor': '#c3e6cb', 'backgroundColor': '#d4edda', 'color': '#155724'});
                         } else {
-                            $statusBox.html('ℹ️ <strong>Info:</strong> Alamat ini tidak terhubung dengan Desa Wisata manapun yang terdaftar.')
-                                      .css('borderColor', '#bee5eb').css('backgroundColor', '#d1ecf1').css('color', '#0c5460');
+                            $statusBox.html('<span class="dashicons dashicons-info"></span> <strong>Info:</strong> Alamat ini belum terdaftar sebagai Desa Wisata. Toko akan berdiri sendiri (Independen).')
+                                      .css({'borderColor': '#bee5eb', 'backgroundColor': '#d1ecf1', 'color': '#0c5460'});
                         }
                     } else {
-                        $statusBox.html('Gagal mengecek kecocokan desa.').css('borderColor', '#f5c6cb').css('backgroundColor', '#f8d7da').css('color', '#721c24');
+                        $statusBox.html('Gagal mengecek kecocokan desa.').css({'borderColor': '#f5c6cb', 'backgroundColor': '#f8d7da', 'color': '#721c24'});
                     }
                 }).fail(function() {
-                     $statusBox.html('Error koneksi saat mengecek kecocokan.').css('borderColor', '#f5c6cb').css('backgroundColor', '#f8d7da').css('color', '#721c24');
+                     $statusBox.html('Error koneksi.').css({'borderColor': '#f5c6cb', 'backgroundColor': '#f8d7da', 'color': '#721c24'});
                 });
             }
 
             $kelSelect.on('change', checkDesaMatch);
+            // Cek saat load (jika edit)
             if ($kelSelect.val()) {
-                checkDesaMatch();
+                // Beri jeda sedikit agar nama desa terload di select2/dropdown jika pakai ajax load
+                setTimeout(checkDesaMatch, 1000); 
             }
          });
      </script>
      <?php
  }
-
  ?>
