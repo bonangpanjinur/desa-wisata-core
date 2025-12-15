@@ -3,68 +3,134 @@
  * File Name:   page-dashboard.php
  * File Folder: includes/admin-pages/
  * File Path:   includes/admin-pages/page-dashboard.php
- *
- * PERBAIKAN:
- * - Mengubah query dari `{$table_prefix}penjual` menjadi `{$table_prefix}pedagang`
- * untuk mengatasi error 'Table doesn't exist'.
+ * * Description: 
+ * Halaman utama Dashboard Admin.
+ * Menampilkan statistik ringkas (Desa, Pedagang, Omset) dan Grafik Penjualan
+ * menggunakan CSS-only charts.
+ * * @package DesaWisataCore
  */
+
+if ( ! defined( 'ABSPATH' ) ) exit;
+
 function dw_dashboard_page_render() {
     global $wpdb;
-    $table_prefix = $wpdb->prefix . 'dw_';
 
-    $desa_count = $wpdb->get_var("SELECT COUNT(*) FROM {$table_prefix}desa");
-    // PERBAIKAN: Menggunakan nama tabel yang benar 'pedagang'.
-    $penjual_pending_count = $wpdb->get_var("SELECT COUNT(*) FROM {$table_prefix}pedagang WHERE status_pendaftaran = 'menunggu'");
-    $produk_count = $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_type = 'dw_produk' AND post_status = 'publish'");
-    $wisata_count = $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_type = 'dw_wisata' AND post_status = 'publish'");
+    // --- 1. DATA STATISTIK UTAMA ---
+    $count_desa = $wpdb->get_var("SELECT COUNT(id) FROM {$wpdb->prefix}dw_desa WHERE status = 'aktif'");
+    $count_pedagang = $wpdb->get_var("SELECT COUNT(id) FROM {$wpdb->prefix}dw_pedagang WHERE status_akun = 'aktif'");
+    $count_produk = $wpdb->get_var("SELECT COUNT(id) FROM {$wpdb->prefix}dw_produk WHERE status = 'aktif'");
+    
+    // Hitung Omset (Hanya status 'selesai' atau 'paid')
+    $omset_sql = "SELECT SUM(total_bayar) FROM {$wpdb->prefix}dw_transaksi WHERE status_pembayaran = 'paid'";
+    $omset = $wpdb->get_var($omset_sql) ?: 0;
+
+
+    // --- 2. DATA GRAFIK (7 HARI TERAKHIR) ---
+    $chart_data = [];
+    $max_value = 0;
+    
+    for ($i = 6; $i >= 0; $i--) {
+        $date = date('Y-m-d', strtotime("-$i days"));
+        $label = date('D', strtotime("-$i days")); // Mon, Tue...
+        
+        $day_omset = $wpdb->get_var($wpdb->prepare(
+            "SELECT SUM(total_bayar) FROM {$wpdb->prefix}dw_transaksi 
+             WHERE DATE(tanggal_transaksi) = %s AND status_pembayaran = 'paid'",
+            $date
+        ));
+        $day_omset = $day_omset ?: 0;
+        
+        if ($day_omset > $max_value) $max_value = $day_omset;
+        
+        $chart_data[] = [
+            'label' => $label,
+            'date' => $date, // Full date for tooltip
+            'value' => $day_omset
+        ];
+    }
+    
+    // Hindari pembagian dengan nol
+    if ($max_value == 0) $max_value = 1;
 
     ?>
     <div class="wrap dw-wrap">
         <div class="dw-header">
-            <h1>Dashboard Desa Wisata</h1>
+            <div>
+                <h1>Dashboard Desa Wisata</h1>
+                <p style="margin:0; color:#666;">Ringkasan aktivitas platform Anda.</p>
+            </div>
+            <div style="text-align:right;">
+                <span class="dw-status-badge status-aktif">System Online</span>
+            </div>
         </div>
-        <p>Selamat datang di panel admin Desa Wisata Core. Di sini Anda dapat melihat ringkasan statistik dan informasi penting.</p>
-        
-        <div class="dw-dashboard-cards">
 
+        <!-- STAT CARDS -->
+        <div class="dw-dashboard-cards">
+            <!-- Omset -->
+            <div class="dw-card">
+                <div class="dw-card-icon"><span class="dashicons dashicons-money-alt"></span></div>
+                <div class="dw-card-content">
+                    <h3>Total Omset</h3>
+                    <p class="dw-card-number">Rp <?php echo number_format($omset, 0, ',', '.'); ?></p>
+                </div>
+            </div>
+            
+            <!-- Desa -->
             <div class="dw-card">
                 <div class="dw-card-icon"><span class="dashicons dashicons-location"></span></div>
                 <div class="dw-card-content">
-                    <h3>Total Desa</h3>
-                    <p class="dw-card-number"><?php echo esc_html($desa_count); ?></p>
-                    <a href="<?php echo admin_url('admin.php?page=dw-desa'); ?>">Kelola Desa</a>
+                    <h3>Desa Aktif</h3>
+                    <p class="dw-card-number"><?php echo number_format($count_desa); ?></p>
                 </div>
+                <div class="dw-card-action"><a href="?page=dw-desa">Kelola &rarr;</a></div>
             </div>
 
+            <!-- Pedagang -->
             <div class="dw-card">
                 <div class="dw-card-icon"><span class="dashicons dashicons-store"></span></div>
                 <div class="dw-card-content">
-                    <h3>Total Produk</h3>
-                    <p class="dw-card-number"><?php echo esc_html($produk_count); ?></p>
-                    <a href="<?php echo admin_url('edit.php?post_type=dw_produk'); ?>">Kelola Produk</a>
+                    <h3>Pedagang</h3>
+                    <p class="dw-card-number"><?php echo number_format($count_pedagang); ?></p>
                 </div>
+                <div class="dw-card-action"><a href="?page=dw-pedagang">Kelola &rarr;</a></div>
             </div>
 
-             <div class="dw-card">
-                <div class="dw-card-icon"><span class="dashicons dashicons-palmtree"></span></div>
+            <!-- Produk -->
+            <div class="dw-card">
+                <div class="dw-card-icon"><span class="dashicons dashicons-cart"></span></div>
                 <div class="dw-card-content">
-                    <h3>Total Wisata</h3>
-                    <p class="dw-card-number"><?php echo esc_html($wisata_count); ?></p>
-                    <a href="<?php echo admin_url('edit.php?post_type=dw_wisata'); ?>">Kelola Wisata</a>
+                    <h3>Produk</h3>
+                    <p class="dw-card-number"><?php echo number_format($count_produk); ?></p>
                 </div>
             </div>
-
-            <div class="dw-card <?php echo $penjual_pending_count > 0 ? 'warning' : ''; ?>">
-                <div class="dw-card-icon"><span class="dashicons dashicons-admin-users"></span></div>
-                <div class="dw-card-content">
-                    <h3>Persetujuan Penjual</h3>
-                    <p class="dw-card-number"><?php echo esc_html($penjual_pending_count); ?></p>
-                    <a href="<?php echo admin_url('admin.php?page=dw-pedagang'); ?>">Lihat Pedagang</a>
-                </div>
-            </div>
-
         </div>
 
+        <!-- ANALYTICS CHART -->
+        <div class="dw-chart-container">
+            <div class="dw-chart-header">
+                <h3>Statistik Penjualan (7 Hari Terakhir)</h3>
+                <select style="font-size:12px; border:1px solid #ddd;">
+                    <option>Minggu Ini</option>
+                    <option>Bulan Ini</option>
+                </select>
+            </div>
+            
+            <div class="dw-chart-bars">
+                <?php foreach ($chart_data as $data): 
+                    $height_percent = ($data['value'] / $max_value) * 100;
+                    if ($data['value'] > 0 && $height_percent < 5) $height_percent = 5;
+                ?>
+                    <div class="dw-bar-group">
+                        <div class="dw-bar-tooltip">
+                            <?php echo $data['date']; ?>: Rp <?php echo number_format($data['value'], 0, ',', '.'); ?>
+                        </div>
+                        <div class="dw-bar" style="height: <?php echo $height_percent; ?>%;"></div>
+                        <div class="dw-bar-label"><?php echo $data['label']; ?></div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
     </div>
     <?php
 }
+?>
