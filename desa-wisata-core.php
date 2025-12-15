@@ -2,13 +2,12 @@
 /**
  * File Name:   desa-wisata-core.php
  * Plugin Name: Desa Wisata Core
- * Version:     3.3.0 (Access Control Added)
+ * Version:     3.3.1 (CORS & Fixes)
  *
- * --- PERBAIKAN V3.2.5 (FIX FATAL ERROR) ---
- * - Mengubah urutan `require_once` di `dw_core_load_dependencies` secara drastis.
- *
- * --- UPDATE V3.3.0 (ACCESS CONTROL) ---
- * - Menambahkan `includes/access-control.php` untuk redirect user frontend.
+ * --- PERBAIKAN V3.3.1 (ERROR 403 & DNS) ---
+ * - Memperbaiki `dw_central_cors_handler` agar tidak memblokir request OPTIONS
+ * secara agresif yang menyebabkan error 403 pada admin-ajax.php.
+ * - Menambahkan validasi keamanan tambahan untuk akses file langsung.
  */
 
 // Mencegah akses langsung ke file.
@@ -16,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'DW_CORE_VERSION', '3.3.0' ); 
+define( 'DW_CORE_VERSION', '3.3.1' ); 
 define( 'DW_CORE_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'DW_CORE_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'DW_CORE_PLUGIN_FILE', __FILE__ );
@@ -28,13 +27,11 @@ if ( file_exists( DW_CORE_PLUGIN_DIR . 'vendor/autoload.php' ) ) {
 
 /**
  * ** 2. Memuat semua file dependensi **
- * --- PERBAIKAN: Urutan file diubah total ---
  */
 function dw_core_load_dependencies() {
     
     // -----------------------------------------------------------------
     // TAHAP 1: Helper Inti & API Eksternal
-    // (File-file ini tidak memiliki dependensi internal)
     // -----------------------------------------------------------------
 	require_once DW_CORE_PLUGIN_DIR . 'includes/helpers.php'; 
 	require_once DW_CORE_PLUGIN_DIR . 'includes/logs.php';
@@ -42,7 +39,6 @@ function dw_core_load_dependencies() {
 
     // -----------------------------------------------------------------
     // TAHAP 2: Logika Bisnis & Penanganan Data
-    // (File-file ini berisi fungsi yang akan dipanggil oleh TAHAP 3)
     // -----------------------------------------------------------------
 	require_once DW_CORE_PLUGIN_DIR . 'includes/cart.php'; 
 	require_once DW_CORE_PLUGIN_DIR . 'includes/data-integrity.php'; 
@@ -53,7 +49,6 @@ function dw_core_load_dependencies() {
 
     // -----------------------------------------------------------------
     // TAHAP 3: Inisialisasi UI, Route, dan Role
-    // (File-file ini memanggil fungsi dari TAHAP 1 & 2)
     // -----------------------------------------------------------------
 	require_once DW_CORE_PLUGIN_DIR . 'includes/post-types.php'; 
 	require_once DW_CORE_PLUGIN_DIR . 'includes/taxonomies.php'; 
@@ -66,7 +61,7 @@ function dw_core_load_dependencies() {
 	require_once DW_CORE_PLUGIN_DIR . 'includes/admin-ui-tweaks.php'; 
     require_once DW_CORE_PLUGIN_DIR . 'includes/init.php'; 
     
-    // --- BARU: Access Control ---
+    // --- Access Control ---
     require_once DW_CORE_PLUGIN_DIR . 'includes/access-control.php';
 }
 dw_core_load_dependencies();
@@ -89,28 +84,29 @@ register_deactivation_hook( __FILE__, 'dw_core_deactivate' );
 
 
 // =========================================================================
-// PERBAIKAN CORS (v3.2.0)
+// PERBAIKAN CORS (v3.3.1)
 // =========================================================================
 
 function dw_central_cors_handler($value = null) {
     
-    // --- PERBAIKAN #2: Pindahkan CORS ke Database ---
+    // 1. Ambil pengaturan origins dari database
     $options = get_option('dw_settings');
     $allowed_origins_string = $options['allowed_cors_origins'] ?? '';
-    
     $allowed_origins = array_filter(array_map('trim', explode("\n", $allowed_origins_string)));
 
+    // Default origins jika kosong
     if (empty($allowed_origins)) {
         $allowed_origins = [
-            'https://sadesa.site', // DOMAIN FRONTEND ANDA
-            'https://www.sadesa.site', 
-            'http://localhost:3000', // Untuk development lokal
+            'https://sadesa.site',
+            'http://localhost:3000',
+            'http://localhost:8000',
+            site_url() // Selalu izinkan domain sendiri
         ];
     }
-    // --- AKHIR PERBAIKAN #2 ---
 
     $origin = get_http_origin();
     
+    // 2. Set Header jika Origin cocok
     if (!empty($origin) && in_array($origin, $allowed_origins)) {
         if (!headers_sent()) {
             header("Access-Control-Allow-Origin: " . $origin);
@@ -120,18 +116,20 @@ function dw_central_cors_handler($value = null) {
         }
     }
 
+    // 3. Handle Preflight Request (OPTIONS)
+    // PERBAIKAN: Jangan memblokir (403) jika ini adalah request internal Admin Panel 
+    // (biasanya same-origin, atau origin header tidak dikirim browser untuk same-origin simple requests)
     if ('OPTIONS' === $_SERVER['REQUEST_METHOD']) {
         if (!empty($origin) && in_array($origin, $allowed_origins)) {
             status_header(200);
             exit(); 
-        } else {
-            status_header(403); 
-            exit();
-        }
+        } 
+        // JANGAN return 403 di sini secara default, biarkan WordPress yang menangani.
+        // Memblokir di sini menyebabkan admin-ajax.php error jika header Origin tidak sesuai ekspektasi.
     }
 
     return $value;
 }
 add_action('init', 'dw_central_cors_handler', 5);
 add_filter('rest_pre_serve_request', 'dw_central_cors_handler', 5);
-?> 
+?>

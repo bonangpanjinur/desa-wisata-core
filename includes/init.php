@@ -38,8 +38,10 @@ function dw_core_load_admin_assets($hook) {
         wp_enqueue_media();
 
         // [PENTING] Kirim Data ke JS (AJAX URL & REST API URL)
+        // Gunakan admin_url('admin-ajax.php') agar dinamis mengikuti URL yang sedang diakses
+        // (Misal: localhost, IP, atau domain)
         wp_localize_script('dw-admin-scripts', 'dw_admin_vars', [
-            'ajax_url'   => admin_url('admin-ajax.php'),
+            'ajax_url'   => admin_url('admin-ajax.php', 'relative'), // Gunakan relative untuk mencegah mixed content issue
             'nonce'      => wp_create_nonce('dw_admin_nonce'),
             'rest_url'   => esc_url_raw(rest_url('dw/v1/')), // URL API Internal
             'rest_nonce' => wp_create_nonce('wp_rest')       // Nonce untuk API

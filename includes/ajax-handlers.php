@@ -10,10 +10,12 @@ function dw_handle_image_upload() {
     if ( ! current_user_can( 'upload_files' ) ) {
         error_log('DW Upload: User not permitted');
         wp_send_json_error( array( 'message' => 'Anda tidak memiliki izin.' ) );
+        wp_die(); // Pastikan stop
     }
 
     if ( ! isset( $_FILES['file'] ) ) {
         wp_send_json_error( array( 'message' => 'No file uploaded' ) );
+        wp_die();
     }
 
     $file = $_FILES['file'];
@@ -25,6 +27,7 @@ function dw_handle_image_upload() {
         if( ! in_array( $file_type['type'], ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'] ) ) {
              wp_delete_file( $movefile['file'] );
              wp_send_json_error( array( 'message' => 'Hanya file gambar (JPG, PNG, WEBP) yang diperbolehkan.' ) );
+             wp_die();
         }
 
         wp_send_json_success( array( 'url' => $movefile['url'], 'id' => 0 ) );
@@ -32,6 +35,7 @@ function dw_handle_image_upload() {
         error_log('DW Upload Error: ' . $movefile['error']);
         wp_send_json_error( array( 'message' => $movefile['error'] ) );
     }
+    wp_die();
 }
 add_action( 'wp_ajax_dw_upload_image', 'dw_handle_image_upload' );
 
@@ -41,27 +45,37 @@ add_action( 'wp_ajax_dw_upload_image', 'dw_handle_image_upload' );
 function dw_handle_send_message() {
     check_ajax_referer( 'dw_chat_nonce', 'nonce' );
 
-    if ( ! is_user_logged_in() ) wp_send_json_error( array( 'message' => 'Login required.' ) );
+    if ( ! is_user_logged_in() ) {
+        wp_send_json_error( array( 'message' => 'Login required.' ) );
+        wp_die();
+    }
 
     $order_id = intval( $_POST['order_id'] ?? 0 );
     $message  = sanitize_textarea_field( $_POST['message'] ?? '' );
     $sender   = get_current_user_id();
 
-    if ( !$order_id || empty($message) ) wp_send_json_error( array( 'message' => 'Data invalid.' ) );
+    if ( !$order_id || empty($message) ) {
+        wp_send_json_error( array( 'message' => 'Data invalid.' ) );
+        wp_die();
+    }
 
     global $wpdb;
     $order = $wpdb->get_row( $wpdb->prepare( "SELECT pembeli_id, pedagang_id FROM {$wpdb->prefix}dw_transaksi WHERE id = %d", $order_id ) );
 
-    if ( ! $order ) wp_send_json_error( array( 'message' => 'Pesanan tidak ditemukan.' ) );
+    if ( ! $order ) {
+        wp_send_json_error( array( 'message' => 'Pesanan tidak ditemukan.' ) );
+        wp_die();
+    }
 
     if ( $sender != $order->pembeli_id && $sender != $order->pedagang_id && ! current_user_can('manage_options') ) {
         wp_send_json_error( array( 'message' => 'Akses ditolak.' ) );
+        wp_die();
     }
 
-    $table_chat = $wpdb->prefix . 'dw_chat_message'; // Koreksi nama tabel sesuai activation.php
+    $table_chat = $wpdb->prefix . 'dw_chat_message'; 
     $inserted = $wpdb->insert(
         $table_chat,
-        array( 'order_id' => $order_id, 'sender_id' => $sender, 'message' => $message, 'created_at' => current_time('mysql') ), // Koreksi kolom
+        array( 'order_id' => $order_id, 'sender_id' => $sender, 'message' => $message, 'created_at' => current_time('mysql') ), 
         array( '%d', '%d', '%s', '%s' )
     );
 
@@ -71,6 +85,7 @@ function dw_handle_send_message() {
         error_log('DW Chat Error: ' . $wpdb->last_error);
         wp_send_json_error( array( 'message' => 'Database error' ) );
     }
+    wp_die();
 }
 add_action( 'wp_ajax_dw_send_message', 'dw_handle_send_message' );
 
@@ -84,7 +99,10 @@ function dw_check_desa_match_from_address() {
     $kel_id = sanitize_text_field($_POST['kel_id'] ?? '');
     
     // Validasi sederhana
-    if ( empty($kel_id) ) wp_send_json_error( ['message' => 'Data wilayah tidak lengkap'] );
+    if ( empty($kel_id) ) {
+        wp_send_json_error( ['message' => 'Data wilayah tidak lengkap'] );
+        wp_die();
+    }
 
     $desa = $wpdb->get_row( $wpdb->prepare(
         "SELECT id, nama_desa FROM {$wpdb->prefix}dw_desa WHERE api_kelurahan_id = %s AND status = 'aktif' LIMIT 1",
@@ -96,6 +114,7 @@ function dw_check_desa_match_from_address() {
     } else {
         wp_send_json_success( [ 'matched' => false ] );
     }
+    wp_die();
 }
 add_action( 'wp_ajax_dw_check_desa_match_from_address', 'dw_check_desa_match_from_address' );
 ?>
