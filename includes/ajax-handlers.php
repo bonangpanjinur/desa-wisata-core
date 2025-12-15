@@ -98,3 +98,45 @@ function dw_handle_send_message() {
     }
 }
 add_action( 'wp_ajax_dw_send_message', 'dw_handle_send_message' );
+
+/**
+ * [BARU] Cek Kecocokan Desa dari Alamat (Form Pedagang)
+ */
+function dw_check_desa_match_from_address() {
+    // 1. Security Check (dw_admin_nonce di-set di dw_core_load_admin_assets)
+    check_ajax_referer( 'dw_admin_nonce', 'nonce' );
+
+    global $wpdb;
+    $kel_id = sanitize_text_field($_POST['kel_id'] ?? '');
+    $kec_id = sanitize_text_field($_POST['kec_id'] ?? '');
+    $kab_id = sanitize_text_field($_POST['kab_id'] ?? '');
+
+    if ( empty($kel_id) || empty($kec_id) || empty($kab_id) ) {
+        wp_send_json_error( ['message' => 'Data wilayah tidak lengkap'] );
+    }
+
+    // Cek di tabel Desa apakah ada yang punya ID wilayah API yang sama
+    $desa = $wpdb->get_row( $wpdb->prepare(
+        "SELECT id, nama_desa FROM {$wpdb->prefix}dw_desa 
+         WHERE api_kelurahan_id = %s 
+         AND api_kecamatan_id = %s 
+         AND api_kabupaten_id = %s
+         AND status = 'aktif'
+         LIMIT 1",
+        $kel_id, $kec_id, $kab_id
+    ));
+
+    if ( $desa ) {
+        wp_send_json_success( [
+            'matched' => true,
+            'desa_id' => $desa->id,
+            'nama_desa' => $desa->nama_desa
+        ] );
+    } else {
+        wp_send_json_success( [
+            'matched' => false
+        ] );
+    }
+}
+add_action( 'wp_ajax_dw_check_desa_match_from_address', 'dw_check_desa_match_from_address' );
+?>
