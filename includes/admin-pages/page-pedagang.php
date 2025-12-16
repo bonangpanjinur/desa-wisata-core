@@ -9,27 +9,25 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-// --- SOLUSI ANTI-GAGAL LOAD API ALAMAT ---
+// --- SOLUSI ANTI-GAGAL LOAD API ALAMAT (REVISI FINAL) ---
 if (!function_exists('dw_get_provinces')) {
-    // Kita coba cari file address-api.php di beberapa kemungkinan lokasi
-    $possible_paths = [
-        // 1. Relatif dari folder ini (includes/admin-pages/ -> includes/address-api.php)
-        dirname(dirname(__FILE__)) . '/address-api.php',
-        
-        // 2. Menggunakan konstanta plugin jika ada
-        (defined('DW_CORE_PLUGIN_DIR') ? DW_CORE_PLUGIN_DIR . 'includes/address-api.php' : ''),
-        
-        // 3. Hardcoded path standard WordPress (Jaga-jaga jika struktur folder standar)
-        WP_PLUGIN_DIR . '/desa-wisata-core/includes/address-api.php'
-    ];
+    // Kita definisikan path secara absolut berdasarkan lokasi file ini (__DIR__)
+    // Lokasi file ini: .../includes/admin-pages/page-pedagang.php
+    // Lokasi target: .../includes/address-api.php
+    
+    // Naik satu level dari 'admin-pages' ke 'includes'
+    $includes_dir = dirname(__DIR__); 
+    $api_path_primary = $includes_dir . '/address-api.php';
 
-    foreach ($possible_paths as $path) {
-        if (!empty($path) && file_exists($path)) {
-            require_once $path;
-            // Jika berhasil load dan fungsi ditemukan, berhenti mencari
-            if (function_exists('dw_get_provinces')) {
-                break;
-            }
+    // Cek dan load
+    if (file_exists($api_path_primary)) {
+        require_once $api_path_primary;
+    } 
+    // Fallback: Jika gagal, coba pakai WP_PLUGIN_DIR (Hardcoded standard path)
+    elseif (defined('WP_PLUGIN_DIR')) {
+        $api_path_secondary = WP_PLUGIN_DIR . '/desa-wisata-core/includes/address-api.php';
+        if (file_exists($api_path_secondary)) {
+            require_once $api_path_secondary;
         }
     }
 }
@@ -334,13 +332,16 @@ function dw_pedagang_page_render() {
                                             echo '<option value="" disabled>Data provinsi tidak tersedia</option>';
                                         }
                                     } else {
-                                        // Tampilkan pesan debug jika masih gagal
-                                        echo '<option value="" disabled>ERROR: API Helper Missing.</option>';
+                                        // DEBUG INFO: Jika masih gagal, tampilkan path yang dicoba
+                                        $includes_dir = dirname(__DIR__); 
+                                        $tried_path = $includes_dir . '/address-api.php';
+                                        echo '<option value="" disabled>ERROR: API Missing.</option>';
+                                        echo '<option value="" disabled>Tried: ' . esc_attr($tried_path) . '</option>';
                                     }
                                     ?>
                                 </select>
                                 <?php if (!function_exists('dw_get_provinces')): ?>
-                                    <p class="dw-api-status dw-api-error">Gagal memuat address-api.php. Cek path plugin.</p>
+                                    <p class="dw-api-status dw-api-error">Gagal memuat API Wilayah.</p>
                                 <?php endif; ?>
                             </div>
 
@@ -398,8 +399,8 @@ function dw_pedagang_page_render() {
         else: 
             // Pastikan class table tersedia
             if (!class_exists('DW_Pedagang_List_Table')) {
-                // Gunakan path dinamis yang lebih aman
-                $table_path = dirname(dirname(__FILE__)) . '/list-tables/class-dw-pedagang-list-table.php';
+                // Gunakan path dinamis yang lebih aman untuk list table juga
+                $table_path = dirname(__DIR__) . '/list-tables/class-dw-pedagang-list-table.php';
                 if (file_exists($table_path)) {
                     require_once $table_path;
                 }
@@ -419,7 +420,7 @@ function dw_pedagang_page_render() {
                 </div>
                 <?php
             } else {
-                echo '<div class="notice notice-error"><p>Error: Class DW_Pedagang_List_Table tidak ditemukan.</p></div>';
+                echo '<div class="notice notice-error"><p>Error: Class DW_Pedagang_List_Table tidak ditemukan di ' . dirname(__DIR__) . '/list-tables/</p></div>';
             }
         endif; 
         ?>
