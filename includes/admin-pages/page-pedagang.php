@@ -1,16 +1,20 @@
 <?php
+/**
+ * Halaman Manajemen Pedagang
+ * Menangani tampilan (UI) dan logika penyimpanan data pedagang.
+ */
+
 // Pastikan tidak diakses langsung
 if (!defined('ABSPATH')) {
     exit;
 }
 
 /**
- * Render halaman Manajemen Pedagang
- * * Fungsi ini menangani logika pemrosesan form dan tampilan HTML.
- * Harus dipanggil melalui hook menu admin, bukan dieksekusi langsung saat file dimuat.
+ * Fungsi utama untuk merender halaman Pedagang.
+ * Dipanggil oleh dw_render_pedagang() di admin-menus.php
  */
-function dw_render_pedagang() {
-    // Handle form submission
+function dw_pedagang_page_render() {
+    // 1. Logika Pemrosesan Form (Simpan Data)
     $message = '';
     $message_type = '';
 
@@ -21,7 +25,7 @@ function dw_render_pedagang() {
         $nama_toko = sanitize_text_field($_POST['nama_toko']);
         $deskripsi = sanitize_textarea_field($_POST['deskripsi_toko']);
         
-        // Data Alamat
+        // Data Alamat (Cascading Dropdown)
         $provinsi = sanitize_text_field($_POST['provinsi']);
         $kota = sanitize_text_field($_POST['kota']);
         $kecamatan = sanitize_text_field($_POST['kecamatan']);
@@ -47,7 +51,7 @@ function dw_render_pedagang() {
                 $result = $wpdb->insert(
                     $table_name,
                     array(
-                        'user_id' => get_current_user_id(), // Sementara assign ke admin yg input, nanti bisa diubah logicnya
+                        'user_id' => get_current_user_id(), // Sementara assign ke admin, nanti bisa disesuaikan
                         'nama_pedagang' => $nama,
                         'email' => $email,
                         'telepon' => $telepon,
@@ -67,26 +71,26 @@ function dw_render_pedagang() {
                     $message = 'Pedagang berhasil ditambahkan.';
                     $message_type = 'success';
                 } else {
-                    $message = 'Gagal menambahkan pedagang. Error database.';
+                    $message = 'Gagal menambahkan pedagang. Error database: ' . $wpdb->last_error;
                     $message_type = 'error';
                 }
             }
         }
     }
 
-    // Ambil data list pedagang untuk ditampilkan di tabel bawah (jika ada)
-    // PERBAIKAN: Include file class list table terlebih dahulu
-    // Menggunakan dirname(__DIR__) karena file ini ada di includes/admin-pages/
-    require_once dirname(__DIR__) . '/list-tables/class-dw-pedagang-list-table.php';
+    // 2. Persiapan Tabel Data (List Table)
+    // Pastikan file class di-include di dalam fungsi untuk menghindari error 'convert_to_screen'
+    if (!class_exists('DW_Pedagang_List_Table')) {
+        require_once dirname(__DIR__) . '/list-tables/class-dw-pedagang-list-table.php';
+    }
 
-    // Instansiasi class table di dalam fungsi agar dijalankan hanya saat halaman di-render
     $pedagang_list_table = new DW_Pedagang_List_Table();
     $pedagang_list_table->prepare_items();
 
+    // 3. Output HTML Halaman
     ?>
-
     <div class="wrap">
-        <h1 class="wp-heading-inline">Manajemen Pedagang</h1>
+        <h1 class="wp-heading-inline">Manajemen Toko / Pedagang</h1>
         <a href="#" class="page-title-action" id="btn-add-pedagang">Tambah Baru</a>
         <hr class="wp-header-end">
 
@@ -96,7 +100,7 @@ function dw_render_pedagang() {
             </div>
         <?php endif; ?>
 
-        <!-- Form Tambah Pedagang (Hidden by default, toggled via JS ideally, but displayed here for simplicity) -->
+        <!-- Form Tambah Pedagang (Hidden by default) -->
         <div id="form-add-pedagang" class="card" style="max-width: 800px; padding: 20px; margin-top: 20px; display: none;">
             <h2>Tambah Pedagang Baru</h2>
             <form method="post" action="">
@@ -179,7 +183,6 @@ function dw_render_pedagang() {
                                 <textarea name="alamat_rinci" id="alamat_rinci" class="large-text" rows="2" placeholder="Nama Jalan, RT/RW, No. Rumah..."></textarea>
                             </td>
                         </tr>
-
                     </tbody>
                 </table>
 
