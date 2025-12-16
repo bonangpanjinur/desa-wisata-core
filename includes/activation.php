@@ -3,7 +3,8 @@
  * File Name:   activation.php
  * File Folder: includes/
  * Description: File aktivasi plugin yang berisi seluruh skema database custom.
- * * UPDATE: Menambahkan tabel dw_paket_transaksi, dw_pembelian_paket, dan dw_payout_ledger.
+ * * UPDATE: 
+ * - Menambahkan kolom `kategori` pada tabel `dw_wisata`.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -100,12 +101,13 @@ function dw_core_activate_plugin() {
        2. KONTEN (INVENTORY & WISATA)
        ========================================= */
 
-    // 3. Tabel Wisata
+    // 3. Tabel Wisata (UPDATE: TAMBAH KATEGORI)
     $sql_wisata = "CREATE TABLE {$table_prefix}wisata (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_desa BIGINT(20) NOT NULL,
         nama_wisata VARCHAR(255) NOT NULL,
         slug VARCHAR(255) NOT NULL,
+        kategori VARCHAR(100),
         deskripsi LONGTEXT,
         harga_tiket DECIMAL(15,2) DEFAULT 0,
         jam_buka VARCHAR(100),
@@ -121,7 +123,8 @@ function dw_core_activate_plugin() {
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         PRIMARY KEY  (id),
         KEY id_desa (id_desa),
-        KEY slug (slug)
+        KEY slug (slug),
+        KEY kategori (kategori)
     ) $charset_collate;";
     dbDelta( $sql_wisata );
 

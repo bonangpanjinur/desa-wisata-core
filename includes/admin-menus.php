@@ -4,9 +4,7 @@
  * File Folder: includes/
  * Description: Mengatur menu admin dan meload halaman admin.
  * * [FIXED UPDATE]
- * - Sinkronisasi nama fungsi callback dengan file page-produk.php dan page-wisata.php terbaru.
- * - Mengubah menu 'Wisata' agar mengarah ke Halaman Custom (dw-wisata).
- * - Mengubah menu 'Produk' agar memanggil fungsi render yang benar.
+ * - Menambahkan Menu Manajemen Kategori Wisata & Produk.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -48,8 +46,6 @@ if ( is_admin() ) {
 
 /**
  * 2. FUNGSI RENDER (JEMBATAN UI)
- * Fungsi ini membungkus pemanggilan fungsi render dari file-file di atas.
- * PERBAIKAN: Nama fungsi disesuaikan dengan update terbaru.
  */
 
 function dw_render_dashboard() { if (function_exists('dw_dashboard_page_render')) dw_dashboard_page_render(); }
@@ -97,13 +93,18 @@ function dw_register_admin_menus() {
     // SUBMENU: Desa
     add_submenu_page('dw-dashboard', 'Desa', 'Desa', 'dw_manage_desa', 'dw-desa', 'dw_render_desa');
 
-    // SUBMENU: Wisata (FIX: Ubah ke Halaman Custom 'dw-wisata')
-    // Agar bisa menggunakan layout input galeri/fasilitas yang baru
+    // SUBMENU: Wisata
     add_submenu_page('dw-dashboard', 'Wisata', 'Wisata', 'edit_posts', 'dw-wisata', 'dw_render_wisata');
     
-    // SUBMENU: Produk (FIX: Pastikan callback dw_render_produk memanggil fungsi yang benar)
+    // SUBMENU: Kategori Wisata (Baru)
+    add_submenu_page('dw-dashboard', 'Kategori Wisata', 'Kategori Wisata', 'manage_categories', 'edit-tags.php?taxonomy=kategori_wisata&post_type=dw_wisata');
+
+    // SUBMENU: Produk
     if (!current_user_can('admin_desa')) {
         add_submenu_page('dw-dashboard', 'Produk', 'Produk', 'edit_posts', 'dw-produk', 'dw_render_produk');
+        
+        // SUBMENU: Kategori Produk (Baru - Hanya jika akses produk ada)
+        add_submenu_page('dw-dashboard', 'Kategori Produk', 'Kategori Produk', 'manage_categories', 'edit-tags.php?taxonomy=kategori_produk&post_type=dw_produk');
     }
 
     // SUBMENU: Toko / Pedagang

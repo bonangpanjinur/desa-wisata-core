@@ -3,10 +3,9 @@
  * File Name:   page-wisata.php
  * Description: CRUD Wisata dengan Tampilan Modern (Premium UI).
  * * UPDATE UI:
- * - Menggunakan gaya tabel 'Card' seperti halaman Produk.
- * - Thumbnail foto lebih besar dan rapi.
- * - Badge status dan harga lebih menarik.
- * - Penambahan ikon untuk lokasi dan kontak.
+ * - Menambahkan input Kategori Wisata (Select Dropdown) pada Form.
+ * - Menambahkan kolom Kategori pada List Table.
+ * - Menangani penyimpanan kolom kategori ke database.
  */
 
 if (!defined('ABSPATH')) exit;
@@ -82,6 +81,7 @@ function dw_wisata_page_render() {
                 'id_desa'      => $id_desa_input,
                 'nama_wisata'  => $nama,
                 'slug'         => $slug,
+                'kategori'     => sanitize_text_field($_POST['kategori']), // SAVE KATEGORI
                 'deskripsi'    => wp_kses_post($_POST['deskripsi']),
                 'harga_tiket'  => floatval($_POST['harga_tiket']),
                 'jam_buka'     => sanitize_text_field($_POST['jam_buka']),
@@ -132,6 +132,12 @@ function dw_wisata_page_render() {
             $is_edit = false; // Fallback ke list
         }
     }
+
+    // Ambil Daftar Kategori Wisata (Taxonomy WP)
+    $kategori_terms = get_terms([
+        'taxonomy' => 'kategori_wisata',
+        'hide_empty' => false,
+    ]);
 
     ?>
     <div class="wrap dw-wrap">
@@ -235,6 +241,27 @@ function dw_wisata_page_render() {
                                         <input type="submit" class="button button-primary button-large" style="flex:1;" value="Simpan">
                                         <a href="?page=dw-wisata" class="button button-large">Batal</a>
                                     </div>
+                                </div>
+                            </div>
+
+                            <!-- Panel Kategori -->
+                            <div class="postbox">
+                                <div class="postbox-header"><h2 class="hndle">Kategori Wisata</h2></div>
+                                <div class="inside">
+                                    <label for="kategori">Pilih Kategori:</label>
+                                    <select name="kategori" id="kategori" class="widefat" style="margin-top:5px;">
+                                        <option value="">-- Pilih Kategori --</option>
+                                        <?php if (!empty($kategori_terms) && !is_wp_error($kategori_terms)) : ?>
+                                            <?php foreach ($kategori_terms as $term) : ?>
+                                                <option value="<?php echo esc_attr($term->name); ?>" <?php selected(($edit_data && isset($edit_data->kategori)) ? $edit_data->kategori : '', $term->name); ?>>
+                                                    <?php echo esc_html($term->name); ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        <?php endif; ?>
+                                    </select>
+                                    <p class="description">
+                                        <a href="edit-tags.php?taxonomy=kategori_wisata&post_type=dw_wisata" target="_blank">+ Kelola Kategori</a>
+                                    </p>
                                 </div>
                             </div>
 
@@ -368,6 +395,7 @@ function dw_wisata_page_render() {
                 .dw-price-free { color:#166534; background:#dcfce7; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; }
                 
                 .dw-rating-pill { background:#fffbeb; color:#b45309; border:1px solid #fcd34d; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; display:inline-flex; align-items:center; gap:3px; }
+                .dw-category-tag { background:#f1f5f9; color:#475569; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:500; border:1px solid #e2e8f0; }
                 
                 .column-foto { width: 80px; text-align:center; }
             </style>
@@ -378,9 +406,10 @@ function dw_wisata_page_render() {
                     <thead>
                         <tr>
                             <th class="column-foto">Foto</th>
-                            <th width="25%">Nama Wisata</th>
-                            <th width="20%">Desa & Lokasi</th>
-                            <th width="15%">Harga Tiket</th>
+                            <th width="20%">Nama Wisata</th>
+                            <th width="15%">Kategori</th>
+                            <th width="15%">Desa & Lokasi</th>
+                            <th width="10%">Harga Tiket</th>
                             <th width="15%">Statistik</th>
                             <th width="10%">Status</th>
                             <th width="10%">Aksi</th>
@@ -406,6 +435,13 @@ function dw_wisata_page_render() {
                             <td>
                                 <strong><a href="<?php echo $edit_link; ?>" style="font-size:14px;"><?php echo esc_html($r->nama_wisata); ?></a></strong>
                                 <br><small style="color:#64748b;">/<?php echo esc_html($r->slug); ?></small>
+                            </td>
+                            <td>
+                                <?php if (!empty($r->kategori)): ?>
+                                    <span class="dw-category-tag"><?php echo esc_html($r->kategori); ?></span>
+                                <?php else: ?>
+                                    <span style="color:#aaa;">-</span>
+                                <?php endif; ?>
                             </td>
                             <td>
                                 <div style="font-weight:600; color:#2271b1;"><span class="dashicons dashicons-location"></span> <?php echo esc_html($r->nama_desa); ?></div>

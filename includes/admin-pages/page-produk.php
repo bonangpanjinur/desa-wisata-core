@@ -2,6 +2,8 @@
 /**
  * File Name:   page-produk.php
  * Description: Manajemen Produk Lengkap (Termasuk Galeri & Variasi).
+ * * UPDATE UI:
+ * - Mengubah input Kategori menjadi Dropdown yang mengambil data dari Taxonomy.
  */
 
 if (!defined('ABSPATH')) exit;
@@ -57,7 +59,7 @@ function dw_produk_form_handler() {
         'stok'         => intval($_POST['stok']),
         'berat_gram'   => intval($_POST['berat_gram']),
         'kondisi'      => sanitize_key($_POST['kondisi']),
-        'kategori'     => sanitize_text_field($_POST['kategori']),
+        'kategori'     => sanitize_text_field($_POST['kategori']), // Ini mengambil nilai dari Select
         'foto_utama'   => esc_url_raw($_POST['foto_utama']),
         'galeri'       => $galeri_json, // Field Galeri
         'status'       => sanitize_text_field($_POST['status']),
@@ -171,6 +173,12 @@ function dw_produk_page_info_render() {
             echo '<div class="notice notice-error"><p>Produk tidak ditemukan.</p></div>'; return; 
         }
     }
+
+    // Ambil Kategori Produk dari Taxonomy
+    $kategori_terms = get_terms([
+        'taxonomy' => 'kategori_produk',
+        'hide_empty' => false,
+    ]);
 
     ?>
     <div class="wrap dw-wrap">
@@ -311,7 +319,17 @@ function dw_produk_page_info_render() {
                                     </p>
                                     <p>
                                         <label>Kategori:</label>
-                                        <input name="kategori" type="text" value="<?php echo esc_attr($edit_data->kategori ?? ''); ?>" class="widefat">
+                                        <select name="kategori" class="widefat">
+                                            <option value="">-- Pilih Kategori --</option>
+                                            <?php if (!empty($kategori_terms) && !is_wp_error($kategori_terms)) : ?>
+                                                <?php foreach ($kategori_terms as $term) : ?>
+                                                    <option value="<?php echo esc_attr($term->name); ?>" <?php selected(($edit_data && isset($edit_data->kategori)) ? $edit_data->kategori : '', $term->name); ?>>
+                                                        <?php echo esc_html($term->name); ?>
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            <?php endif; ?>
+                                        </select>
+                                        <p class="description"><a href="edit-tags.php?taxonomy=kategori_produk&post_type=dw_produk" target="_blank">+ Kelola Kategori</a></p>
                                     </p>
                                 </div>
                             </div>
@@ -416,6 +434,7 @@ function dw_produk_page_info_render() {
                     <tr>
                         <th width="70">Gambar</th>
                         <th>Nama Produk</th>
+                        <th>Kategori</th>
                         <th>Toko</th>
                         <th>Desa</th>
                         <th>Harga</th>
@@ -444,7 +463,8 @@ function dw_produk_page_info_render() {
                     ?>
                     <tr>
                         <td><img src="<?php echo esc_url($img); ?>" class="dw-thumb-prod"></td>
-                        <td><strong><a href="<?php echo $edit_url; ?>"><?php echo esc_html($r->nama_produk); ?></a></strong><br><small><?php echo esc_html($r->kategori); ?></small></td>
+                        <td><strong><a href="<?php echo $edit_url; ?>"><?php echo esc_html($r->nama_produk); ?></a></strong></td>
+                        <td><small><?php echo esc_html($r->kategori); ?></small></td>
                         <td><?php echo esc_html($r->nama_toko); ?></td>
                         <td><?php echo esc_html($r->nama_desa ? $r->nama_desa : '-'); ?></td>
                         <td><strong>Rp <?php echo number_format($r->harga, 0, ',', '.'); ?></strong></td>
