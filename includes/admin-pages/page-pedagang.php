@@ -9,7 +9,7 @@ if (!defined('ABSPATH')) {
  * * Fungsi ini menangani logika pemrosesan form dan tampilan HTML.
  * Harus dipanggil melalui hook menu admin, bukan dieksekusi langsung saat file dimuat.
  */
-function dw_render_page_pedagang() {
+function dw_render_pedagang() {
     // Handle form submission
     $message = '';
     $message_type = '';
