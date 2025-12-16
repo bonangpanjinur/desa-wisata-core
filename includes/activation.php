@@ -54,7 +54,7 @@ function dw_core_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_desa );
 
-    // 2. Tabel Pedagang (UMKM) - UPDATE RATING TOKO
+ // 2. Tabel Pedagang (UMKM) - UPDATE RATING TOKO & FOTO SAMPUL
     $sql_pedagang = "CREATE TABLE {$table_prefix}pedagang (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_user BIGINT(20) UNSIGNED NOT NULL,
@@ -68,6 +68,7 @@ function dw_core_activate_plugin() {
         url_ktp VARCHAR(255),
         nik VARCHAR(50),
         foto_profil VARCHAR(255),
+        foto_sampul VARCHAR(255), 
         no_rekening VARCHAR(50) DEFAULT NULL,
         nama_bank VARCHAR(100) DEFAULT NULL,
         atas_nama_rekening VARCHAR(100) DEFAULT NULL,
@@ -92,12 +93,14 @@ function dw_core_activate_plugin() {
         kecamatan_nama VARCHAR(100),
         kelurahan_nama VARCHAR(100),
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         PRIMARY KEY  (id),
         UNIQUE KEY id_user (id_user),
         KEY id_desa (id_desa),
         KEY slug_toko (slug_toko)
     ) $charset_collate;";
-    dbDelta( $sql_pedagang );
+    dbDelta($sql_pedagang);
+
 
     /* =========================================
        2. KONTEN (INVENTORY & WISATA)
