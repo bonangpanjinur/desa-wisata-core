@@ -1,7 +1,7 @@
 <?php
 /**
  * Halaman Manajemen Pedagang
- * UI/UX Updated: Modern Card Layout & Robust Address API Loading
+ * UI/UX Updated: Modern Card Layout & Diagnostic Address Loading
  */
 
 // Pastikan tidak diakses langsung
@@ -9,25 +9,41 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-// --- SOLUSI ANTI-GAGAL LOAD API ALAMAT (REVISI FINAL) ---
-if (!function_exists('dw_get_provinces')) {
-    // Kita definisikan path secara absolut berdasarkan lokasi file ini (__DIR__)
-    // Lokasi file ini: .../includes/admin-pages/page-pedagang.php
-    // Lokasi target: .../includes/address-api.php
-    
-    // Naik satu level dari 'admin-pages' ke 'includes'
-    $includes_dir = dirname(__DIR__); 
-    $api_path_primary = $includes_dir . '/address-api.php';
+// --- DIAGNOSTIC LOADER: ADDRESS API ---
+// Array untuk menyimpan log path yang dicoba (untuk debugging jika gagal)
+$dw_debug_paths = [];
 
-    // Cek dan load
-    if (file_exists($api_path_primary)) {
-        require_once $api_path_primary;
-    } 
-    // Fallback: Jika gagal, coba pakai WP_PLUGIN_DIR (Hardcoded standard path)
-    elseif (defined('WP_PLUGIN_DIR')) {
-        $api_path_secondary = WP_PLUGIN_DIR . '/desa-wisata-core/includes/address-api.php';
-        if (file_exists($api_path_secondary)) {
-            require_once $api_path_secondary;
+// Cek apakah fungsi sudah ada sebelumnya
+if (!function_exists('dw_get_provinces')) {
+    
+    // STRATEGI 1: Gunakan Konstanta Plugin (Paling Akurat)
+    if (defined('DW_CORE_PLUGIN_DIR')) {
+        $path1 = DW_CORE_PLUGIN_DIR . 'includes/address-api.php';
+        $dw_debug_paths[] = "Try Constant: " . $path1;
+        if (file_exists($path1)) {
+            require_once $path1;
+        }
+    }
+
+    // STRATEGI 2: Gunakan Path Relatif WordPress (plugin_dir_path)
+    // Naik 2 level dari file ini: admin-pages -> includes -> root plugin? Tidak, ini ada di includes/admin-pages/
+    // Target: includes/address-api.php
+    if (!function_exists('dw_get_provinces')) {
+        // dirname(__FILE__) = .../includes/admin-pages
+        // dirname(dirname(__FILE__)) = .../includes
+        $path2 = dirname(dirname(__FILE__)) . '/address-api.php';
+        $dw_debug_paths[] = "Try Relative: " . $path2;
+        if (file_exists($path2)) {
+            require_once $path2;
+        }
+    }
+
+    // STRATEGI 3: Cek Helpers (Siapa tahu fungsinya ada di sana)
+    if (!function_exists('dw_get_provinces')) {
+        $path3 = dirname(dirname(__FILE__)) . '/helpers.php';
+        $dw_debug_paths[] = "Try Helper: " . $path3;
+        if (file_exists($path3)) {
+            require_once $path3;
         }
     }
 }
@@ -36,7 +52,7 @@ if (!function_exists('dw_get_provinces')) {
  * Fungsi utama render page
  */
 function dw_pedagang_page_render() {
-    global $wpdb;
+    global $wpdb, $dw_debug_paths; // Akses variabel debug
     $table_name = $wpdb->prefix . 'dw_pedagang';
     
     $message = '';
@@ -46,7 +62,7 @@ function dw_pedagang_page_render() {
     $action = isset($_GET['action']) ? $_GET['action'] : 'list';
     $pedagang_id = isset($_GET['id']) ? intval($_GET['id']) : 0;
     
-    // Data default (kosong)
+    // Data default
     $data = [
         'nama_pedagang' => '',
         'email' => '',
@@ -73,7 +89,7 @@ function dw_pedagang_page_render() {
         }
     }
 
-    // --- 2. HANDLE SUBMISSION (SIMPAN DATA) ---
+    // --- 2. HANDLE SUBMISSION ---
     if (isset($_POST['submit_pedagang']) && check_admin_referer('dw_save_pedagang_nonce')) {
         // Sanitize inputs
         $nama = sanitize_text_field($_POST['nama_pedagang']);
@@ -332,16 +348,18 @@ function dw_pedagang_page_render() {
                                             echo '<option value="" disabled>Data provinsi tidak tersedia</option>';
                                         }
                                     } else {
-                                        // DEBUG INFO: Jika masih gagal, tampilkan path yang dicoba
-                                        $includes_dir = dirname(__DIR__); 
-                                        $tried_path = $includes_dir . '/address-api.php';
-                                        echo '<option value="" disabled>ERROR: API Missing.</option>';
-                                        echo '<option value="" disabled>Tried: ' . esc_attr($tried_path) . '</option>';
+                                        // DEBUGGING: Tampilkan path yang dicoba jika gagal
+                                        echo '<option value="" disabled>ERROR: API GAGAL DIMUAT</option>';
+                                        if (!empty($dw_debug_paths)) {
+                                            foreach($dw_debug_paths as $dbg_path) {
+                                                echo '<option value="" disabled>Cek: ' . esc_html($dbg_path) . '</option>';
+                                            }
+                                        }
                                     }
                                     ?>
                                 </select>
                                 <?php if (!function_exists('dw_get_provinces')): ?>
-                                    <p class="dw-api-status dw-api-error">Gagal memuat API Wilayah.</p>
+                                    <p class="dw-api-status dw-api-error">Fungsi dw_get_provinces() tidak ditemukan. Lihat detail di dropdown.</p>
                                 <?php endif; ?>
                             </div>
 
