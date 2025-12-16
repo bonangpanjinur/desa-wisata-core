@@ -2,212 +2,268 @@
 /**
  * File Name:   reviews.php
  * File Folder: includes/
- * File Path:   includes/reviews.php
- *
- * Mengelola fungsionalitas ulasan dan rating.
- *
- * PERBAIKAN v3.1:
- * - Menyempurnakan `dw_insert_review` dengan validasi dasar.
- * - Mengganti nama tabel dari `dw_review` ke `dw_ulasan`.
- *
- * PERBAIKAN (Error 500 Pengguna):
- * - dw_check_user_purchase(): Memperbaiki query JOIN agar sesuai skema database 3-tabel (transaksi, sub, items).
- * - dw_get_approved_reviews(): Memperbaiki nama tabel 'dw_reviews' -> 'dw_ulasan'
- *
- * @package DesaWisataCore
+ * Description: Library lengkap untuk manajemen ulasan (CRUD + Kalkulasi).
+ * * Functions:
+ * 1. dw_submit_review_handler (Create)
+ * 2. dw_get_reviews (Read)
+ * 3. dw_approve_review (Update Status)
+ * 4. dw_delete_review (Delete)
+ * 5. dw_recalculate_rating_stats (Logic Kalkulasi Produk/Wisata)
+ * 6. dw_recalculate_shop_rating (Logic Kalkulasi Toko)
+ * 7. Helpers (Check Purchase, etc)
  */
-if ( ! defined( 'ABSPATH' ) ) exit;
 
-/**
- * Menyimpan ulasan baru ke database.
- *
- * @param array $data Data ulasan ['target_id', 'target_type', 'rating', 'komentar'].
- * @param int $user_id ID pengguna yang mengirim ulasan.
- * @return int|WP_Error ID ulasan baru atau WP_Error jika gagal.
- */
-function dw_insert_review($data, $user_id) {
-    // Basic validation
-    if (empty($data['target_id']) || empty($data['target_type']) || empty($data['rating'])) {
-        return new WP_Error('missing_review_data', 'Data target ID, tipe, dan rating wajib diisi.');
-    }
-    if (!in_array($data['target_type'], ['produk', 'wisata'])) {
-        return new WP_Error('invalid_target_type', 'Tipe target ulasan tidak valid.');
-    }
-    $rating = intval($data['rating']);
-    if ($rating < 1 || $rating > 5) {
-        return new WP_Error('invalid_rating', 'Rating harus antara 1 dan 5.');
-    }
+if (!defined('ABSPATH')) exit;
 
-    // Validasi apakah user sudah pernah mengulas target ini sebelumnya
-    global $wpdb;
-    $table_name = $wpdb->prefix . 'dw_ulasan';
-    $existing_review = $wpdb->get_var($wpdb->prepare(
-        "SELECT id FROM $table_name WHERE user_id = %d AND target_id = %d AND target_type = %s",
-        $user_id,
-        absint($data['target_id']),
-        sanitize_key($data['target_type'])
-    ));
+/* ==========================================================================
+   1. CREATE (SUBMIT REVIEW)
+   ========================================================================== */
 
-    if ($existing_review) {
-        return new WP_Error('duplicate_review', 'Anda sudah pernah memberikan ulasan untuk item ini.');
-    }
-
-
-    // TODO: Tambahkan validasi apakah user sudah membeli produk / mengunjungi wisata ini?
-    // Ini memerlukan query ke tabel transaksi atau sistem booking wisata (jika ada).
-    // Implementasi 'dw_check_user_purchase' di bawah ini masih placeholder.
-    if ($data['target_type'] === 'produk') {
-        $has_purchased = dw_check_user_purchase($user_id, absint($data['target_id']));
-        if (!$has_purchased) {
-            return new WP_Error('not_purchased', 'Anda hanya bisa mengulas produk yang sudah dibeli.');
-        }
-    }
-    // TODO: Tambahkan validasi serupa untuk 'wisata' jika ada sistem booking/tiket.
-
-
-    $insert_data = [
-        'user_id'         => $user_id,
-        'target_id'       => absint($data['target_id']),
-        'target_type'     => sanitize_key($data['target_type']), // 'produk' or 'wisata'
-        'rating'          => $rating,
-        'komentar'        => isset($data['komentar']) ? wp_kses_post($data['komentar']) : '', // Allow basic HTML
-        'status_moderasi' => 'pending', // Default status
-        'created_at'      => current_time('mysql', 1), // Use GMT time
-    ];
-
-    $inserted = $wpdb->insert($table_name, $insert_data);
-
-    if ($inserted) {
-        $new_review_id = $wpdb->insert_id;
-        // Trigger action hook jika perlu (misal: notifikasi admin)
-        do_action('dw_new_review_submitted', $new_review_id, $insert_data);
-        // Hapus cache hitungan ulasan pending
-        wp_cache_delete('dw_pending_reviews_count', 'desa_wisata_core');
-        return $new_review_id;
-    } else {
-        error_log("Gagal insert ulasan ke DB: " . $wpdb->last_error); // Log error database
-        return new WP_Error('db_insert_error', 'Gagal menyimpan ulasan ke database.');
-    }
-}
-
-/**
- * (Placeholder -> Semi-Implementasi) Fungsi untuk memeriksa apakah user sudah membeli produk.
- * Implementasi detail tergantung struktur data transaksi Anda.
- * Memeriksa apakah ada transaksi 'selesai' untuk user dan produk tersebut.
- */
-function dw_check_user_purchase($user_id, $product_id) {
-    // Return true sementara untuk development agar tidak memblokir pengiriman ulasan
-    // Ganti 'return true;' dengan kode di bawah ini saat siap diuji/production
-    // return true;
-
-    global $wpdb;
-    // PERBAIKAN: Query JOIN disesuaikan dengan skema database baru (transaksi -> sub_transaksi -> items)
-    $count = $wpdb->get_var($wpdb->prepare(
-        "SELECT COUNT(t.id) 
-         FROM {$wpdb->prefix}dw_transaksi t
-         JOIN {$wpdb->prefix}dw_transaksi_sub ts ON t.id = ts.id_transaksi
-         JOIN {$wpdb->prefix}dw_transaksi_items ti ON ts.id = ti.id_sub_transaksi
-         WHERE t.id_pembeli = %d 
-           AND ti.id_produk = %d 
-           AND ts.status_pesanan = 'selesai'", // Cek status di sub-transaksi
-        $user_id, $product_id
-    ));
-    return $count > 0;
-}
-
-/**
- * Mengambil ulasan yang disetujui untuk target tertentu.
- *
- * @param int $target_id ID produk atau wisata.
- * @param string $target_type 'produk' atau 'wisata'.
- * @param int $per_page Jumlah per halaman.
- * @param int $page Halaman saat ini.
- * @return array Hasil query ['reviews' => [], 'total' => 0, 'total_pages' => 0, 'average_rating' => 0.0].
- */
-function dw_get_approved_reviews($target_id, $target_type, $per_page = 10, $page = 1) {
-    global $wpdb;
-    $table_ulasan = $wpdb->prefix . 'dw_ulasan'; // PERBAIKAN: Nama tabel
-    $table_users = $wpdb->users;
-
-    $target_id = absint($target_id);
-    $target_type = sanitize_key($target_type);
-    $per_page = absint($per_page);
-    if ($per_page <= 0) $per_page = 10; // Default jika 0 atau negatif
-    $page = absint($page);
-    if ($page <= 0) $page = 1; // Default jika 0 atau negatif
-    $offset = ($page - 1) * $per_page;
-
-    $where_clause = $wpdb->prepare(
-        "WHERE ulasan.target_id = %d AND ulasan.target_type = %s AND ulasan.status_moderasi = 'disetujui'",
-        $target_id, $target_type
-    );
-
-    // Hitung total ulasan yang disetujui dan rata-rata rating dalam satu query
-    $stats = $wpdb->get_row(
-        "SELECT COUNT(ulasan.id) as total, AVG(ulasan.rating) as average_rating
-         FROM $table_ulasan ulasan $where_clause"
-    );
-
-    $total_reviews = $stats ? (int) $stats->total : 0;
-    $average_rating = $stats ? round((float) $stats->average_rating, 1) : 0.0; // Bulatkan ke 1 desimal
-
-    // Ambil data ulasan dengan join ke tabel user untuk nama
-    $reviews = [];
-    if ($total_reviews > 0) {
-        $reviews = $wpdb->get_results(
-            "SELECT ulasan.id, ulasan.user_id, ulasan.rating, ulasan.komentar, ulasan.created_at, users.display_name
-             FROM $table_ulasan ulasan
-             LEFT JOIN $table_users users ON ulasan.user_id = users.ID
-             $where_clause
-             ORDER BY ulasan.created_at DESC
-             LIMIT $per_page OFFSET $offset",
-            ARRAY_A
-        );
-
-        // Format tanggal dan hapus user_id
-        if ($reviews) {
-            foreach ($reviews as $key => $review) {
-                $reviews[$key]['tanggal_formatted'] = date('d M Y', strtotime($review['created_at']));
-                // Anonimkan jika perlu atau hapus data sensitif
-                 unset($reviews[$key]['user_id']); // Mungkin tidak perlu user_id di frontend publik
-            }
-        }
-    }
-
-
-    return [
-        'reviews'     => $reviews ?: [],
-        'total'       => $total_reviews,
-        'average_rating' => $average_rating, // Tambahkan rata-rata rating
-        'total_pages' => ceil($total_reviews / $per_page),
-        'current_page'=> $page,
-    ];
-}
-
-/**
- * Mendapatkan ringkasan rating untuk sebuah target.
- *
- * @param int $target_id ID produk atau wisata.
- * @param string $target_type 'produk' atau 'wisata'.
- * @return array ['total_reviews' => int, 'average_rating' => float]
- */
-function dw_get_rating_summary($target_id, $target_type) {
+function dw_submit_review_handler($data) {
     global $wpdb;
     $table_ulasan = $wpdb->prefix . 'dw_ulasan';
 
-    $target_id = absint($target_id);
-    $target_type = sanitize_key($target_type);
+    $user_id = get_current_user_id();
+    if (!$user_id) return new WP_Error('auth_error', 'Silakan login terlebih dahulu.');
 
+    $tipe      = sanitize_text_field($data['tipe']); // 'produk' atau 'wisata'
+    $target_id = intval($data['target_id']);
+    $rating    = intval($data['rating']);
+    $komentar  = sanitize_textarea_field($data['komentar']);
+
+    // Validasi Rating
+    if ($rating < 1 || $rating > 5) return new WP_Error('invalid_rating', 'Rating harus antara 1-5.');
+
+    // Validasi Pembelian (Jika Produk)
+    if ($tipe === 'produk') {
+        if (!dw_check_user_purchased_product($user_id, $target_id)) {
+            return new WP_Error('not_purchased', 'Anda harus membeli produk ini dan transaksi selesai sebelum memberi ulasan.');
+        }
+    }
+
+    // Cek duplikasi (User hanya boleh review 1x per item?)
+    // Opsional: Aktifkan jika ingin membatasi 1 review per user per produk
+    /*
+    $exist = $wpdb->get_var($wpdb->prepare("SELECT id FROM $table_ulasan WHERE user_id=%d AND target_id=%d AND tipe=%s", $user_id, $target_id, $tipe));
+    if ($exist) return new WP_Error('duplicate', 'Anda sudah mengulas item ini.');
+    */
+
+    // Insert
+    $wpdb->insert($table_ulasan, [
+        'tipe'      => $tipe,
+        'target_id' => $target_id,
+        'user_id'   => $user_id,
+        'rating'    => $rating,
+        'komentar'  => $komentar,
+        'status_moderasi' => 'pending', // Default pending agar aman
+        'created_at' => current_time('mysql')
+    ]);
+
+    return ['success' => true, 'message' => 'Ulasan berhasil dikirim dan menunggu moderasi.'];
+}
+
+/* ==========================================================================
+   2. READ (GET REVIEWS)
+   ========================================================================== */
+
+/**
+ * Mengambil daftar ulasan untuk ditampilkan di frontend (Hanya yang disetujui)
+ */
+function dw_get_reviews($target_id, $tipe = 'produk', $limit = 10, $offset = 0) {
+    global $wpdb;
+    $table_ulasan = $wpdb->prefix . 'dw_ulasan';
+    $table_users  = $wpdb->prefix . 'users'; // Join ke tabel user WP untuk ambil nama/foto
+
+    // Query join untuk mengambil nama user & foto avatar (jika ada)
+    // Asumsi: Kita ambil display_name dari tabel users
+    $sql = "SELECT u.*, wp_users.display_name, wp_users.user_email 
+            FROM $table_ulasan u
+            LEFT JOIN $table_users wp_users ON u.user_id = wp_users.ID
+            WHERE u.target_id = %d 
+            AND u.tipe = %s 
+            AND u.status_moderasi = 'disetujui'
+            ORDER BY u.created_at DESC
+            LIMIT %d OFFSET %d";
+
+    $reviews = $wpdb->get_results($wpdb->prepare($sql, $target_id, $tipe, $limit, $offset));
+
+    // Format data tambahan (misal Gravatar)
+    foreach ($reviews as $r) {
+        $r->avatar_url = get_avatar_url($r->user_email);
+        $r->human_date = human_time_diff(strtotime($r->created_at), current_time('timestamp')) . ' yang lalu';
+    }
+
+    return $reviews;
+}
+
+/**
+ * Hitung total ulasan (untuk pagination)
+ */
+function dw_count_reviews($target_id, $tipe = 'produk') {
+    global $wpdb;
+    $table_ulasan = $wpdb->prefix . 'dw_ulasan';
+    return $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table_ulasan WHERE target_id = %d AND tipe = %s AND status_moderasi = 'disetujui'", $target_id, $tipe));
+}
+
+/* ==========================================================================
+   3. UPDATE (APPROVE / MODERATE)
+   ========================================================================== */
+
+function dw_approve_review($review_id) {
+    global $wpdb;
+    $table_ulasan = $wpdb->prefix . 'dw_ulasan';
+
+    // 1. Update Status
+    $updated = $wpdb->update($table_ulasan, ['status_moderasi' => 'disetujui'], ['id' => $review_id]);
+
+    if ($updated === false) return false;
+
+    // 2. Ambil Info Review untuk Recalculate
+    $review = $wpdb->get_row($wpdb->prepare("SELECT tipe, target_id FROM $table_ulasan WHERE id = %d", $review_id));
+    
+    if ($review) {
+        dw_recalculate_rating_stats($review->target_id, $review->tipe);
+    }
+    return true;
+}
+
+function dw_reject_review($review_id) {
+    global $wpdb;
+    $table_ulasan = $wpdb->prefix . 'dw_ulasan';
+    
+    // Update jadi ditolak
+    $wpdb->update($table_ulasan, ['status_moderasi' => 'ditolak'], ['id' => $review_id]);
+    
+    // Perlu recalculate? Bisa jadi, jika sebelumnya 'disetujui' lalu diubah ke 'ditolak'
+    $review = $wpdb->get_row($wpdb->prepare("SELECT tipe, target_id FROM $table_ulasan WHERE id = %d", $review_id));
+    if ($review) {
+        dw_recalculate_rating_stats($review->target_id, $review->tipe);
+    }
+}
+
+/* ==========================================================================
+   4. DELETE (HAPUS)
+   ========================================================================== */
+
+function dw_delete_review($review_id) {
+    global $wpdb;
+    $table_ulasan = $wpdb->prefix . 'dw_ulasan';
+
+    // Ambil info sebelum hapus (untuk recalc)
+    $review = $wpdb->get_row($wpdb->prepare("SELECT tipe, target_id, status_moderasi FROM $table_ulasan WHERE id = %d", $review_id));
+
+    if (!$review) return false;
+
+    // Hapus
+    $wpdb->delete($table_ulasan, ['id' => $review_id]);
+
+    // Recalculate hanya jika review yang dihapus statusnya 'disetujui'
+    // Karena review pending/ditolak tidak mempengaruhi nilai rata-rata
+    if ($review->status_moderasi === 'disetujui') {
+        dw_recalculate_rating_stats($review->target_id, $review->tipe);
+    }
+
+    return true;
+}
+
+/* ==========================================================================
+   5. CALCULATION LOGIC (INTI SISTEM RATING)
+   ========================================================================== */
+
+/**
+ * Menghitung ulang rata-rata produk/wisata & Trigger update toko
+ */
+function dw_recalculate_rating_stats($target_id, $tipe = 'produk') {
+    global $wpdb;
+    $table_ulasan = $wpdb->prefix . 'dw_ulasan';
+
+    // A. Hitung Rata-rata & Total untuk Target (Produk/Wisata)
     $stats = $wpdb->get_row($wpdb->prepare(
-        "SELECT COUNT(id) as total_reviews, AVG(rating) as average_rating
-         FROM $table_ulasan
-         WHERE target_id = %d AND target_type = %s AND status_moderasi = 'disetujui'",
-        $target_id, $target_type
+        "SELECT AVG(rating) as avg_rating, COUNT(*) as total_ulasan 
+         FROM $table_ulasan 
+         WHERE target_id = %d AND tipe = %s AND status_moderasi = 'disetujui'",
+        $target_id, $tipe
     ));
 
-    return [
-        'total_reviews' => $stats ? (int) $stats->total_reviews : 0,
-        'average_rating' => $stats && $stats->average_rating ? round((float) $stats->average_rating, 1) : 0.0,
-    ];
+    $avg_rating   = $stats->avg_rating ? number_format((float)$stats->avg_rating, 2, '.', '') : 0;
+    $total_ulasan = $stats->total_ulasan ? intval($stats->total_ulasan) : 0;
+
+    // B. Update Tabel Target
+    if ($tipe === 'produk') {
+        $wpdb->update(
+            $wpdb->prefix . 'dw_produk',
+            ['rating_avg' => $avg_rating, 'total_ulasan' => $total_ulasan],
+            ['id' => $target_id]
+        );
+
+        // --- C. TRIGGGER UPDATE TOKO (AKUMULASI) ---
+        // Cari ID Pedagang dari produk ini
+        $id_pedagang = $wpdb->get_var($wpdb->prepare("SELECT id_pedagang FROM {$wpdb->prefix}dw_produk WHERE id = %d", $target_id));
+        
+        if ($id_pedagang) {
+            dw_recalculate_shop_rating($id_pedagang);
+        }
+
+    } elseif ($tipe === 'wisata') {
+        $wpdb->update(
+            $wpdb->prefix . 'dw_wisata',
+            ['rating_avg' => $avg_rating, 'total_ulasan' => $total_ulasan],
+            ['id' => $target_id]
+        );
+    }
+}
+
+/**
+ * Hitung Rata-rata Toko (Dari semua ulasan produknya)
+ */
+function dw_recalculate_shop_rating($pedagang_id) {
+    global $wpdb;
+    
+    // Strategi: Rata-rata dari SEMUA ulasan produk milik toko ini
+    $sql_shop_rating = "
+        SELECT AVG(u.rating) as shop_rating, COUNT(u.id) as shop_reviews
+        FROM {$wpdb->prefix}dw_ulasan u
+        JOIN {$wpdb->prefix}dw_produk p ON u.target_id = p.id
+        WHERE p.id_pedagang = %d 
+        AND u.tipe = 'produk' 
+        AND u.status_moderasi = 'disetujui'
+    ";
+
+    $shop_stats = $wpdb->get_row($wpdb->prepare($sql_shop_rating, $pedagang_id));
+    
+    $shop_rating = $shop_stats->shop_rating ? number_format((float)$shop_stats->shop_rating, 2, '.', '') : 0;
+    $shop_count  = $shop_stats->shop_reviews ? intval($shop_stats->shop_reviews) : 0;
+
+    // Update Tabel Pedagang
+    $wpdb->update(
+        $wpdb->prefix . 'dw_pedagang',
+        [
+            'rating_toko'       => $shop_rating,
+            'total_ulasan_toko' => $shop_count
+        ],
+        ['id' => $pedagang_id]
+    );
+}
+
+/* ==========================================================================
+   6. HELPERS
+   ========================================================================== */
+
+/**
+ * Cek apakah user sudah membeli produk & transaksi selesai
+ */
+function dw_check_user_purchased_product($user_id, $product_id) {
+    global $wpdb;
+    // Cek di tabel transaksi items join ke transaksi utama
+    // Pastikan status transaksi = 'selesai'
+    $sql = "SELECT COUNT(*) FROM {$wpdb->prefix}dw_transaksi_items ti
+            JOIN {$wpdb->prefix}dw_transaksi_sub ts ON ti.id_sub_transaksi = ts.id
+            JOIN {$wpdb->prefix}dw_transaksi t ON ts.id_transaksi = t.id
+            WHERE t.id_pembeli = %d 
+            AND ti.id_produk = %d 
+            AND t.status_transaksi = 'selesai'";
+    
+    $count = $wpdb->get_var($wpdb->prepare($sql, $user_id, $product_id));
+    return $count > 0;
 }
 ?>

@@ -4,7 +4,7 @@
  * File Folder: includes/
  * Description: File aktivasi plugin yang berisi seluruh skema database custom.
  * * UPDATE: 
- * - Menambahkan kolom `kategori` pada tabel `dw_wisata`.
+ * - Menambahkan kolom `rating_toko` dan `total_ulasan_toko` pada tabel `dw_pedagang`.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -54,7 +54,7 @@ function dw_core_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_desa );
 
-    // 2. Tabel Pedagang (UMKM)
+    // 2. Tabel Pedagang (UMKM) - UPDATE RATING TOKO
     $sql_pedagang = "CREATE TABLE {$table_prefix}pedagang (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_user BIGINT(20) UNSIGNED NOT NULL,
@@ -72,6 +72,8 @@ function dw_core_activate_plugin() {
         nama_bank VARCHAR(100) DEFAULT NULL,
         atas_nama_rekening VARCHAR(100) DEFAULT NULL,
         qris_image_url VARCHAR(255) DEFAULT NULL,
+        rating_toko DECIMAL(3,2) DEFAULT 0,
+        total_ulasan_toko INT DEFAULT 0,
         status_pendaftaran ENUM('menunggu','disetujui','ditolak','menunggu_desa') DEFAULT 'menunggu_desa',
         status_akun ENUM('aktif','nonaktif','suspend','nonaktif_habis_kuota') DEFAULT 'nonaktif',
         sisa_transaksi INT DEFAULT 0,
@@ -101,7 +103,7 @@ function dw_core_activate_plugin() {
        2. KONTEN (INVENTORY & WISATA)
        ========================================= */
 
-    // 3. Tabel Wisata (UPDATE: TAMBAH KATEGORI)
+    // 3. Tabel Wisata
     $sql_wisata = "CREATE TABLE {$table_prefix}wisata (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_desa BIGINT(20) NOT NULL,
@@ -248,7 +250,7 @@ function dw_core_activate_plugin() {
     dbDelta( $sql_items );
 
     /* =========================================
-       4. MODEL 3: PAKET & KOMISI (UPDATE BARU)
+       4. MODEL 3: PAKET & KOMISI
        ========================================= */
 
     // 9. Tabel Paket Transaksi
@@ -266,7 +268,7 @@ function dw_core_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_paket );
 
-    // 10. Tabel Pembelian Paket (Riwayat)
+    // 10. Tabel Pembelian Paket
     $sql_pembelian = "CREATE TABLE {$table_prefix}pembelian_paket (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_pedagang BIGINT(20) NOT NULL,
@@ -285,7 +287,7 @@ function dw_core_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_pembelian );
 
-    // 11. Tabel Payout Ledger (Pencatatan Utang Komisi)
+    // 11. Tabel Payout Ledger
     $sql_ledger = "CREATE TABLE {$table_prefix}payout_ledger (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         order_id BIGINT(20) NOT NULL, 
@@ -304,7 +306,7 @@ function dw_core_activate_plugin() {
        5. PENDUKUNG LAINNYA
        ========================================= */
 
-    // 12. Tabel Cart (Keranjang)
+    // 12. Tabel Cart
     $sql_cart = "CREATE TABLE {$table_prefix}cart ( 
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         user_id BIGINT(20) UNSIGNED NULL,
@@ -336,7 +338,7 @@ function dw_core_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_chat );
 
-    // 14. Tabel Promosi (Iklan)
+    // 14. Tabel Promosi
     $sql_promosi = "CREATE TABLE {$table_prefix}promosi (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         tipe ENUM('produk','wisata') NOT NULL,
@@ -352,7 +354,7 @@ function dw_core_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_promosi );
 
-    // 15. Tabel Ulasan (Reviews)
+    // 15. Tabel Ulasan
     $sql_ulasan = "CREATE TABLE {$table_prefix}ulasan (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         tipe ENUM('produk','wisata') NOT NULL,
@@ -415,7 +417,7 @@ function dw_core_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_alamat );
 
-    // 19. Tabel Revoked Tokens (Logout)
+    // 19. Tabel Revoked Tokens
     $sql_revoked = "CREATE TABLE {$table_prefix}revoked_tokens (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         token_hash VARCHAR(64) NOT NULL,
