@@ -69,6 +69,9 @@ if (isset($_POST['submit_pedagang']) && check_admin_referer('dw_add_pedagang_non
 }
 
 // Ambil data list pedagang untuk ditampilkan di tabel bawah (jika ada)
+// PERBAIKAN: Include file class list table terlebih dahulu
+require_once dirname(__DIR__) . '/list-tables/class-dw-pedagang-list-table.php';
+
 $pedagang_list_table = new DW_Pedagang_List_Table();
 $pedagang_list_table->prepare_items();
 
