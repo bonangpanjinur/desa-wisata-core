@@ -9,11 +9,25 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-// Memastikan fungsi API Alamat tersedia
+// --- PERBAIKAN: LOGIKA LOAD API ALAMAT YANG LEBIH KUAT ---
 if (!function_exists('dw_get_provinces')) {
-    $api_path = DW_CORE_PLUGIN_DIR . 'includes/address-api.php';
-    if (file_exists($api_path)) {
-        require_once $api_path;
+    // Cara 1: Coba pakai Konstanta Plugin (jika ada)
+    $loaded = false;
+    if (defined('DW_CORE_PLUGIN_DIR')) {
+        $api_path = DW_CORE_PLUGIN_DIR . 'includes/address-api.php';
+        if (file_exists($api_path)) {
+            require_once $api_path;
+            $loaded = true;
+        }
+    }
+
+    // Cara 2: Fallback pakai Relative Path (jika Cara 1 gagal)
+    if (!$loaded || !function_exists('dw_get_provinces')) {
+        // Naik satu folder dari /admin-pages/ ke /includes/
+        $manual_path = dirname(dirname(__FILE__)) . '/address-api.php';
+        if (file_exists($manual_path)) {
+            require_once $manual_path;
+        }
     }
 }
 
