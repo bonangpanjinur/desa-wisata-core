@@ -1,7 +1,7 @@
 <?php
 /**
  * File Name:   includes/admin-pages/page-pedagang.php
- * Description: Manajemen Toko / Pedagang (Lengkap dengan Foto Profil & Sampul).
+ * Description: Manajemen Toko / Pedagang (Auto Relasi Desa by Alamat).
  */
 
 if (!defined('ABSPATH')) exit;
@@ -48,9 +48,27 @@ function dw_pedagang_page_render() {
             $nasional_aktif = isset($_POST['shipping_nasional_aktif']) ? 1 : 0;
             $pesan_di_tempat = isset($_POST['allow_pesan_di_tempat']) ? 1 : 0;
             
+            // --- LOGIKA OTOMATISASI RELASI DESA ---
+            // Cek apakah ada Desa Wisata di kelurahan ini
+            $kelurahan_id = sanitize_text_field($_POST['kelurahan_id']); // ID API Kelurahan
+            $determined_id_desa = 0; // Default: Independen
+
+            if (!empty($kelurahan_id)) {
+                // Cari ID Desa yang punya api_kelurahan_id sama
+                $found_desa = $wpdb->get_var($wpdb->prepare(
+                    "SELECT id FROM $table_desa WHERE api_kelurahan_id = %s LIMIT 1", 
+                    $kelurahan_id
+                ));
+                
+                if ($found_desa) {
+                    $determined_id_desa = $found_desa; // Relasi Otomatis
+                }
+            }
+            // -------------------------------------
+
             $input = [
                 'id_user'           => intval($_POST['id_user']),
-                'id_desa'           => intval($_POST['id_desa']),
+                'id_desa'           => $determined_id_desa, // Hasil auto-detect
                 'nama_toko'         => $nama_toko,
                 'slug_toko'         => $slug_toko,
                 'nama_pemilik'      => sanitize_text_field($_POST['nama_pemilik']),
@@ -59,7 +77,7 @@ function dw_pedagang_page_render() {
                 
                 // URLs & Uploads (Profil & Sampul)
                 'foto_profil'       => esc_url_raw($_POST['foto_profil_url']),
-                'foto_sampul'       => esc_url_raw($_POST['foto_sampul_url']), // Field baru
+                'foto_sampul'       => esc_url_raw($_POST['foto_sampul_url']),
                 'url_ktp'           => esc_url_raw($_POST['url_ktp']),
                 'url_gmaps'         => esc_url_raw($_POST['url_gmaps']),
                 
@@ -107,7 +125,15 @@ function dw_pedagang_page_render() {
                     // UPDATE
                     unset($input['created_at']);
                     $result = $wpdb->update($table_name, $input, ['id' => intval($_POST['pedagang_id'])]);
-                    $message = 'Data pedagang diperbarui.'; $message_type = 'success';
+                    $message = 'Data pedagang diperbarui. ';
+                    
+                    // Feedback status relasi
+                    if ($determined_id_desa > 0) {
+                        $message .= 'Toko terhubung ke Desa Wisata setempat.';
+                    } else {
+                        $message .= 'Status Toko: Independen (Tidak ada Desa terdaftar di lokasi ini).';
+                    }
+                    $message_type = 'success';
                 } else {
                     // INSERT
                     $exists = $wpdb->get_var($wpdb->prepare("SELECT id FROM $table_name WHERE id_user = %d", $input['id_user']));
@@ -115,7 +141,13 @@ function dw_pedagang_page_render() {
                         $message = 'User ini sudah memiliki toko.'; $message_type = 'error';
                     } else {
                         $result = $wpdb->insert($table_name, $input);
-                        $message = 'Pedagang baru ditambahkan.'; $message_type = 'success';
+                        $message = 'Pedagang baru ditambahkan. ';
+                        if ($determined_id_desa > 0) {
+                            $message .= 'Otomatis terhubung ke Desa Wisata.';
+                        } else {
+                            $message .= 'Status Toko: Independen.';
+                        }
+                        $message_type = 'success';
                     }
                 }
             }
@@ -125,13 +157,19 @@ function dw_pedagang_page_render() {
     // --- 2. PREPARE DATA FOR VIEW ---
     $is_edit = isset($_GET['action']) && ($_GET['action'] == 'edit' || $_GET['action'] == 'new');
     $edit_data = null;
+    $nama_desa_terkait = 'Independen'; // Default text
+
     if ($is_edit && isset($_GET['id'])) {
         $edit_data = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE id = %d", intval($_GET['id'])));
+        
+        // Ambil nama desa jika ada relasi
+        if ($edit_data && $edit_data->id_desa) {
+            $nama_desa_terkait = $wpdb->get_var($wpdb->prepare("SELECT nama_desa FROM $table_desa WHERE id = %d", $edit_data->id_desa));
+        }
     }
 
     // Helper Data Dropdowns
     $users = get_users(['role__in' => ['subscriber', 'customer', 'pedagang', 'administrator']]);
-    $list_desa = $wpdb->get_results("SELECT id, nama_desa FROM $table_desa ORDER BY nama_desa ASC");
     
     // Load Helper Wilayah
     if (!function_exists('dw_get_api_provinsi')) {
@@ -147,6 +185,7 @@ function dw_pedagang_page_render() {
         .dw-tab-btn.active { background:#fff; border-color:#c3c4c7; border-bottom-color:#fff; color:#2271b1; margin-bottom:-1px; }
         .dw-tab-content { display:none; }
         .dw-tab-content.active { display:block; }
+        .dw-readonly-box { background: #f0f0f1; padding: 10px; border: 1px solid #ccc; border-radius: 4px; color: #555; }
     </style>
 
     <div class="wrap dw-wrap">
@@ -194,17 +233,7 @@ function dw_pedagang_page_render() {
                                         </select>
                                     </td>
                                 </tr>
-                                <tr>
-                                    <th>Afiliasi Desa Wisata</th>
-                                    <td>
-                                        <select name="id_desa" class="regular-text">
-                                            <option value="">-- Tidak Ada / Independen --</option>
-                                            <?php foreach ($list_desa as $desa): ?>
-                                                <option value="<?php echo $desa->id; ?>" <?php selected($edit_data ? $edit_data->id_desa : '', $desa->id); ?>><?php echo $desa->nama_desa; ?></option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                    </td>
-                                </tr>
+                                
                                 <tr>
                                     <th>Nama Toko / Usaha</th>
                                     <td><input name="nama_toko" type="text" value="<?php echo esc_attr($edit_data->nama_toko ?? ''); ?>" class="regular-text" required placeholder="Contoh: Keripik Singkong Barokah"></td>
@@ -256,6 +285,20 @@ function dw_pedagang_page_render() {
                         <!-- TAB 2: LOKASI -->
                         <div id="tab-lokasi" class="dw-tab-content">
                              <table class="form-table">
+                                <!-- INFORMASI STATUS RELASI (READONLY) -->
+                                <tr>
+                                    <th>Afiliasi Desa</th>
+                                    <td>
+                                        <div class="dw-readonly-box">
+                                            <strong><?php echo esc_html($nama_desa_terkait); ?></strong>
+                                            <p class="description" style="margin:5px 0 0 0;">
+                                                Status ini otomatis ditentukan oleh sistem berdasarkan <strong>Kelurahan/Desa</strong> yang dipilih di bawah.
+                                                <br>Jika di lokasi tersebut terdaftar Desa Wisata, toko akan otomatis terhubung.
+                                            </p>
+                                        </div>
+                                    </td>
+                                </tr>
+
                                 <tr>
                                     <th>Provinsi</th>
                                     <td>
