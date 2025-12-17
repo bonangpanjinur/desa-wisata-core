@@ -6,20 +6,17 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-// Handler (Logic tetap sama, skip untuk hemat space, fokus render)
-function dw_verifikasi_paket_handler() {
-    if (!isset($_POST['dw_verifikasi_paket_action'])) return;
-    // ... (Gunakan handler yang sama seperti file sebelumnya, logika approve/reject tidak berubah)
-    // ...
-    // Redirect tetap ke admin.php?page=dw-verifikasi-paket
-}
-add_action('admin_init', 'dw_verifikasi_paket_handler');
+// Handler PHP form dihapus karena digantikan oleh AJAX Handler di includes/ajax-handlers.php
+// add_action('admin_init', ...); // TIDAK DIPERLUKAN LAGI
 
 function dw_verifikasi_paket_page_render() {
     global $wpdb;
+    
+    // Query tetap sama
     $pending = $wpdb->get_results("SELECT pp.*, p.nama_toko, p.nama_pemilik FROM {$wpdb->prefix}dw_pembelian_paket pp JOIN {$wpdb->prefix}dw_pedagang p ON pp.id_pedagang=p.id WHERE pp.status='pending' ORDER BY pp.created_at ASC");
     $history = $wpdb->get_results("SELECT pp.*, p.nama_toko FROM {$wpdb->prefix}dw_pembelian_paket pp JOIN {$wpdb->prefix}dw_pedagang p ON pp.id_pedagang=p.id WHERE pp.status!='pending' ORDER BY pp.created_at DESC LIMIT 5");
     
+    // Tampilkan pesan error/sukses standar WP (opsional)
     $e=get_transient('settings_errors'); if($e){ settings_errors('dw_verif_msg'); delete_transient('settings_errors'); }
     ?>
     <div class="wrap dw-wrap">
@@ -37,10 +34,13 @@ function dw_verifikasi_paket_page_render() {
             .dw-pkg-badge { background: #eff6ff; color: #1d4ed8; padding: 4px 10px; border-radius: 15px; font-size: 12px; font-weight: 600; display: inline-block; margin-bottom: 10px; }
             
             .dw-actions { display: flex; gap: 10px; margin-top: 15px; }
-            .btn-approve { background: #16a34a; color: #fff; border: none; padding: 8px 20px; border-radius: 4px; font-weight: 600; cursor: pointer; }
+            .btn-approve { background: #16a34a; color: #fff; border: none; padding: 8px 20px; border-radius: 4px; font-weight: 600; cursor: pointer; transition: 0.2s; }
             .btn-approve:hover { background: #15803d; }
-            .btn-reject { background: #fff; color: #dc2626; border: 1px solid #dc2626; padding: 8px 15px; border-radius: 4px; font-weight: 600; cursor: pointer; }
+            .btn-approve:disabled { background: #ccc; cursor: not-allowed; }
+            
+            .btn-reject { background: #fff; color: #dc2626; border: 1px solid #dc2626; padding: 8px 15px; border-radius: 4px; font-weight: 600; cursor: pointer; transition: 0.2s; }
             .btn-reject:hover { background: #fef2f2; }
+            .btn-reject:disabled { border-color: #ccc; color: #ccc; cursor: not-allowed; }
             
             .dw-history-list { background: #fff; border: 1px solid #c3c4c7; border-radius: 8px; overflow: hidden; }
             .dw-hist-item { padding: 15px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; }
@@ -74,18 +74,24 @@ function dw_verifikasi_paket_page_render() {
                             </div>
                             <div class="dw-req-meta">Kuota Tambahan: <strong>+<?php echo $req->jumlah_transaksi; ?> Transaksi</strong></div>
                             
-                            <form method="post" class="dw-actions">
-                                <input type="hidden" name="pembelian_id" value="<?php echo $req->id; ?>">
-                                <input type="hidden" name="dw_verifikasi_paket_action" value="1">
-                                <?php wp_nonce_field('dw_verifikasi_paket_nonce'); ?>
-                                
-                                <button type="submit" name="action_type" value="approve_paket" class="btn-approve" onclick="return confirm('Konfirmasi bukti bayar valid?');">
+                            <!-- ACTIONS BUTTONS (AJAX) -->
+                            <!-- Note: Class 'dw-verify-paket-btn' dan atribut 'data-*' sangat penting untuk JS -->
+                            <div class="dw-actions">
+                                <button type="button" 
+                                    class="btn-approve dw-verify-paket-btn" 
+                                    data-id="<?php echo $req->id; ?>" 
+                                    data-type="approve">
                                     <span class="dashicons dashicons-yes" style="vertical-align:middle;"></span> Terima & Aktifkan
                                 </button>
-                                <button type="submit" name="action_type" value="reject_paket" class="btn-reject" onclick="return confirm('Tolak permintaan ini?');">
+                                
+                                <button type="button" 
+                                    class="btn-reject dw-verify-paket-btn" 
+                                    data-id="<?php echo $req->id; ?>" 
+                                    data-type="reject">
                                     Tolak
                                 </button>
-                            </form>
+                            </div>
+
                         </div>
                     </div>
                 <?php endforeach; endif; ?>

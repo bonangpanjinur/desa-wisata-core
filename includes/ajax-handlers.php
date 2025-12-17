@@ -2,7 +2,7 @@
 if ( ! defined( 'ABSPATH' ) ) exit;
 
 // ==========================================
-// 1. USER & PUBLIC HANDLERS (KODE LAMA ANDA)
+// 1. USER & PUBLIC HANDLERS
 // ==========================================
 
 /**
@@ -12,14 +12,11 @@ function dw_handle_image_upload() {
     check_ajax_referer( 'dw_upload_nonce', 'nonce' );
 
     if ( ! current_user_can( 'upload_files' ) ) {
-        error_log('DW Upload: User not permitted');
         wp_send_json_error( array( 'message' => 'Anda tidak memiliki izin.' ) );
-        wp_die();
     }
 
     if ( ! isset( $_FILES['file'] ) ) {
-        wp_send_json_error( array( 'message' => 'No file uploaded' ) );
-        wp_die();
+        wp_send_json_error( array( 'message' => 'Tidak ada file yang diunggah.' ) );
     }
 
     $file = $_FILES['file'];
@@ -31,20 +28,16 @@ function dw_handle_image_upload() {
         if( ! in_array( $file_type['type'], ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'] ) ) {
              wp_delete_file( $movefile['file'] );
              wp_send_json_error( array( 'message' => 'Hanya file gambar (JPG, PNG, WEBP) yang diperbolehkan.' ) );
-             wp_die();
         }
-
         wp_send_json_success( array( 'url' => $movefile['url'], 'id' => 0 ) );
     } else {
-        error_log('DW Upload Error: ' . $movefile['error']);
         wp_send_json_error( array( 'message' => $movefile['error'] ) );
     }
-    wp_die();
 }
 add_action( 'wp_ajax_dw_upload_image', 'dw_handle_image_upload' );
 
 /**
- * Handler Toggle Wishlist (Like/Unlike)
+ * Handler Toggle Wishlist
  */
 function dw_ajax_toggle_wishlist() {
     if (!is_user_logged_in()) {
@@ -56,12 +49,9 @@ function dw_ajax_toggle_wishlist() {
     $item_id = isset($_POST['item_id']) ? intval($_POST['item_id']) : 0;
     $item_type = isset($_POST['item_type']) ? sanitize_text_field($_POST['item_type']) : 'wisata';
 
-    if (!$item_id) {
-        wp_send_json_error(['message' => 'Data tidak valid']);
-    }
+    if (!$item_id) wp_send_json_error(['message' => 'Data tidak valid']);
 
     $table = $wpdb->prefix . 'dw_wishlist';
-
     $exists = $wpdb->get_row($wpdb->prepare(
         "SELECT id FROM $table WHERE user_id = %d AND item_id = %d AND item_type = %s",
         $user_id, $item_id, $item_type
@@ -88,31 +78,21 @@ add_action('wp_ajax_dw_toggle_wishlist', 'dw_ajax_toggle_wishlist');
 function dw_handle_send_message() {
     check_ajax_referer( 'dw_chat_nonce', 'nonce' );
 
-    if ( ! is_user_logged_in() ) {
-        wp_send_json_error( array( 'message' => 'Login required.' ) );
-        wp_die();
-    }
+    if ( ! is_user_logged_in() ) wp_send_json_error( array( 'message' => 'Login required.' ) );
 
+    global $wpdb;
     $order_id = intval( $_POST['order_id'] ?? 0 );
     $message  = sanitize_textarea_field( $_POST['message'] ?? '' );
     $sender   = get_current_user_id();
 
-    if ( !$order_id || empty($message) ) {
-        wp_send_json_error( array( 'message' => 'Data invalid.' ) );
-        wp_die();
-    }
+    if ( !$order_id || empty($message) ) wp_send_json_error( array( 'message' => 'Data invalid.' ) );
 
-    global $wpdb;
     $order = $wpdb->get_row( $wpdb->prepare( "SELECT pembeli_id, pedagang_id FROM {$wpdb->prefix}dw_transaksi WHERE id = %d", $order_id ) );
 
-    if ( ! $order ) {
-        wp_send_json_error( array( 'message' => 'Pesanan tidak ditemukan.' ) );
-        wp_die();
-    }
+    if ( ! $order ) wp_send_json_error( array( 'message' => 'Pesanan tidak ditemukan.' ) );
 
     if ( $sender != $order->pembeli_id && $sender != $order->pedagang_id && ! current_user_can('manage_options') ) {
         wp_send_json_error( array( 'message' => 'Akses ditolak.' ) );
-        wp_die();
     }
 
     $table_chat = $wpdb->prefix . 'dw_chat_message'; 
@@ -125,26 +105,21 @@ function dw_handle_send_message() {
     if ( $inserted ) {
         wp_send_json_success( array( 'message' => 'Terkirim' ) );
     } else {
-        error_log('DW Chat Error: ' . $wpdb->last_error);
         wp_send_json_error( array( 'message' => 'Database error' ) );
     }
-    wp_die();
 }
 add_action( 'wp_ajax_dw_send_message', 'dw_handle_send_message' );
 
 /**
- * Cek Kecocokan Desa (Untuk Auto-Verify Pedagang)
+ * Cek Kecocokan Desa
  */
 function dw_check_desa_match_from_address() {
-    check_ajax_referer( 'dw_admin_nonce', 'nonce' );
+    check_ajax_referer( 'dw_admin_nonce', 'nonce' ); 
     global $wpdb;
 
     $kel_id = sanitize_text_field($_POST['kel_id'] ?? '');
     
-    if ( empty($kel_id) ) {
-        wp_send_json_error( ['message' => 'Data wilayah tidak lengkap'] );
-        wp_die();
-    }
+    if ( empty($kel_id) ) wp_send_json_error( ['message' => 'Data wilayah tidak lengkap'] );
 
     $desa = $wpdb->get_row( $wpdb->prepare(
         "SELECT id, nama_desa FROM {$wpdb->prefix}dw_desa WHERE api_kelurahan_id = %s AND status = 'aktif' LIMIT 1",
@@ -156,192 +131,184 @@ function dw_check_desa_match_from_address() {
     } else {
         wp_send_json_success( [ 'matched' => false ] );
     }
-    wp_die();
 }
 add_action( 'wp_ajax_dw_check_desa_match_from_address', 'dw_check_desa_match_from_address' );
 
 /**
- * Handler AJAX untuk mengambil data wilayah (Provinsi/Kota/Kec/Kel)
+ * Handler Wilayah
  */
 function dw_get_wilayah_handler() {
-    check_ajax_referer( 'dw_admin_nonce', 'nonce' );
-
     $type = isset($_GET['type']) ? sanitize_text_field($_GET['type']) : '';
     $id   = isset($_GET['id']) ? sanitize_text_field($_GET['id']) : '';
     $data = [];
 
+    // Pastikan fungsi API tersedia
     if (!function_exists('dw_get_api_provinsi')) {
-        // Sesuaikan path jika perlu, menggunakan konstanta plugin lebih aman
         if (defined('DW_CORE_PLUGIN_DIR')) {
             require_once DW_CORE_PLUGIN_DIR . 'includes/address-api.php';
-        } else {
-             // Fallback manual path
-             $api_path = plugin_dir_path(dirname(__FILE__)) . 'includes/address-api.php';
-             if (file_exists($api_path)) require_once $api_path;
         }
     }
 
     if (function_exists('dw_get_api_provinsi')) {
-        if ($type === 'provinsi') {
-            $data = dw_get_api_provinsi();
-        } 
-        elseif ($type === 'kabupaten' && !empty($id)) {
-            $data = dw_get_api_kabupaten($id);
-        } 
-        elseif ($type === 'kecamatan' && !empty($id)) {
-            $data = dw_get_api_kecamatan($id);
-        } 
-        elseif ($type === 'kelurahan' && !empty($id)) {
-            $data = dw_get_api_desa($id);
-        }
+        if ($type === 'provinsi') $data = dw_get_api_provinsi();
+        elseif ($type === 'kabupaten') $data = dw_get_api_kabupaten($id);
+        elseif ($type === 'kecamatan') $data = dw_get_api_kecamatan($id);
+        elseif ($type === 'kelurahan') $data = dw_get_api_desa($id);
     }
 
-    if (empty($data)) {
-        wp_send_json_error(['message' => 'Gagal mengambil data atau data kosong.']);
-    } else {
-        wp_send_json_success($data);
-    }
-    wp_die();
+    if (!empty($data)) wp_send_json_success($data);
+    else wp_send_json_error(['message' => 'Data kosong']);
 }
 add_action('wp_ajax_dw_get_wilayah', 'dw_get_wilayah_handler');
+add_action('wp_ajax_nopriv_dw_get_wilayah', 'dw_get_wilayah_handler');
 
 // ==========================================
-// 2. ADMIN HANDLERS (PERBAIKAN & PENAMBAHAN)
+// 2. ADMIN HANDLERS (ADMIN PANEL)
 // ==========================================
 
 /**
- * Handle Verifikasi Paket Transaksi (FIXED)
- * Memperbaiki masalah verifikasi paket tidak berfungsi.
+ * Handle Verifikasi Paket Transaksi
+ * Triggered by: .dw-verify-paket-btn
  */
 add_action('wp_ajax_dw_process_verifikasi_paket', 'dw_process_verifikasi_paket');
 function dw_process_verifikasi_paket() {
     check_ajax_referer('dw_admin_nonce', 'security');
+    if (!current_user_can('manage_options')) wp_send_json_error('Akses ditolak.');
 
-    if (!current_user_can('manage_options')) {
-        wp_send_json_error('Anda tidak memiliki izin.');
-    }
+    global $wpdb;
+    $pembelian_id = isset($_POST['post_id']) ? intval($_POST['post_id']) : 0;
+    $action_type  = isset($_POST['action_type']) ? sanitize_text_field($_POST['action_type']) : ''; // 'approve' atau 'reject'
 
-    $post_id = isset($_POST['post_id']) ? intval($_POST['post_id']) : 0;
-    $action_type = isset($_POST['action_type']) ? sanitize_text_field($_POST['action_type']) : '';
+    if (!$pembelian_id) wp_send_json_error('ID Transaksi tidak valid.');
 
-    if (!$post_id) {
-        wp_send_json_error('Data transaksi tidak valid.');
-    }
+    // Ambil data pembelian dari tabel custom
+    $table_pembelian = $wpdb->prefix . 'dw_pembelian_paket';
+    $transaksi = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_pembelian WHERE id = %d", $pembelian_id));
 
-    // Ambil User ID (Coba meta key 'user_id' dulu, fallback ke 'id_pedagang')
-    $user_id = get_post_meta($post_id, 'user_id', true);
-    if (!$user_id) {
-        $user_id = get_post_meta($post_id, 'id_pedagang', true);
-    }
-
-    if (!$user_id) {
-        wp_send_json_error('User ID tidak ditemukan dalam transaksi.');
-    }
+    if (!$transaksi) wp_send_json_error('Data transaksi tidak ditemukan.');
+    if ($transaksi->status != 'pending') wp_send_json_error('Transaksi ini sudah diproses sebelumnya.');
 
     if ($action_type === 'approve') {
-        // 1. Update status transaksi
-        update_post_meta($post_id, 'status_verifikasi', 'terverifikasi');
+        // 1. Update status di tabel pembelian
+        $wpdb->update(
+            $table_pembelian,
+            array('status' => 'disetujui', 'updated_at' => current_time('mysql')),
+            array('id' => $pembelian_id)
+        );
+
+        // 2. Update Data Pedagang (Kuota & Masa Aktif)
+        $id_pedagang = $transaksi->id_pedagang;
+        $kuota_tambahan = intval($transaksi->jumlah_transaksi);
         
-        // 2. Berikan role 'pedagang' ke user
-        $user = get_user_by('ID', $user_id);
-        if ($user && !in_array('pedagang', (array) $user->roles)) {
-            $user->add_role('pedagang');
+        // Cek tabel pedagang
+        $table_pedagang = $wpdb->prefix . 'dw_pedagang';
+        $pedagang = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_pedagang WHERE id = %d", $id_pedagang));
+        
+        if ($pedagang) {
+            $kuota_sekarang = isset($pedagang->sisa_kuota) ? intval($pedagang->sisa_kuota) : 0;
+            $kuota_baru = $kuota_sekarang + $kuota_tambahan;
+
+            $wpdb->update(
+                $table_pedagang,
+                array(
+                    'sisa_kuota' => $kuota_baru, 
+                    'status_paket' => 'active',
+                    'paket_expired' => date('Y-m-d H:i:s', strtotime('+30 days')) // Contoh default 30 hari
+                ),
+                array('id' => $id_pedagang)
+            );
+            
+            // Opsional: Jika user WP terhubung, berikan role 'pedagang'
+            if (!empty($pedagang->user_id)) {
+                $user = get_user_by('ID', $pedagang->user_id);
+                if ($user && !in_array('pedagang', (array)$user->roles)) {
+                    $user->add_role('pedagang');
+                }
+            }
         }
 
-        // 3. Set masa aktif paket
-        $paket_id = get_post_meta($post_id, 'paket_id', true);
-        $duration = get_post_meta($paket_id, 'durasi', true); // Durasi dalam hari
-        
-        if ($duration) {
-            $start_date = current_time('mysql');
-            $end_date = date('Y-m-d H:i:s', strtotime("+$duration days", strtotime($start_date)));
-            
-            // Update di transaksi
-            update_post_meta($post_id, 'tanggal_mulai', $start_date);
-            update_post_meta($post_id, 'tanggal_berakhir', $end_date);
-            
-            // Update di user meta agar mudah dicek
-            update_user_meta($user_id, 'dw_paket_status', 'active');
-            update_user_meta($user_id, 'dw_paket_end_date', $end_date);
-        }
-
-        wp_send_json_success('Paket disetujui dan diaktifkan.');
+        wp_send_json_success('Paket berhasil disetujui. Kuota ditambahkan.');
 
     } elseif ($action_type === 'reject') {
-        update_post_meta($post_id, 'status_verifikasi', 'ditolak');
-        wp_send_json_success('Paket ditolak.');
+        // Update status ditolak
+        $wpdb->update(
+            $table_pembelian,
+            array('status' => 'ditolak', 'updated_at' => current_time('mysql')),
+            array('id' => $pembelian_id)
+        );
+        wp_send_json_success('Permintaan paket ditolak.');
     }
 
     wp_send_json_error('Aksi tidak dikenali.');
 }
 
 /**
- * Handle Payout Komisi (FIXED)
- * Memperbaiki masalah tombol payout tidak merespon.
- */
-add_action('wp_ajax_dw_process_payout_komisi', 'dw_process_payout_komisi');
-function dw_process_payout_komisi() {
-    check_ajax_referer('dw_admin_nonce', 'security');
-
-    if (!current_user_can('manage_options')) {
-        wp_send_json_error('Akses ditolak.');
-    }
-
-    $komisi_id = isset($_POST['komisi_id']) ? intval($_POST['komisi_id']) : 0;
-    $status = isset($_POST['status']) ? sanitize_text_field($_POST['status']) : '';
-
-    if (!$komisi_id) {
-        wp_send_json_error('ID Komisi tidak valid.');
-    }
-
-    if ($status === 'paid') {
-        update_post_meta($komisi_id, 'status_komisi', 'paid');
-        update_post_meta($komisi_id, 'tanggal_payout', current_time('mysql'));
-        
-        // Tambahan: Jika mau update saldo wallet user bisa ditambahkan disini
-        
-        wp_send_json_success('Komisi berhasil dibayarkan.');
-
-    } elseif ($status === 'rejected') {
-        update_post_meta($komisi_id, 'status_komisi', 'rejected');
-        wp_send_json_success('Komisi ditolak.');
-    }
-
-    wp_send_json_error('Gagal memproses.');
-}
-
-/**
  * Handle Verifikasi Pedagang (Dokumen)
+ * Triggered by: .dw-verify-pedagang-btn
  */
 add_action('wp_ajax_dw_verify_pedagang', 'dw_process_verify_pedagang');
 function dw_process_verify_pedagang() {
     check_ajax_referer('dw_admin_nonce', 'security');
+    if (!current_user_can('manage_options')) wp_send_json_error('Akses ditolak.');
 
-    if (!current_user_can('manage_options')) {
-        wp_send_json_error('Izin ditolak.');
-    }
-
+    global $wpdb;
     $pedagang_id = intval($_POST['pedagang_id']);
     $action_type = sanitize_text_field($_POST['action_type']);
+    $table_pedagang = $wpdb->prefix . 'dw_pedagang';
 
     if (!$pedagang_id) wp_send_json_error('ID Pedagang invalid.');
 
-    $user_id = get_post_meta($pedagang_id, 'user_id', true);
-
     if ($action_type === 'approve') {
-        update_post_meta($pedagang_id, 'status_verifikasi', 'terverifikasi');
-        if($user_id) update_user_meta($user_id, 'dw_is_verified_pedagang', 'yes');
+        $wpdb->update(
+            $table_pedagang,
+            array('status_verifikasi' => 'terverifikasi'),
+            array('id' => $pedagang_id)
+        );
         wp_send_json_success('Pedagang diverifikasi.');
     } elseif ($action_type === 'reject') {
-        update_post_meta($pedagang_id, 'status_verifikasi', 'ditolak');
-        if($user_id) update_user_meta($user_id, 'dw_is_verified_pedagang', 'no');
+        $wpdb->update(
+            $table_pedagang,
+            array('status_verifikasi' => 'ditolak'),
+            array('id' => $pedagang_id)
+        );
         wp_send_json_success('Pedagang ditolak.');
     }
     wp_send_json_error('Error handling request.');
 }
 
 /**
+ * Handle Payout Komisi
+ * Triggered by: .dw-payout-btn
+ */
+add_action('wp_ajax_dw_process_payout_komisi', 'dw_process_payout_komisi');
+function dw_process_payout_komisi() {
+    check_ajax_referer('dw_admin_nonce', 'security');
+    if (!current_user_can('manage_options')) wp_send_json_error('Akses ditolak.');
+
+    global $wpdb;
+    $komisi_id = intval($_POST['komisi_id']);
+    $status = sanitize_text_field($_POST['status']);
+    $table_komisi = $wpdb->prefix . 'dw_komisi';
+
+    if ($status === 'paid') {
+        $wpdb->update($table_komisi, 
+            ['status_komisi' => 'paid', 'tanggal_payout' => current_time('mysql')],
+            ['id' => $komisi_id]
+        );
+        wp_send_json_success('Komisi DIBAYAR.');
+    } elseif ($status === 'rejected') {
+        $wpdb->update($table_komisi, 
+            ['status_komisi' => 'rejected'], 
+            ['id' => $komisi_id]
+        );
+        wp_send_json_success('Komisi DITOLAK.');
+    }
+    wp_send_json_error('Gagal memproses.');
+}
+
+/**
  * Handle Delete Log
+ * Triggered by JS for log cleanup if applicable
  */
 add_action('wp_ajax_dw_delete_log', 'dw_process_delete_log');
 function dw_process_delete_log() {
@@ -350,6 +317,8 @@ function dw_process_delete_log() {
 
     $log_id = intval($_POST['log_id']);
     if ($log_id) {
+        // Asumsi Log disimpan sebagai Post Type 'dw_log' atau serupa.
+        // Jika Log menggunakan tabel custom, ganti dengan logic $wpdb->delete
         wp_delete_post($log_id, true);
         wp_send_json_success('Log dihapus.');
     }
