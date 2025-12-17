@@ -6,10 +6,16 @@
  *
  * Mengelola peran pengguna kustom dan hak akses (capabilities).
  * UPDATE: Menambahkan Self-Healing Logic untuk memastikan hak akses selalu update.
+ * @package DesaWisataCore
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
-	exit; 
+    exit; 
+}
+
+// 1. DEFINISI KONSTANTA ROLE ID (Agar konsisten)
+if ( ! defined( 'DW_ROLE_ADMIN_DESA' ) ) {
+    define( 'DW_ROLE_ADMIN_DESA', 'admin_desa' );
 }
 
 function dw_get_custom_capabilities() {
@@ -23,7 +29,7 @@ function dw_get_custom_capabilities() {
 function dw_create_roles_and_caps() {
     // Hapus peran lama untuk refresh bersih
     if ( get_role( 'admin_kabupaten' ) ) remove_role('admin_kabupaten');
-    if ( get_role( 'admin_desa' ) ) remove_role('admin_desa');
+    if ( get_role( DW_ROLE_ADMIN_DESA ) ) remove_role(DW_ROLE_ADMIN_DESA);
     if ( get_role( 'pedagang' ) ) remove_role('pedagang');
 
     // Role: Admin Kabupaten
@@ -41,12 +47,12 @@ function dw_create_roles_and_caps() {
     }
 
     // Role: Admin Desa (FIXED)
-    add_role('admin_desa', 'Admin Desa', [
+    add_role(DW_ROLE_ADMIN_DESA, 'Admin Desa', [
         'read' => true,
         'upload_files' => true, 
         'list_users' => true,
     ]);
-    $admin_desa_role = get_role('admin_desa');
+    $admin_desa_role = get_role(DW_ROLE_ADMIN_DESA);
     if ($admin_desa_role) {
         $admin_desa_role->add_cap('edit_dw_wisatas');         
         $admin_desa_role->add_cap('publish_dw_wisatas');      
@@ -105,15 +111,57 @@ function dw_ensure_admin_capabilities() {
 // --- SELF HEALING: Update Role Otomatis ---
 function dw_force_refresh_caps_once() {
     // Cek apakah Admin Desa punya hak 'dw_manage_pedagang'. Jika tidak, refresh.
-    $role = get_role('admin_desa');
+    $role = get_role(DW_ROLE_ADMIN_DESA);
     if ($role && !$role->has_cap('dw_manage_pedagang')) {
         dw_create_roles_and_caps();
-        update_option('dw_caps_version', DW_CORE_VERSION); // Tandai sudah update
+        // Cek versi jika tersedia, atau biarkan berjalan jika cap hilang
+        if (defined('DW_CORE_VERSION')) {
+             update_option('dw_caps_version', DW_CORE_VERSION); 
+        }
     }
 }
 add_action('init', 'dw_force_refresh_caps_once', 999);
 
-// --- FILTER RESTRIKSI AKSES (SAMA SEPERTI SEBELUMNYA) ---
+/**
+ * AUTO-FIX: Hapus Role Duplikat (Baru Ditambahkan)
+ * Berjalan saat admin init untuk membersihkan role ganda.
+ */
+function dw_fix_duplicate_roles() {
+    global $wp_roles;
+    
+    if ( ! isset( $wp_roles ) ) {
+        $wp_roles = new WP_Roles();
+    }
+
+    $target_role_name = 'Admin Desa';
+    $correct_slug     = DW_ROLE_ADMIN_DESA; // 'admin_desa'
+
+    foreach ( $wp_roles->roles as $slug => $details ) {
+        // Logika: Jika Nama role = "Admin Desa" TAPI slug-nya BUKAN 'admin_desa'
+        if ( $details['name'] === $target_role_name && $slug !== $correct_slug ) {
+            
+            // 1. Pindahkan user ke role yang benar
+            $users = get_users( array( 'role' => $slug ) );
+            if ( ! empty( $users ) ) {
+                foreach ( $users as $user ) {
+                    $user->add_role( $correct_slug );
+                    $user->remove_role( $slug );
+                }
+            }
+
+            // 2. Hapus Role Duplikat
+            remove_role( $slug );
+            
+            if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+                error_log( "Desa Wisata Core: Menghapus role duplikat '$slug'." );
+            }
+        }
+    }
+}
+add_action( 'admin_init', 'dw_fix_duplicate_roles' );
+
+
+// --- FILTER RESTRIKSI AKSES (SAMA SEPERTI KODE ASLI) ---
 function dw_map_meta_cap_filter( $caps, $cap, $user_id, $args ) {
     global $wpdb;
     $post_id = isset($args[0]) ? absint($args[0]) : 0;
@@ -127,7 +175,7 @@ function dw_map_meta_cap_filter( $caps, $cap, $user_id, $args ) {
     $post_type = $post ? $post->post_type : (function_exists('get_current_screen') && get_current_screen() ? get_current_screen()->post_type : null);
     if (!$post_type) return $caps; 
 
-    if (in_array('admin_desa', $user->roles) && $post_type === 'dw_wisata') {
+    if (in_array(DW_ROLE_ADMIN_DESA, $user->roles) && $post_type === 'dw_wisata') {
         $managed_desa_id = $wpdb->get_var($wpdb->prepare("SELECT id FROM {$wpdb->prefix}dw_desa WHERE id_user_desa = %d", $user_id));
         if ($post_id > 0 && $post) {
             $wisata_desa_id = get_post_meta($post_id, '_dw_id_desa', true);
@@ -175,7 +223,7 @@ function dw_restrict_cpt_queries_by_role( $query ) {
         $query->set( 'author', $user_id );
         if ( isset( $_GET['author'] ) && $_GET['author'] != $user_id ) $query->set( 'author', $user_id );
     }
-    if ( in_array( 'admin_desa', $user->roles ) && $query->get( 'post_type' ) === 'dw_wisata' ) {
+    if ( in_array( DW_ROLE_ADMIN_DESA, $user->roles ) && $query->get( 'post_type' ) === 'dw_wisata' ) {
         $managed_desa_id = $wpdb->get_var( $wpdb->prepare("SELECT id FROM {$wpdb->prefix}dw_desa WHERE id_user_desa = %d", $user_id) );
         if ( $managed_desa_id ) {
             $meta_query = $query->get( 'meta_query' );
