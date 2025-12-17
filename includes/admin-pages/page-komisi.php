@@ -6,25 +6,21 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-// Handler Mark Paid
-function dw_mark_payout_paid_handler() {
-    if (!isset($_POST['dw_mark_paid_nonce']) || !wp_verify_nonce($_POST['dw_mark_paid_nonce'], 'dw_mark_paid_action')) return;
-    global $wpdb;
-    $wpdb->update("{$wpdb->prefix}dw_payout_ledger", ['status'=>'paid', 'paid_at'=>current_time('mysql')], ['payable_to_type'=>'desa', 'payable_to_id'=>absint($_POST['desa_id']), 'status'=>'unpaid']);
-    add_settings_error('dw_komisi_notices', 'ok', 'Payout ditandai lunas.', 'success');
-    set_transient('settings_errors', get_settings_errors(), 30);
-    wp_redirect(admin_url('admin.php?page=dw-komisi')); exit;
-}
-add_action('admin_post_dw_mark_payout_paid', 'dw_mark_payout_paid_handler');
+// Handler PHP Manual dihapus karena digantikan AJAX di includes/ajax-handlers.php
 
 function dw_komisi_page_render() {
     global $wpdb;
-    $e = get_transient('settings_errors'); if($e){ settings_errors('dw_komisi_notices'); delete_transient('settings_errors'); }
-
+    
     // Stats
     $unpaid_rows = $wpdb->get_results("SELECT l.payable_to_id as desa_id, d.nama_desa, SUM(l.amount) as total, COUNT(l.id) as trx_count FROM {$wpdb->prefix}dw_payout_ledger l JOIN {$wpdb->prefix}dw_desa d ON l.payable_to_id=d.id WHERE l.status='unpaid' AND l.payable_to_type='desa' GROUP BY l.payable_to_id");
-    $total_debt = array_sum(array_column($unpaid_rows, 'total'));
+    
+    $total_debt = 0;
+    if($unpaid_rows) {
+        $total_debt = array_sum(array_column($unpaid_rows, 'total'));
+    }
+
     $platform_revenue = $wpdb->get_var("SELECT SUM(amount) FROM {$wpdb->prefix}dw_payout_ledger WHERE payable_to_type='platform' AND status='paid'") ?: 0;
+    
     $paid_history = $wpdb->get_results("SELECT l.payable_to_id, d.nama_desa, SUM(l.amount) as total, MAX(l.paid_at) as last_paid FROM {$wpdb->prefix}dw_payout_ledger l JOIN {$wpdb->prefix}dw_desa d ON l.payable_to_id=d.id WHERE l.status='paid' AND l.payable_to_type='desa' GROUP BY l.payable_to_id ORDER BY last_paid DESC LIMIT 5");
 
     ?>
@@ -54,8 +50,9 @@ function dw_komisi_page_render() {
             .dw-clean-table tr:last-child td { border-bottom: none; }
             .dw-clean-table tr:hover { background: #f8fafc; }
             
-            .btn-pay { background: #2271b1; color: #fff; border: none; padding: 8px 16px; border-radius: 4px; font-weight: 600; cursor: pointer; transition: 0.2s; display: inline-flex; align-items: center; gap: 5px; }
-            .btn-pay:hover { background: #1d4ed8; }
+            .btn-pay { background: #2271b1; color: #fff; border: none; padding: 8px 16px; border-radius: 4px; font-weight: 600; cursor: pointer; transition: 0.2s; display: inline-flex; align-items: center; gap: 5px; text-decoration: none; }
+            .btn-pay:hover { background: #1d4ed8; color: #fff; }
+            .btn-pay:disabled { background: #94a3b8; cursor: not-allowed; opacity: 0.7; }
         </style>
 
         <div class="dw-finance-grid">
@@ -98,14 +95,14 @@ function dw_komisi_page_render() {
                         <td><?php echo number_format($row->trx_count); ?> transaksi</td>
                         <td style="color: #ef4444; font-weight: 700; font-size: 16px;">Rp <?php echo number_format($row->total, 0, ',', '.'); ?></td>
                         <td style="text-align: right;">
-                            <form method="post" action="<?php echo admin_url('admin-post.php'); ?>">
-                                <input type="hidden" name="action" value="dw_mark_payout_paid">
-                                <input type="hidden" name="desa_id" value="<?php echo $row->desa_id; ?>">
-                                <?php wp_nonce_field('dw_mark_paid_action', 'dw_mark_paid_nonce'); ?>
-                                <button class="btn-pay" onclick="return confirm('Konfirmasi transfer Rp <?php echo number_format($row->total, 0, ',', '.'); ?> ke <?php echo esc_js($row->nama_desa); ?>?');">
-                                    <span class="dashicons dashicons-yes"></span> Tandai Lunas
-                                </button>
-                            </form>
+                            <!-- BUTTON AJAX -->
+                            <button type="button" 
+                                class="btn-pay dw-bulk-payout-btn" 
+                                data-desa-id="<?php echo $row->desa_id; ?>"
+                                data-desa-name="<?php echo esc_attr($row->nama_desa); ?>"
+                                data-amount="<?php echo number_format($row->total, 0, ',', '.'); ?>">
+                                <span class="dashicons dashicons-yes"></span> Tandai Lunas
+                            </button>
                         </td>
                     </tr>
                 <?php endforeach; endif; ?>
