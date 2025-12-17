@@ -1,22 +1,22 @@
 <?php
 /**
- * File Name:   page-verifikasi-paket.php
+ * File Name: page-verifikasi-paket.php
  * Description: Verifikasi Pembelian Paket (UI Card Grid).
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-// Handler PHP form dihapus karena digantikan oleh AJAX Handler di includes/ajax-handlers.php
-
 function dw_verifikasi_paket_page_render() {
     global $wpdb;
     
-    // Query tetap sama
+    // Ambil Transaksi Pending
     $pending = $wpdb->get_results("SELECT pp.*, p.nama_toko, p.nama_pemilik FROM {$wpdb->prefix}dw_pembelian_paket pp JOIN {$wpdb->prefix}dw_pedagang p ON pp.id_pedagang=p.id WHERE pp.status='pending' ORDER BY pp.created_at ASC");
+    
+    // Ambil Riwayat (History)
     $history = $wpdb->get_results("SELECT pp.*, p.nama_toko FROM {$wpdb->prefix}dw_pembelian_paket pp JOIN {$wpdb->prefix}dw_pedagang p ON pp.id_pedagang=p.id WHERE pp.status!='pending' ORDER BY pp.created_at DESC LIMIT 5");
     
-    // Tampilkan pesan error/sukses standar WP (opsional)
-    $e=get_transient('settings_errors'); if($e){ settings_errors('dw_verif_msg'); delete_transient('settings_errors'); }
+    // Pesan Notifikasi WP
+    settings_errors('dw_verif_msg'); 
     ?>
     <div class="wrap dw-wrap">
         <h1 class="wp-heading-inline">Verifikasi Topup Paket</h1>
@@ -33,6 +33,10 @@ function dw_verifikasi_paket_page_render() {
             .dw-pkg-badge { background: #eff6ff; color: #1d4ed8; padding: 4px 10px; border-radius: 15px; font-size: 12px; font-weight: 600; display: inline-block; margin-bottom: 10px; }
             
             .dw-actions { display: flex; gap: 10px; margin-top: 15px; }
+            /* Tambahkan style spinner */
+            .dw-spinner { display:none; width: 20px; height: 20px; border: 2px solid #f3f3f3; border-top: 2px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite; margin-left: 10px; vertical-align: middle; }
+            @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+            
             .btn-approve { background: #16a34a; color: #fff; border: none; padding: 8px 20px; border-radius: 4px; font-weight: 600; cursor: pointer; transition: 0.2s; }
             .btn-approve:hover { background: #15803d; }
             .btn-approve:disabled { background: #ccc; cursor: not-allowed; }
@@ -58,10 +62,15 @@ function dw_verifikasi_paket_page_render() {
                         Tidak ada permintaan verifikasi baru.
                     </div>
                 <?php else: foreach($pending as $req): ?>
-                    <div class="dw-request-card">
+                    <div class="dw-request-card" id="card-<?php echo $req->id; ?>">
+                        <?php if(!empty($req->url_bukti_bayar)): ?>
                         <a href="<?php echo esc_url($req->url_bukti_bayar); ?>" target="_blank">
                             <img src="<?php echo esc_url($req->url_bukti_bayar); ?>" class="dw-proof-thumb" title="Klik untuk perbesar">
                         </a>
+                        <?php else: ?>
+                            <div class="dw-proof-thumb" style="display:flex;align-items:center;justify-content:center;background:#f1f5f9;color:#94a3b8;">No Image</div>
+                        <?php endif; ?>
+
                         <div class="dw-req-details">
                             <div class="dw-req-header">
                                 <div class="dw-shop-name"><?php echo esc_html($req->nama_toko); ?> <span style="font-weight:400; font-size:13px; color:#64748b;">(<?php echo esc_html($req->nama_pemilik); ?>)</span></div>
@@ -73,8 +82,7 @@ function dw_verifikasi_paket_page_render() {
                             </div>
                             <div class="dw-req-meta">Kuota Tambahan: <strong>+<?php echo $req->jumlah_transaksi; ?> Transaksi</strong></div>
                             
-                            <!-- ACTIONS BUTTONS (AJAX) -->
-                            <!-- Note: Class 'dw-verify-paket-btn' dan atribut 'data-*' sangat penting untuk JS -->
+                            <!-- ACTIONS BUTTONS -->
                             <div class="dw-actions">
                                 <button type="button" 
                                     class="btn-approve dw-verify-paket-btn" 
@@ -89,6 +97,7 @@ function dw_verifikasi_paket_page_render() {
                                     data-type="reject">
                                     Tolak
                                 </button>
+                                <div class="dw-spinner" id="spinner-<?php echo $req->id; ?>"></div>
                             </div>
 
                         </div>

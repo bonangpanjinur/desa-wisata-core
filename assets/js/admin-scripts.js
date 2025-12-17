@@ -1,134 +1,92 @@
 jQuery(document).ready(function($) {
 
-    /**
-     * Handler untuk Tombol Verifikasi Paket (Terima / Tolak)
-     * (Sistem Baru untuk Halaman Verifikasi Paket)
-     */
-    $(document).on('click', '.btn-verifikasi-paket', function(e) {
-        e.preventDefault();
+    console.log('DW Admin Script Initialized');
 
-        var button = $(this);
-        var transaksiId = button.data('id');
-        var actionType = button.data('action'); // 'approve' atau 'reject'
-        var nonce = button.data('nonce');
-        var spinner = $('#spinner-' + transaksiId);
-        var row = button.closest('tr');
+    // Cek apakah variabel dari PHP masuk
+    if (typeof dw_admin_vars === 'undefined') {
+        console.error('ERROR CRITICAL: dw_admin_vars tidak ditemukan. Cek file admin-assets.php Anda.');
+        // Fallback darurat (Mencegah crash, tapi mungkin nonce expired)
+        var dw_admin_vars = { ajaxurl: ajaxurl, nonce: '' }; 
+    }
 
-        // Konfirmasi sebelum aksi
-        var confirmMessage = (actionType === 'approve') 
-            ? 'Apakah Anda yakin ingin MENERIMA dan mengaktifkan paket ini?' 
-            : 'Apakah Anda yakin ingin MENOLAK permintaan ini?';
-
-        if (!confirm(confirmMessage)) {
-            return;
-        }
-
-        // UI Loading state
-        button.prop('disabled', true);
-        spinner.addClass('is-active');
-
-        $.ajax({
-            url: ajaxurl, // Variabel global WordPress
-            type: 'POST',
-            data: {
-                action: 'dw_proses_verifikasi_paket', // Action hook di PHP (Baru)
-                transaksi_id: transaksiId,
-                tipe_aksi: actionType,
-                security: nonce
-            },
-            success: function(response) {
-                spinner.removeClass('is-active');
-                
-                if (response.success) {
-                    // Animasi hapus baris tabel
-                    row.css('background-color', '#e6f9e6').fadeOut(500, function() {
-                        $(this).remove();
-                        
-                        // Jika tabel kosong setelah dihapus, refresh halaman
-                        if($('table tbody tr').length === 0) {
-                            location.reload();
-                        }
-                    });
-                    
-                    alert('Sukses: ' + response.data.message);
-                } else {
-                    button.prop('disabled', false);
-                    alert('Gagal: ' + (response.data ? response.data.message : 'Terjadi kesalahan server.'));
-                }
-            },
-            error: function(xhr, status, error) {
-                spinner.removeClass('is-active');
-                button.prop('disabled', false);
-                console.log(xhr.responseText);
-                alert('Terjadi kesalahan koneksi: ' + error);
-            }
-        });
-    });
-
-    // ==========================================================================
-    // KODE LAMA (Legacy Handlers)
-    // Mengembalikan fitur verifikasi pedagang, bulk payout, dan handler lama
-    // ==========================================================================
-
-    // Debugging: Cek apakah script dimuat
-    console.log('DW Admin Script Loaded!');
-
-    // 1. HANDLER VERIFIKASI PAKET LAMA (Jika masih ada halaman yang pakai class ini)
+    // =================================================
+    // HANDLER VERIFIKASI PAKET (Sesuai ID/Class dari File Anda)
+    // =================================================
     $(document).on('click', '.dw-verify-paket-btn', function(e) {
         e.preventDefault();
         
         var button = $(this);
-        var postId = button.data('id');       // Mengambil data-id="..."
-        var actionType = button.data('type'); // Mengambil data-type="..."
+        var card = button.closest('.dw-request-card');
+        var postId = button.data('id');       // ID Transaksi
+        var actionType = button.data('type'); // approve / reject
+        var spinner = $('#spinner-' + postId);
         var originalText = button.html();
 
-        // Konfirmasi
-        var pesan = (actionType === 'approve') ? 'Terima paket ini dan aktifkan kuota?' : 'Tolak paket ini?';
+        // 1. Konfirmasi User
+        var pesan = (actionType === 'approve') 
+            ? 'Yakin ingin MENERIMA pembayaran ini dan mengaktifkan paket?' 
+            : 'Yakin ingin MENOLAK permintaan ini?';
+        
         if (!confirm(pesan)) {
             return;
         }
 
-        // Ubah tombol jadi loading
-        button.text('Memproses...').prop('disabled', true);
+        // 2. UI Loading State
+        button.prop('disabled', true).text('Memproses...');
+        button.siblings('button').prop('disabled', true); // Matikan tombol sebelahnya juga
+        if(spinner.length) spinner.show();
 
-        // Kirim AJAX ke WordPress
+        // 3. Kirim AJAX
         $.ajax({
-            url: dw_admin_vars.ajaxurl, // URL admin-ajax.php
+            url: dw_admin_vars.ajaxurl,
             type: 'POST',
+            dataType: 'json',
             data: {
-                action: 'dw_process_verifikasi_paket', // Handler PHP Lama
-                security: dw_admin_vars.nonce,         // Kunci keamanan
+                action: 'dw_process_verifikasi_paket', // Action sesuai di ajax-handlers.php (Handler LAMA/EXISTING)
+                security: dw_admin_vars.nonce,         // Nonce keamanan
                 post_id: postId,
                 action_type: actionType
             },
             success: function(response) {
+                if(spinner.length) spinner.hide();
+
                 if (response.success) {
-                    alert(response.data); // Tampilkan pesan sukses dari PHP
-                    location.reload();    // Refresh halaman
+                    // Sukses: Beri efek visual lalu reload
+                    card.css('background-color', '#dcfce7').fadeOut(500, function() {
+                        alert(response.data);
+                        location.reload(); 
+                    });
                 } else {
-                    alert('Gagal: ' + response.data);
-                    button.html(originalText).prop('disabled', false); // Kembalikan tombol jika gagal
+                    // Gagal: Kembalikan tombol
+                    alert('GAGAL: ' + (response.data || 'Terjadi kesalahan sistem.'));
+                    button.html(originalText).prop('disabled', false);
+                    button.siblings('button').prop('disabled', false);
                 }
             },
             error: function(xhr, status, error) {
-                console.error(error);
-                alert('Terjadi kesalahan koneksi server.');
+                if(spinner.length) spinner.hide();
+                console.error('AJAX Error:', error);
+                console.log(xhr.responseText);
+                
+                alert('Terjadi kesalahan koneksi server. Cek console browser untuk detail.');
                 button.html(originalText).prop('disabled', false);
+                button.siblings('button').prop('disabled', false);
             }
         });
     });
 
-    // 2. HANDLER VERIFIKASI PEDAGANG
+    // =================================================
+    // HANDLER VERIFIKASI PEDAGANG (KTP/SELFIE)
+    // =================================================
     $(document).on('click', '.dw-verify-pedagang-btn', function(e) {
         e.preventDefault();
         var button = $(this);
         var pedagangId = button.data('id');
         var actionType = button.data('type');
-        var originalText = button.html();
 
         if (!confirm('Proses verifikasi pedagang ini?')) return;
 
-        button.text('...').prop('disabled', true);
+        button.prop('disabled', true).text('...');
 
         $.ajax({
             url: dw_admin_vars.ajaxurl,
@@ -145,24 +103,23 @@ jQuery(document).ready(function($) {
                     location.reload();
                 } else {
                     alert('Error: ' + response.data);
-                    button.html(originalText).prop('disabled', false);
+                    button.prop('disabled', false).text(actionType === 'approve' ? 'Terima' : 'Tolak');
                 }
             }
         });
     });
 
-    // 3. HANDLER BULK PAYOUT (KOMISI)
+    // =================================================
+    // HANDLER BULK PAYOUT
+    // =================================================
     $(document).on('click', '.dw-bulk-payout-btn', function(e) {
         e.preventDefault();
         var button = $(this);
         var desaId = button.data('desa-id');
-        var amount = button.data('amount');
-        var desaName = button.data('desa-name');
-        var originalText = button.html();
+        
+        if (!confirm('Konfirmasi pembayaran telah dilakukan?')) return;
 
-        if (!confirm('Konfirmasi transfer Rp ' + amount + ' ke ' + desaName + ' sudah dilakukan?')) return;
-
-        button.text('Processing...').prop('disabled', true);
+        button.prop('disabled', true).text('Processing...');
 
         $.ajax({
             url: dw_admin_vars.ajaxurl,
@@ -177,8 +134,8 @@ jQuery(document).ready(function($) {
                     alert(response.data);
                     location.reload();
                 } else {
-                    alert('Gagal: ' + response.data);
-                    button.html(originalText).prop('disabled', false);
+                    alert('Error: ' + response.data);
+                    button.prop('disabled', false).text('Tandai Lunas');
                 }
             }
         });
