@@ -20,16 +20,17 @@ function dw_render_page_verifikasi_paket() {
     $message = '';
     $message_type = '';
 
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
+    // Cek apakah ada submission form
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type']) && isset($_POST['dw_verif_nonce'])) {
         
-        // Cek nonce keamanan
-        if (!isset($_POST['dw_verif_nonce']) || !wp_verify_nonce($_POST['dw_verif_nonce'], 'dw_verifikasi_paket_action')) {
-            $message = 'Security check failed.';
+        // 1. Cek nonce keamanan
+        if (!wp_verify_nonce($_POST['dw_verif_nonce'], 'dw_verifikasi_paket_action')) {
+            $message = 'Security check failed. Token tidak valid.';
             $message_type = 'error';
         } else {
-            $pembelian_id = intval($_POST['pembelian_id']);
+            $pembelian_id = isset($_POST['pembelian_id']) ? intval($_POST['pembelian_id']) : 0;
             
-            // Ambil data pembelian
+            // 2. Ambil data pembelian untuk validasi
             $pembelian = $wpdb->get_row($wpdb->prepare(
                 "SELECT * FROM $table_pembelian WHERE id = %d", 
                 $pembelian_id
@@ -37,8 +38,10 @@ function dw_render_page_verifikasi_paket() {
 
             if ($pembelian && $pembelian->status === 'pending') {
                 
+                // --- AKSI SETUJUI (APPROVE) ---
                 if ($_POST['action_type'] === 'approve') {
-                    // 1. Update status pembelian di dw_pembelian_paket
+                    
+                    // A. Update status pembelian
                     $update_pembelian = $wpdb->update(
                         $table_pembelian,
                         array(
@@ -51,9 +54,8 @@ function dw_render_page_verifikasi_paket() {
                         array('%d')
                     );
 
-                    // 2. Tambahkan kuota ke tabel dw_pedagang & Aktifkan Akun
+                    // B. Tambahkan kuota & Aktifkan Akun Pedagang
                     if ($update_pembelian !== false) {
-                        // Ambil data pedagang saat ini untuk menambah sisa transaksi
                         $pedagang = $wpdb->get_row($wpdb->prepare("SELECT sisa_transaksi FROM $table_pedagang WHERE id = %d", $pembelian->id_pedagang));
                         
                         $sisa_transaksi_lama = $pedagang ? intval($pedagang->sisa_transaksi) : 0;
@@ -63,8 +65,8 @@ function dw_render_page_verifikasi_paket() {
                         $wpdb->update(
                             $table_pedagang,
                             array(
-                                'status_akun' => 'aktif', // Aktifkan akun
-                                'sisa_transaksi' => $sisa_transaksi_baru, // Update kuota
+                                'status_akun' => 'aktif',
+                                'sisa_transaksi' => $sisa_transaksi_baru,
                                 'updated_at' => current_time('mysql')
                             ),
                             array('id' => $pembelian->id_pedagang),
@@ -72,43 +74,62 @@ function dw_render_page_verifikasi_paket() {
                             array('%d')
                         );
 
-                        $message = "Paket disetujui! Kuota pedagang bertambah " . $tambahan_kuota . " transaksi.";
-                        $message_type = 'success';
+                        // REDIRECT SETELAH SUKSES (Mencegah submit ulang saat refresh)
+                        $redirect_url = add_query_arg(array('status_msg' => 'approved'), remove_query_arg(array('status_msg', 'error_msg')));
+                        echo "<script>window.location.href='$redirect_url';</script>";
+                        exit;
                     } else {
-                        $message = "Gagal mengupdate database pembelian.";
+                        $message = "Database error: Gagal mengupdate status pembelian.";
                         $message_type = 'error';
                     }
 
+                // --- AKSI TOLAK (REJECT) ---
                 } elseif ($_POST['action_type'] === 'reject') {
                     // Ambil alasan tolak
                     $alasan_tolak = isset($_POST['alasan_tolak']) ? sanitize_textarea_field($_POST['alasan_tolak']) : 'Ditolak oleh admin';
 
                     // Update status menjadi ditolak
-                    $wpdb->update(
+                    $result = $wpdb->update(
                         $table_pembelian,
                         array(
                             'status' => 'ditolak',
                             'processed_at' => current_time('mysql'),
-                            'catatan_admin' => $alasan_tolak // Simpan alasan
+                            'catatan_admin' => $alasan_tolak
                         ),
                         array('id' => $pembelian_id),
                         array('%s', '%s', '%s'),
                         array('%d')
                     );
-                    $message = "Permintaan paket ditolak.";
-                    $message_type = 'warning';
+
+                    if ($result !== false) {
+                        // REDIRECT SETELAH SUKSES
+                        $redirect_url = add_query_arg(array('status_msg' => 'rejected'), remove_query_arg(array('status_msg', 'error_msg')));
+                        echo "<script>window.location.href='$redirect_url';</script>";
+                        exit;
+                    } else {
+                        $message = "Gagal menolak paket. Database error: " . $wpdb->last_error;
+                        $message_type = 'error';
+                    }
                 }
             } else {
-                $message = "Data tidak ditemukan atau sudah diproses sebelumnya.";
+                $message = "Data tidak ditemukan (ID: $pembelian_id) atau status bukan pending.";
                 $message_type = 'error';
             }
         }
     }
 
+    // --- MENANGKAP PESAN DARI URL (HASIL REDIRECT) ---
+    if (isset($_GET['status_msg'])) {
+        if ($_GET['status_msg'] == 'approved') {
+            $message = "Paket berhasil disetujui dan kuota telah ditambahkan.";
+            $message_type = 'success';
+        } elseif ($_GET['status_msg'] == 'rejected') {
+            $message = "Permintaan paket telah ditolak.";
+            $message_type = 'warning';
+        }
+    }
+
     // --- QUERY DATA ---
-    // Mengambil data dari dw_pembelian_paket (sesuai activation.php)
-    // JOIN ke dw_pedagang untuk dapat id_user
-    // JOIN ke users untuk dapat nama asli
     $items = $wpdb->get_results("
         SELECT 
             pp.id AS pembelian_id,
@@ -189,17 +210,17 @@ function dw_render_page_verifikasi_paket() {
                                 </td>
                                 <td>
                                     <div style="display: flex; gap: 5px;">
-                                        <!-- Form Approve (Langsung Submit) -->
-                                        <form method="post" action="" style="display:inline;">
+                                        <!-- Form Approve -->
+                                        <form method="post" action="">
                                             <?php wp_nonce_field('dw_verifikasi_paket_action', 'dw_verif_nonce'); ?>
                                             <input type="hidden" name="pembelian_id" value="<?php echo esc_attr($item->pembelian_id); ?>">
                                             <input type="hidden" name="action_type" value="approve">
-                                            <button type="submit" class="button button-primary" onclick="return confirm('Yakin ingin menyetujui paket ini? Kuota transaksi akan ditambahkan ke pedagang.');">
+                                            <button type="submit" class="button button-primary" onclick="return confirm('Yakin ingin menyetujui paket ini?');">
                                                 <span class="dashicons dashicons-yes" style="margin-top:4px;"></span> Terima
                                             </button>
                                         </form>
 
-                                        <!-- Tombol Reject (Buka Modal) -->
+                                        <!-- Tombol Buka Modal Reject -->
                                         <button type="button" class="button button-secondary open-reject-modal" 
                                                 data-id="<?php echo esc_attr($item->pembelian_id); ?>" 
                                                 data-toko="<?php echo esc_attr($item->nama_toko); ?>"
@@ -214,14 +235,16 @@ function dw_render_page_verifikasi_paket() {
                 </table>
             </div>
 
-            <!-- Modal Penolakan -->
+            <!-- Modal Penolakan (ID Form Unik) -->
             <div id="dw-reject-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:99999; justify-content:center; align-items:center;">
                 <div style="background:#fff; width:400px; max-width:90%; padding:20px; border-radius:5px; box-shadow:0 4px 6px rgba(0,0,0,0.1);">
                     <h3 style="margin-top:0;">Tolak Paket</h3>
                     <p>Anda akan menolak permintaan paket dari <strong id="modal-toko-name"></strong>.</p>
                     
-                    <form method="post" action="">
+                    <!-- ID Form Unik untuk menghindari konflik JS -->
+                    <form method="post" action="" id="dw-reject-form-unique">
                         <?php wp_nonce_field('dw_verifikasi_paket_action', 'dw_verif_nonce'); ?>
+                        <!-- Input Hidden ID harus terisi lewat JS -->
                         <input type="hidden" name="pembelian_id" id="modal-pembelian-id" value="">
                         <input type="hidden" name="action_type" value="reject">
                         
@@ -230,7 +253,8 @@ function dw_render_page_verifikasi_paket() {
                         
                         <div style="text-align:right;">
                             <button type="button" class="button" id="close-reject-modal">Batal</button>
-                            <button type="submit" class="button button-primary" style="background-color: #d63638; border-color: #d63638;">Tolak Permintaan</button>
+                            <!-- Name button unik -->
+                            <button type="submit" name="btn_reject_submit" class="button button-primary" style="background-color: #d63638; border-color: #d63638;">Tolak Permintaan</button>
                         </div>
                     </form>
                 </div>
@@ -246,20 +270,26 @@ function dw_render_page_verifikasi_paket() {
 
                     // Buka modal saat tombol tolak diklik
                     btns.forEach(function(btn) {
-                        btn.addEventListener('click', function() {
+                        btn.addEventListener('click', function(e) {
+                            e.preventDefault(); // Mencegah aksi default
                             var id = this.getAttribute('data-id');
                             var toko = this.getAttribute('data-toko');
                             
-                            modalInputId.value = id;
-                            modalTokoName.textContent = toko;
-                            modal.style.display = 'flex';
+                            // Debugging ID
+                            console.log("Membuka modal untuk ID: " + id);
+                            
+                            if(modalInputId) modalInputId.value = id;
+                            if(modalTokoName) modalTokoName.textContent = toko;
+                            if(modal) modal.style.display = 'flex';
                         });
                     });
 
                     // Tutup modal
-                    closeBtn.addEventListener('click', function() {
-                        modal.style.display = 'none';
-                    });
+                    if(closeBtn) {
+                        closeBtn.addEventListener('click', function() {
+                            modal.style.display = 'none';
+                        });
+                    }
 
                     // Tutup modal jika klik di luar area konten
                     window.addEventListener('click', function(event) {
