@@ -1,12 +1,79 @@
 jQuery(document).ready(function($) {
-    
+
+    /**
+     * Handler untuk Tombol Verifikasi Paket (Terima / Tolak)
+     * (Sistem Baru untuk Halaman Verifikasi Paket)
+     */
+    $(document).on('click', '.btn-verifikasi-paket', function(e) {
+        e.preventDefault();
+
+        var button = $(this);
+        var transaksiId = button.data('id');
+        var actionType = button.data('action'); // 'approve' atau 'reject'
+        var nonce = button.data('nonce');
+        var spinner = $('#spinner-' + transaksiId);
+        var row = button.closest('tr');
+
+        // Konfirmasi sebelum aksi
+        var confirmMessage = (actionType === 'approve') 
+            ? 'Apakah Anda yakin ingin MENERIMA dan mengaktifkan paket ini?' 
+            : 'Apakah Anda yakin ingin MENOLAK permintaan ini?';
+
+        if (!confirm(confirmMessage)) {
+            return;
+        }
+
+        // UI Loading state
+        button.prop('disabled', true);
+        spinner.addClass('is-active');
+
+        $.ajax({
+            url: ajaxurl, // Variabel global WordPress
+            type: 'POST',
+            data: {
+                action: 'dw_proses_verifikasi_paket', // Action hook di PHP (Baru)
+                transaksi_id: transaksiId,
+                tipe_aksi: actionType,
+                security: nonce
+            },
+            success: function(response) {
+                spinner.removeClass('is-active');
+                
+                if (response.success) {
+                    // Animasi hapus baris tabel
+                    row.css('background-color', '#e6f9e6').fadeOut(500, function() {
+                        $(this).remove();
+                        
+                        // Jika tabel kosong setelah dihapus, refresh halaman
+                        if($('table tbody tr').length === 0) {
+                            location.reload();
+                        }
+                    });
+                    
+                    alert('Sukses: ' + response.data.message);
+                } else {
+                    button.prop('disabled', false);
+                    alert('Gagal: ' + (response.data ? response.data.message : 'Terjadi kesalahan server.'));
+                }
+            },
+            error: function(xhr, status, error) {
+                spinner.removeClass('is-active');
+                button.prop('disabled', false);
+                console.log(xhr.responseText);
+                alert('Terjadi kesalahan koneksi: ' + error);
+            }
+        });
+    });
+
+    // ==========================================================================
+    // KODE LAMA (Legacy Handlers)
+    // Mengembalikan fitur verifikasi pedagang, bulk payout, dan handler lama
+    // ==========================================================================
+
     // Debugging: Cek apakah script dimuat
     console.log('DW Admin Script Loaded!');
 
-    // =================================================
-    // 1. HANDLER VERIFIKASI PAKET (Terima / Tolak)
-    // =================================================
-    // Event listener ini mendengarkan klik pada class .dw-verify-paket-btn
+    // 1. HANDLER VERIFIKASI PAKET LAMA (Jika masih ada halaman yang pakai class ini)
     $(document).on('click', '.dw-verify-paket-btn', function(e) {
         e.preventDefault();
         
@@ -29,7 +96,7 @@ jQuery(document).ready(function($) {
             url: dw_admin_vars.ajaxurl, // URL admin-ajax.php
             type: 'POST',
             data: {
-                action: 'dw_process_verifikasi_paket', // Harus sama dengan add_action wp_ajax_... di PHP
+                action: 'dw_process_verifikasi_paket', // Handler PHP Lama
                 security: dw_admin_vars.nonce,         // Kunci keamanan
                 post_id: postId,
                 action_type: actionType
@@ -51,9 +118,7 @@ jQuery(document).ready(function($) {
         });
     });
 
-    // =================================================
     // 2. HANDLER VERIFIKASI PEDAGANG
-    // =================================================
     $(document).on('click', '.dw-verify-pedagang-btn', function(e) {
         e.preventDefault();
         var button = $(this);
@@ -86,9 +151,7 @@ jQuery(document).ready(function($) {
         });
     });
 
-    // =================================================
     // 3. HANDLER BULK PAYOUT (KOMISI)
-    // =================================================
     $(document).on('click', '.dw-bulk-payout-btn', function(e) {
         e.preventDefault();
         var button = $(this);
