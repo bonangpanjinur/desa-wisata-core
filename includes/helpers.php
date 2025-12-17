@@ -659,7 +659,42 @@ function dw_send_user_notification($user_id, $subject, $message) {
 function dw_send_pedagang_notification($user_id, $subject, $message) {
     return dw_send_user_notification($user_id, $subject, $message);
 }
+/**
+ * Cek status Wishlist User
+ * * @param int $user_id
+ * @param int $item_id
+ * @param string $item_type ('wisata' atau 'produk')
+ * @return bool
+ */
+function dw_is_wishlisted($item_id, $item_type = 'wisata', $user_id = null) {
+    if (!$user_id) {
+        if (!is_user_logged_in()) return false;
+        $user_id = get_current_user_id();
+    }
 
+    global $wpdb;
+    $table = $wpdb->prefix . 'dw_wishlist';
+    
+    // Gunakan cache wpdb atau transient jika trafik tinggi, untuk sekarang direct query cukup
+    $result = $wpdb->get_var($wpdb->prepare(
+        "SELECT id FROM $table WHERE user_id = %d AND item_id = %d AND item_type = %s",
+        $user_id, $item_id, $item_type
+    ));
+
+    return !empty($result);
+}
+
+/**
+ * Get Total Likes untuk item tertentu (Opsional)
+ */
+function dw_get_wishlist_count($item_id, $item_type = 'wisata') {
+    global $wpdb;
+    $table = $wpdb->prefix . 'dw_wishlist';
+    return (int) $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM $table WHERE item_id = %d AND item_type = %s",
+        $item_id, $item_type
+    ));
+}
 // =============================================================================
 // FUNGSI HELPER BARU: RESTOCK (Update v3.3)
 // =============================================================================

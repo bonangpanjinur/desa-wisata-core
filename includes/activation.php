@@ -458,6 +458,22 @@ function dw_core_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_wa );
 
+        // 22. Tabel Wishlist
+
+       $table_wishlist = $wpdb->prefix . 'dw_wishlist';
+    $sql_wishlist = "CREATE TABLE $table_wishlist (
+        id bigint(20) NOT NULL AUTO_INCREMENT,
+        user_id bigint(20) UNSIGNED NOT NULL,
+        item_id bigint(20) UNSIGNED NOT NULL,
+        item_type varchar(20) NOT NULL DEFAULT 'wisata', -- 'wisata' atau 'produk'
+        created_at datetime DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY  (id),
+        KEY user_id (user_id),
+        KEY item_lookup (item_id, item_type),
+        UNIQUE KEY unique_like (user_id, item_id, item_type) 
+    ) $charset_collate;";
+    dbDelta( $sql_wishlist );
+
     // Update versi DB
     update_option( 'dw_core_db_version', DW_CORE_VERSION );
     

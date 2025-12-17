@@ -40,6 +40,52 @@ function dw_handle_image_upload() {
 add_action( 'wp_ajax_dw_upload_image', 'dw_handle_image_upload' );
 
 /**
+ * Handler Toggle Wishlist (Like/Unlike)
+ */
+function dw_ajax_toggle_wishlist() {
+    // 1. Cek Login
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'Silakan login terlebih dahulu', 'code' => 'not_logged_in']);
+    }
+
+    // 2. Verifikasi Nonce (Keamanan) - Opsional, sebaiknya dipakai jika sudah disetup di JS
+    // check_ajax_referer('dw_nonce', 'nonce');
+
+    global $wpdb;
+    $user_id = get_current_user_id();
+    $item_id = isset($_POST['item_id']) ? intval($_POST['item_id']) : 0;
+    $item_type = isset($_POST['item_type']) ? sanitize_text_field($_POST['item_type']) : 'wisata';
+
+    if (!$item_id) {
+        wp_send_json_error(['message' => 'Data tidak valid']);
+    }
+
+    $table = $wpdb->prefix . 'dw_wishlist';
+
+    // 3. Cek apakah sudah ada
+    $exists = $wpdb->get_row($wpdb->prepare(
+        "SELECT id FROM $table WHERE user_id = %d AND item_id = %d AND item_type = %s",
+        $user_id, $item_id, $item_type
+    ));
+
+    if ($exists) {
+        // Jika ada -> Hapus (Unlike)
+        $wpdb->delete($table, ['id' => $exists->id]);
+        wp_send_json_success(['status' => 'removed', 'message' => 'Dihapus dari favorit']);
+    } else {
+        // Jika tidak ada -> Tambah (Like)
+        $wpdb->insert($table, [
+            'user_id' => $user_id,
+            'item_id' => $item_id,
+            'item_type' => $item_type,
+            'created_at' => current_time('mysql')
+        ]);
+        wp_send_json_success(['status' => 'added', 'message' => 'Ditambahkan ke favorit']);
+    }
+}
+add_action('wp_ajax_dw_toggle_wishlist', 'dw_ajax_toggle_wishlist');
+
+/**
  * Handle chat message sending
  */
 function dw_handle_send_message() {
