@@ -1,134 +1,276 @@
 <?php
+// Pastikan akses langsung dicegah
+if (!defined('ABSPATH')) {
+    exit;
+}
+
 /**
- * File Name: page-verifikasi-paket.php
- * Description: Verifikasi Pembelian Paket (UI Card Grid).
+ * Render Halaman Verifikasi Paket
+ * Fungsi ini harus dipanggil dari callback menu di admin-menus.php
  */
-
-if ( ! defined( 'ABSPATH' ) ) exit;
-
-function dw_verifikasi_paket_page_render() {
+function dw_render_page_verifikasi_paket() {
     global $wpdb;
-    
-    // Ambil Transaksi Pending
-    $pending = $wpdb->get_results("SELECT pp.*, p.nama_toko, p.nama_pemilik FROM {$wpdb->prefix}dw_pembelian_paket pp JOIN {$wpdb->prefix}dw_pedagang p ON pp.id_pedagang=p.id WHERE pp.status='pending' ORDER BY pp.created_at ASC");
-    
-    // Ambil Riwayat (History)
-    $history = $wpdb->get_results("SELECT pp.*, p.nama_toko FROM {$wpdb->prefix}dw_pembelian_paket pp JOIN {$wpdb->prefix}dw_pedagang p ON pp.id_pedagang=p.id WHERE pp.status!='pending' ORDER BY pp.created_at DESC LIMIT 5");
-    
-    // Pesan Notifikasi WP
-    settings_errors('dw_verif_msg'); 
-    ?>
-    <div class="wrap dw-wrap">
-        <h1 class="wp-heading-inline">Verifikasi Topup Paket</h1>
-        <hr class="wp-header-end">
+
+    // Definisi nama tabel sesuai activation.php
+    $table_pembelian = $wpdb->prefix . 'dw_pembelian_paket'; // Tabel transaksi pembelian paket
+    $table_pedagang = $wpdb->prefix . 'dw_pedagang';         // Tabel data pedagang
+    $table_users = $wpdb->prefix . 'users';                  // Tabel user WP
+
+    // --- LOGIC: HANDLE FORM SUBMISSION ---
+    $message = '';
+    $message_type = '';
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
         
-        <style>
-            .dw-verif-container { display: grid; grid-template-columns: 2fr 1fr; gap: 30px; margin-top: 20px; }
-            .dw-request-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); display: flex; gap: 20px; }
-            .dw-proof-thumb { width: 100px; height: 100px; border-radius: 6px; object-fit: cover; border: 1px solid #eee; flex-shrink: 0; cursor: pointer; }
-            .dw-req-details { flex-grow: 1; }
-            .dw-req-header { display: flex; justify-content: space-between; margin-bottom: 10px; }
-            .dw-shop-name { font-size: 16px; font-weight: 700; color: #1e293b; }
-            .dw-req-meta { font-size: 13px; color: #64748b; margin-bottom: 5px; }
-            .dw-pkg-badge { background: #eff6ff; color: #1d4ed8; padding: 4px 10px; border-radius: 15px; font-size: 12px; font-weight: 600; display: inline-block; margin-bottom: 10px; }
+        // Cek nonce keamanan
+        if (!isset($_POST['dw_verif_nonce']) || !wp_verify_nonce($_POST['dw_verif_nonce'], 'dw_verifikasi_paket_action')) {
+            $message = 'Security check failed.';
+            $message_type = 'error';
+        } else {
+            $pembelian_id = intval($_POST['pembelian_id']);
             
-            .dw-actions { display: flex; gap: 10px; margin-top: 15px; }
-            /* Tambahkan style spinner */
-            .dw-spinner { display:none; width: 20px; height: 20px; border: 2px solid #f3f3f3; border-top: 2px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite; margin-left: 10px; vertical-align: middle; }
-            @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-            
-            .btn-approve { background: #16a34a; color: #fff; border: none; padding: 8px 20px; border-radius: 4px; font-weight: 600; cursor: pointer; transition: 0.2s; }
-            .btn-approve:hover { background: #15803d; }
-            .btn-approve:disabled { background: #ccc; cursor: not-allowed; }
-            
-            .btn-reject { background: #fff; color: #dc2626; border: 1px solid #dc2626; padding: 8px 15px; border-radius: 4px; font-weight: 600; cursor: pointer; transition: 0.2s; }
-            .btn-reject:hover { background: #fef2f2; }
-            .btn-reject:disabled { border-color: #ccc; color: #ccc; cursor: not-allowed; }
-            
-            .dw-history-list { background: #fff; border: 1px solid #c3c4c7; border-radius: 8px; overflow: hidden; }
-            .dw-hist-item { padding: 15px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; }
-            .dw-hist-status { font-size: 11px; font-weight: 700; text-transform: uppercase; padding: 2px 6px; border-radius: 4px; }
-            .st-approved { background: #dcfce7; color: #166534; }
-            .st-rejected { background: #fee2e2; color: #991b1b; }
-        </style>
+            // Ambil data pembelian
+            $pembelian = $wpdb->get_row($wpdb->prepare(
+                "SELECT * FROM $table_pembelian WHERE id = %d", 
+                $pembelian_id
+            ));
 
-        <div class="dw-verif-container">
-            <!-- Kolom Kiri: Pending Requests -->
-            <div class="dw-pending-col">
-                <h3 style="margin-top: 0; margin-bottom: 20px;">Permintaan Masuk (<?php echo count($pending); ?>)</h3>
+            if ($pembelian && $pembelian->status === 'pending') {
                 
-                <?php if(empty($pending)): ?>
-                    <div class="dw-request-card" style="justify-content: center; color: #94a3b8; padding: 40px;">
-                        Tidak ada permintaan verifikasi baru.
-                    </div>
-                <?php else: foreach($pending as $req): ?>
-                    <div class="dw-request-card" id="card-<?php echo $req->id; ?>">
-                        <?php if(!empty($req->url_bukti_bayar)): ?>
-                        <a href="<?php echo esc_url($req->url_bukti_bayar); ?>" target="_blank">
-                            <img src="<?php echo esc_url($req->url_bukti_bayar); ?>" class="dw-proof-thumb" title="Klik untuk perbesar">
-                        </a>
-                        <?php else: ?>
-                            <div class="dw-proof-thumb" style="display:flex;align-items:center;justify-content:center;background:#f1f5f9;color:#94a3b8;">No Image</div>
-                        <?php endif; ?>
+                if ($_POST['action_type'] === 'approve') {
+                    // 1. Update status pembelian di dw_pembelian_paket
+                    $update_pembelian = $wpdb->update(
+                        $table_pembelian,
+                        array(
+                            'status' => 'disetujui',
+                            'processed_at' => current_time('mysql'),
+                            'catatan_admin' => 'Diverifikasi manual oleh admin'
+                        ),
+                        array('id' => $pembelian_id),
+                        array('%s', '%s', '%s'),
+                        array('%d')
+                    );
 
-                        <div class="dw-req-details">
-                            <div class="dw-req-header">
-                                <div class="dw-shop-name"><?php echo esc_html($req->nama_toko); ?> <span style="font-weight:400; font-size:13px; color:#64748b;">(<?php echo esc_html($req->nama_pemilik); ?>)</span></div>
-                                <div style="font-size:12px; color:#64748b;"><?php echo date('d M H:i', strtotime($req->created_at)); ?></div>
-                            </div>
-                            
-                            <div class="dw-pkg-badge">
-                                <?php echo esc_html($req->nama_paket_snapshot); ?> • Rp <?php echo number_format($req->harga_paket,0,',','.'); ?>
-                            </div>
-                            <div class="dw-req-meta">Kuota Tambahan: <strong>+<?php echo $req->jumlah_transaksi; ?> Transaksi</strong></div>
-                            
-                            <!-- ACTIONS BUTTONS -->
-                            <div class="dw-actions">
-                                <button type="button" 
-                                    class="btn-approve dw-verify-paket-btn" 
-                                    data-id="<?php echo $req->id; ?>" 
-                                    data-type="approve">
-                                    <span class="dashicons dashicons-yes" style="vertical-align:middle;"></span> Terima & Aktifkan
-                                </button>
-                                
-                                <button type="button" 
-                                    class="btn-reject dw-verify-paket-btn" 
-                                    data-id="<?php echo $req->id; ?>" 
-                                    data-type="reject">
-                                    Tolak
-                                </button>
-                                <div class="dw-spinner" id="spinner-<?php echo $req->id; ?>"></div>
-                            </div>
+                    // 2. Tambahkan kuota ke tabel dw_pedagang & Aktifkan Akun
+                    if ($update_pembelian !== false) {
+                        // Ambil data pedagang saat ini untuk menambah sisa transaksi
+                        $pedagang = $wpdb->get_row($wpdb->prepare("SELECT sisa_transaksi FROM $table_pedagang WHERE id = %d", $pembelian->id_pedagang));
+                        
+                        $sisa_transaksi_lama = $pedagang ? intval($pedagang->sisa_transaksi) : 0;
+                        $tambahan_kuota = intval($pembelian->jumlah_transaksi);
+                        $sisa_transaksi_baru = $sisa_transaksi_lama + $tambahan_kuota;
 
-                        </div>
-                    </div>
-                <?php endforeach; endif; ?>
+                        $wpdb->update(
+                            $table_pedagang,
+                            array(
+                                'status_akun' => 'aktif', // Aktifkan akun
+                                'sisa_transaksi' => $sisa_transaksi_baru, // Update kuota
+                                'updated_at' => current_time('mysql')
+                            ),
+                            array('id' => $pembelian->id_pedagang),
+                            array('%s', '%d', '%s'),
+                            array('%d')
+                        );
+
+                        $message = "Paket disetujui! Kuota pedagang bertambah " . $tambahan_kuota . " transaksi.";
+                        $message_type = 'success';
+                    } else {
+                        $message = "Gagal mengupdate database pembelian.";
+                        $message_type = 'error';
+                    }
+
+                } elseif ($_POST['action_type'] === 'reject') {
+                    // Ambil alasan tolak
+                    $alasan_tolak = isset($_POST['alasan_tolak']) ? sanitize_textarea_field($_POST['alasan_tolak']) : 'Ditolak oleh admin';
+
+                    // Update status menjadi ditolak
+                    $wpdb->update(
+                        $table_pembelian,
+                        array(
+                            'status' => 'ditolak',
+                            'processed_at' => current_time('mysql'),
+                            'catatan_admin' => $alasan_tolak // Simpan alasan
+                        ),
+                        array('id' => $pembelian_id),
+                        array('%s', '%s', '%s'),
+                        array('%d')
+                    );
+                    $message = "Permintaan paket ditolak.";
+                    $message_type = 'warning';
+                }
+            } else {
+                $message = "Data tidak ditemukan atau sudah diproses sebelumnya.";
+                $message_type = 'error';
+            }
+        }
+    }
+
+    // --- QUERY DATA ---
+    // Mengambil data dari dw_pembelian_paket (sesuai activation.php)
+    // JOIN ke dw_pedagang untuk dapat id_user
+    // JOIN ke users untuk dapat nama asli
+    $items = $wpdb->get_results("
+        SELECT 
+            pp.id AS pembelian_id,
+            pp.nama_paket_snapshot,
+            pp.harga_paket,
+            pp.jumlah_transaksi,
+            pp.url_bukti_bayar,
+            pp.created_at,
+            pp.status,
+            ped.nama_toko,
+            u.display_name AS nama_pemilik,
+            u.user_email
+        FROM $table_pembelian pp
+        LEFT JOIN $table_pedagang ped ON pp.id_pedagang = ped.id
+        LEFT JOIN $table_users u ON ped.id_user = u.ID
+        WHERE pp.status = 'pending'
+        ORDER BY pp.created_at ASC
+    ");
+
+    ?>
+
+    <div class="wrap">
+        <h1 class="wp-heading-inline">Verifikasi Pembelian Paket</h1>
+        <p class="description">Verifikasi bukti transfer pembelian kuota transaksi pedagang.</p>
+        <hr class="wp-header-end">
+
+        <?php if (!empty($message)) : ?>
+            <div class="notice notice-<?php echo esc_attr($message_type); ?> is-dismissible">
+                <p><?php echo esc_html($message); ?></p>
+            </div>
+        <?php endif; ?>
+
+        <?php if (empty($items)) : ?>
+            <div class="notice notice-info inline" style="margin-top: 20px;">
+                <p>Tidak ada permintaan pembelian paket yang menunggu verifikasi saat ini.</p>
+            </div>
+        <?php else : ?>
+            <div class="card" style="margin-top: 20px; padding: 0; max-width: 100%;">
+                <table class="wp-list-table widefat fixed striped table-view-list">
+                    <thead>
+                        <tr>
+                            <th style="width: 20%;">Pedagang / Toko</th>
+                            <th style="width: 20%;">Detail Paket</th>
+                            <th style="width: 15%;">Tagihan</th>
+                            <th style="width: 15%;">Waktu Request</th>
+                            <th style="width: 10%;">Bukti</th>
+                            <th style="width: 20%;">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($items as $item) : ?>
+                            <tr>
+                                <td>
+                                    <strong><?php echo $item->nama_toko ? esc_html($item->nama_toko) : '<em>(Toko dihapus)</em>'; ?></strong><br>
+                                    <span class="description">Pemilik: <?php echo esc_html($item->nama_pemilik); ?></span><br>
+                                    <small><?php echo esc_html($item->user_email); ?></small>
+                                </td>
+                                <td>
+                                    <strong><?php echo esc_html($item->nama_paket_snapshot); ?></strong><br>
+                                    <span class="dashicons dashicons-cart" style="font-size:14px; width:14px; height:14px; vertical-align:middle;"></span> 
+                                    <?php echo number_format($item->jumlah_transaksi); ?> Transaksi
+                                </td>
+                                <td>
+                                    <strong style="color: #2271b1;">Rp <?php echo number_format($item->harga_paket, 0, ',', '.'); ?></strong>
+                                </td>
+                                <td>
+                                    <?php echo date('d M Y', strtotime($item->created_at)); ?><br>
+                                    <span class="description"><?php echo date('H:i', strtotime($item->created_at)); ?> WIB</span>
+                                </td>
+                                <td>
+                                    <?php if (!empty($item->url_bukti_bayar)) : ?>
+                                        <a href="<?php echo esc_url($item->url_bukti_bayar); ?>" target="_blank" class="button button-small">
+                                            <span class="dashicons dashicons-visibility" style="margin-top:2px;"></span> Lihat
+                                        </a>
+                                    <?php else : ?>
+                                        <span class="description">- Kosong -</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <div style="display: flex; gap: 5px;">
+                                        <!-- Form Approve (Langsung Submit) -->
+                                        <form method="post" action="" style="display:inline;">
+                                            <?php wp_nonce_field('dw_verifikasi_paket_action', 'dw_verif_nonce'); ?>
+                                            <input type="hidden" name="pembelian_id" value="<?php echo esc_attr($item->pembelian_id); ?>">
+                                            <input type="hidden" name="action_type" value="approve">
+                                            <button type="submit" class="button button-primary" onclick="return confirm('Yakin ingin menyetujui paket ini? Kuota transaksi akan ditambahkan ke pedagang.');">
+                                                <span class="dashicons dashicons-yes" style="margin-top:4px;"></span> Terima
+                                            </button>
+                                        </form>
+
+                                        <!-- Tombol Reject (Buka Modal) -->
+                                        <button type="button" class="button button-secondary open-reject-modal" 
+                                                data-id="<?php echo esc_attr($item->pembelian_id); ?>" 
+                                                data-toko="<?php echo esc_attr($item->nama_toko); ?>"
+                                                style="color: #d63638; border-color: #d63638;">
+                                            <span class="dashicons dashicons-no" style="margin-top:4px;"></span> Tolak
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
             </div>
 
-            <!-- Kolom Kanan: History -->
-            <div class="dw-history-col">
-                <h3 style="margin-top: 0; margin-bottom: 20px;">Riwayat Terakhir</h3>
-                <div class="dw-history-list">
-                    <?php if(empty($history)): ?>
-                        <div class="dw-hist-item" style="color:#94a3b8; justify-content:center;">Kosong</div>
-                    <?php else: foreach($history as $hist): 
-                        $st_class = ($hist->status == 'disetujui') ? 'st-approved' : 'st-rejected';
-                        ?>
-                        <div class="dw-hist-item">
-                            <div>
-                                <div style="font-weight:600; font-size:13px;"><?php echo esc_html($hist->nama_toko); ?></div>
-                                <div style="font-size:11px; color:#64748b;"><?php echo esc_html($hist->nama_paket_snapshot); ?></div>
-                            </div>
-                            <div style="text-align:right;">
-                                <span class="dw-hist-status <?php echo $st_class; ?>"><?php echo ucfirst($hist->status); ?></span>
-                                <div style="font-size:10px; color:#94a3b8; margin-top:3px;"><?php echo date('d/m', strtotime($hist->created_at)); ?></div>
-                            </div>
+            <!-- Modal Penolakan -->
+            <div id="dw-reject-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:99999; justify-content:center; align-items:center;">
+                <div style="background:#fff; width:400px; max-width:90%; padding:20px; border-radius:5px; box-shadow:0 4px 6px rgba(0,0,0,0.1);">
+                    <h3 style="margin-top:0;">Tolak Paket</h3>
+                    <p>Anda akan menolak permintaan paket dari <strong id="modal-toko-name"></strong>.</p>
+                    
+                    <form method="post" action="">
+                        <?php wp_nonce_field('dw_verifikasi_paket_action', 'dw_verif_nonce'); ?>
+                        <input type="hidden" name="pembelian_id" id="modal-pembelian-id" value="">
+                        <input type="hidden" name="action_type" value="reject">
+                        
+                        <label for="alasan_tolak" style="font-weight:600; display:block; margin-bottom:5px;">Alasan Penolakan:</label>
+                        <textarea name="alasan_tolak" id="alasan_tolak" rows="4" style="width:100%; margin-bottom:15px;" placeholder="Contoh: Bukti transfer buram, Nominal tidak sesuai..." required></textarea>
+                        
+                        <div style="text-align:right;">
+                            <button type="button" class="button" id="close-reject-modal">Batal</button>
+                            <button type="submit" class="button button-primary" style="background-color: #d63638; border-color: #d63638;">Tolak Permintaan</button>
                         </div>
-                    <?php endforeach; endif; ?>
+                    </form>
                 </div>
             </div>
-        </div>
+
+            <script type="text/javascript">
+                document.addEventListener('DOMContentLoaded', function() {
+                    var modal = document.getElementById('dw-reject-modal');
+                    var modalTokoName = document.getElementById('modal-toko-name');
+                    var modalInputId = document.getElementById('modal-pembelian-id');
+                    var btns = document.querySelectorAll('.open-reject-modal');
+                    var closeBtn = document.getElementById('close-reject-modal');
+
+                    // Buka modal saat tombol tolak diklik
+                    btns.forEach(function(btn) {
+                        btn.addEventListener('click', function() {
+                            var id = this.getAttribute('data-id');
+                            var toko = this.getAttribute('data-toko');
+                            
+                            modalInputId.value = id;
+                            modalTokoName.textContent = toko;
+                            modal.style.display = 'flex';
+                        });
+                    });
+
+                    // Tutup modal
+                    closeBtn.addEventListener('click', function() {
+                        modal.style.display = 'none';
+                    });
+
+                    // Tutup modal jika klik di luar area konten
+                    window.addEventListener('click', function(event) {
+                        if (event.target == modal) {
+                            modal.style.display = 'none';
+                        }
+                    });
+                });
+            </script>
+        <?php endif; ?>
     </div>
-    <?php
+<?php
 }
 ?>
