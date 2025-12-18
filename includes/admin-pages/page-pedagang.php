@@ -173,7 +173,7 @@ function dw_pedagang_page_render() {
     
     $users = get_users(['role__in' => ['administrator', 'pedagang', 'subscriber']]);
 
-    // Statistik Dashboard (Calculated via WPDB to avoid memory issues)
+    // Statistik Dashboard
     $total_pedagang = $wpdb->get_var("SELECT COUNT(id) FROM $table_name");
     $independent_count = $wpdb->get_var("SELECT COUNT(id) FROM $table_name WHERE is_independent = 1");
     $with_desa_count = $wpdb->get_var("SELECT COUNT(id) FROM $table_name WHERE is_independent = 0");
@@ -181,7 +181,7 @@ function dw_pedagang_page_render() {
     $total_transaksi = $total_transaksi ? number_format($total_transaksi) : '0';
     ?>
 
-    <!-- CSS STYLING UI/UX -->
+    <!-- CSS STYLING -->
     <style>
         .dw-admin-wrap { max-width: 1200px; margin: 20px 20px 0 0; }
         .dw-header-action { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
@@ -229,6 +229,34 @@ function dw_pedagang_page_render() {
         .dw-col-6 { flex: 0 0 calc(50% - 10px); }
         .dw-col-4 { flex: 0 0 calc(33.333% - 13.33px); }
         .dw-col-8 { flex: 0 0 calc(66.666% - 6.66px); }
+
+        /* Checkbox List Styling */
+        .dw-checkbox-list {
+            max-height: 250px;
+            overflow-y: auto;
+            border: 1px solid #8c8f94;
+            border-radius: 4px;
+            padding: 10px;
+            background: #fff;
+        }
+        .dw-checkbox-list label {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+            cursor: pointer;
+            padding: 2px 0;
+            border-bottom: 1px dashed #f0f0f1;
+        }
+        .dw-checkbox-list input[type="checkbox"] {
+            margin-right: 8px;
+            margin-top: 0;
+        }
+        .dw-empty-msg {
+            color: #646970;
+            font-style: italic;
+            padding: 10px;
+            text-align: center;
+        }
 
         /* Status Badges */
         .dw-status-badge { display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
@@ -443,11 +471,11 @@ function dw_pedagang_page_render() {
                             <div class="dw-card">
                                 <div class="dw-nav-title" style="padding:15px; border-bottom:1px solid #f0f0f1; font-weight:600;">Navigasi Form</div>
                                 <ul class="dw-tabs-nav">
-                                    <li class="active" onclick="dwSwitchTab('tab-umum', this)"><span class="dashicons dashicons-store"></span> Informasi Toko</li>
-                                    <li onclick="dwSwitchTab('tab-lokasi', this)"><span class="dashicons dashicons-location"></span> Lokasi & Wilayah</li>
-                                    <li onclick="dwSwitchTab('tab-legalitas', this)"><span class="dashicons dashicons-id-alt"></span> Legalitas</li>
-                                    <li onclick="dwSwitchTab('tab-keuangan', this)"><span class="dashicons dashicons-money-alt"></span> Keuangan</li>
-                                    <li onclick="dwSwitchTab('tab-pengaturan', this)"><span class="dashicons dashicons-admin-settings"></span> Pengaturan & Ongkir</li>
+                                    <li class="dw-tab-trigger active" data-target="tab-umum"><span class="dashicons dashicons-store"></span> Informasi Toko</li>
+                                    <li class="dw-tab-trigger" data-target="tab-lokasi"><span class="dashicons dashicons-location"></span> Lokasi & Wilayah</li>
+                                    <li class="dw-tab-trigger" data-target="tab-legalitas"><span class="dashicons dashicons-id-alt"></span> Legalitas</li>
+                                    <li class="dw-tab-trigger" data-target="tab-keuangan"><span class="dashicons dashicons-money-alt"></span> Keuangan</li>
+                                    <li class="dw-tab-trigger" data-target="tab-pengaturan"><span class="dashicons dashicons-admin-settings"></span> Pengaturan & Ongkir</li>
                                 </ul>
                             </div>
                             
@@ -703,16 +731,14 @@ function dw_pedagang_page_render() {
                                                         <input type="number" name="ojek_dekat_harga" class="dw-form-control" placeholder="5000" value="<?php echo esc_attr($ojek_zona['satu_kecamatan']['dekat']['harga'] ?? ''); ?>">
                                                     </div>
                                                     <div class="dw-col-8">
-                                                        <label>Pilih Desa</label>
-                                                        <select name="ojek_dekat_desa[]" class="dw-form-control select2-villages" multiple="multiple">
-                                                            <?php 
-                                                            if(!empty($ojek_zona['satu_kecamatan']['dekat']['desa_ids'])){
-                                                                foreach($ojek_zona['satu_kecamatan']['dekat']['desa_ids'] as $vid){
-                                                                    echo "<option value='$vid' selected>$vid</option>"; 
-                                                                }
-                                                            }
-                                                            ?>
-                                                        </select>
+                                                        <label>Pilih Desa (Checklist)</label>
+                                                        <?php 
+                                                            $saved_dekat = $ojek_zona['satu_kecamatan']['dekat']['desa_ids'] ?? [];
+                                                            $json_dekat = htmlspecialchars(json_encode($saved_dekat), ENT_QUOTES, 'UTF-8');
+                                                        ?>
+                                                        <div id="wrap_ojek_dekat_desa" class="dw-checkbox-list" data-name="ojek_dekat_desa[]" data-selected="<?php echo $json_dekat; ?>">
+                                                            <p class="dw-empty-msg"><span class="dashicons dashicons-arrow-left-alt"></span> Silakan pilih <strong>Kecamatan</strong> di tab "Lokasi & Wilayah" terlebih dahulu.</p>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -726,16 +752,14 @@ function dw_pedagang_page_render() {
                                                         <input type="number" name="ojek_jauh_harga" class="dw-form-control" placeholder="10000" value="<?php echo esc_attr($ojek_zona['satu_kecamatan']['jauh']['harga'] ?? ''); ?>">
                                                     </div>
                                                     <div class="dw-col-8">
-                                                        <label>Pilih Desa</label>
-                                                        <select name="ojek_jauh_desa[]" class="dw-form-control select2-villages" multiple="multiple">
-                                                            <?php 
-                                                            if(!empty($ojek_zona['satu_kecamatan']['jauh']['desa_ids'])){
-                                                                foreach($ojek_zona['satu_kecamatan']['jauh']['desa_ids'] as $vid){
-                                                                    echo "<option value='$vid' selected>$vid</option>";
-                                                                }
-                                                            }
-                                                            ?>
-                                                        </select>
+                                                        <label>Pilih Desa (Checklist)</label>
+                                                        <?php 
+                                                            $saved_jauh = $ojek_zona['satu_kecamatan']['jauh']['desa_ids'] ?? [];
+                                                            $json_jauh = htmlspecialchars(json_encode($saved_jauh), ENT_QUOTES, 'UTF-8');
+                                                        ?>
+                                                        <div id="wrap_ojek_jauh_desa" class="dw-checkbox-list" data-name="ojek_jauh_desa[]" data-selected="<?php echo $json_jauh; ?>">
+                                                            <p class="dw-empty-msg"><span class="dashicons dashicons-arrow-left-alt"></span> Silakan pilih <strong>Kecamatan</strong> di tab "Lokasi & Wilayah" terlebih dahulu.</p>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -814,121 +838,356 @@ function dw_pedagang_page_render() {
             
             <script>
             jQuery(document).ready(function($){
-                // Init Select2
+                
+                // --- 1. TAB NAVIGATION HANDLER ---
+                $(document).on('click', '.dw-tab-trigger', function(e) {
+                    e.preventDefault();
+                    var target = $(this).data('target');
+                    $('.dw-tab-trigger').removeClass('active');
+                    $(this).addClass('active');
+                    $('.dw-tab-pane').removeClass('active').hide();
+                    $('#' + target).fadeIn(200).addClass('active');
+                    if(target === 'tab-pengaturan') {
+                        if ($.fn.select2) {
+                            $('.select2-districts').select2({ width: '100%' });
+                        }
+                    }
+                });
+
+                // --- 2. INIT SELECT2 ---
                 if ($.fn.select2) {
-                    $('.select2-villages, .select2-districts').select2({ width: '100%' });
+                    $('.select2').select2({ width: '100%' });
+                    $('.select2-districts').select2({ width: '100%' });
                 }
 
-                // Load Ongkir Options Logic
-                function loadOngkirOptions(force = false) {
-                    // Get Main Location IDs
-                    // Priority: Current selected value -> Data attribute (initial load)
-                    var kecId = $('select[name="pedagang_kec"]').val();
-                    if(!kecId) kecId = $('select[name="pedagang_kec"]').data('current');
+                // --- 3. HELPER LOAD AJAX OPTION (SUPER ROBUST VERSION) ---
+                function loadRegionOptions(action, parentId, $targetEl, selectedId = null, placeholder = 'Pilih...') {
+                    $targetEl.html('<option value="">Memuat...</option>').prop('disabled', true);
                     
-                    var kabId = $('select[name="pedagang_kota"]').val();
-                    if(!kabId) kabId = $('select[name="pedagang_kota"]').data('current');
-
-                    // 1. Handle Villages (Satu Kecamatan)
-                    var $villageSelects = $('select[name="ojek_dekat_desa[]"], select[name="ojek_jauh_desa[]"]');
-                    var lastKecId = $villageSelects.data('loaded-parent');
-
-                    if (kecId && (force || kecId != lastKecId)) {
-                        $villageSelects.prop('disabled', true);
-                        
-                        // Fetch
-                        $.post(ajaxurl, { action: 'dw_get_villages', dist_id: kecId }, function(res){
-                            $villageSelects.prop('disabled', false);
-                            if(res.success && res.data && res.data.data) {
-                                var villages = res.data.data;
-                                
-                                // Process each select
-                                $villageSelects.each(function(){
-                                    var $sel = $(this);
-                                    var currentVal = $sel.val() || []; // Preserve selection (IDs)
-                                    
-                                    // Clear existing options
-                                    $sel.empty();
-                                    
-                                    // Append new options
-                                    $.each(villages, function(i, v){
-                                        var isSelected = currentVal.includes(v.code);
-                                        var newOption = new Option(v.name, v.code, isSelected, isSelected);
-                                        $sel.append(newOption);
-                                    });
-                                    
-                                    // Trigger change for Select2 to update UI
-                                    $sel.trigger('change');
-                                    $sel.data('loaded-parent', kecId);
-                                });
-                            }
-                        });
-                    } else if (!kecId) {
-                        $villageSelects.empty().trigger('change').data('loaded-parent', '');
+                    var data = { action: action, nonce: '<?php echo wp_create_nonce("dw_region_nonce"); ?>' };
+                    
+                    // Kirim semua variasi parameter ID agar server pasti menerimanya
+                    if(action === 'dw_get_cities') { 
+                        data.prov_id = parentId; data.province_id = parentId; data.id_prov = parentId; 
+                    }
+                    if(action === 'dw_get_districts') { 
+                        data.city_id = parentId; data.kab_id = parentId; data.regency_id = parentId; 
+                    }
+                    if(action === 'dw_get_villages') { 
+                        data.dist_id = parentId; data.kec_id = parentId; data.district_id = parentId; 
                     }
 
-                    // 2. Handle Districts (Beda Kecamatan)
+                    $.ajax({
+                        url: ajaxurl,
+                        type: 'POST',
+                        dataType: 'json', // Paksa parse JSON
+                        data: data,
+                        success: function(res) {
+                            $targetEl.empty().prop('disabled', false);
+                            $targetEl.append('<option value="">' + placeholder + '</option>');
+                            
+                            console.log('API Response for ' + action + ':', res); // DEBUG
+
+                            if (res.success) {
+                                // Normalisasi struktur data
+                                var items = res.data;
+                                if (items && items.data) items = items.data;
+                                if (items && items.results) items = items.results;
+                                
+                                // Pastikan items ada isinya
+                                if (items && (Array.isArray(items) || typeof items === 'object')) {
+                                    var count = 0;
+                                    $.each(items, function(i, item) {
+                                        var val = null;
+                                        var txt = null;
+
+                                        if (typeof item === 'object' && item !== null) {
+                                            // Deteksi ID (berbagai kemungkinan key)
+                                            val = item.code || item.id || item.city_id || item.district_id || item.subdistrict_id || item.province_id || item.kode || item.no;
+                                            
+                                            // Deteksi Nama (berbagai kemungkinan key)
+                                            txt = item.name || item.nama || item.text || item.label || 
+                                                  item.city_name || item.district_name || item.province_name || item.village_name ||
+                                                  item.province || item.city || item.district || item.subdistrict || item.village ||
+                                                  item.kabupaten || item.kota || item.kecamatan || item.kelurahan || item.desa;
+                                        } else {
+                                            // Asumsi Key-Value pair (i=ID, item=Name) atau Array of Strings
+                                            if (Array.isArray(items)) {
+                                                val = item;
+                                                txt = item;
+                                            } else {
+                                                val = i;
+                                                txt = item;
+                                            }
+                                        }
+                                        
+                                        if(val && txt) {
+                                            var isSelected = (selectedId && String(val) === String(selectedId)) ? 'selected' : '';
+                                            $targetEl.append('<option value="' + val + '" ' + isSelected + '>' + txt + '</option>');
+                                            count++;
+                                        }
+                                    });
+                                    
+                                    if(count === 0) {
+                                        $targetEl.append('<option value="">Data kosong (Format Error)</option>');
+                                        console.warn('Data ditemukan tapi format item tidak dikenali:', items);
+                                    }
+                                } else {
+                                    $targetEl.append('<option value="">Data tidak ditemukan</option>');
+                                }
+                                
+                                $targetEl.trigger('change');
+                            } else {
+                                 console.warn('API Response False:', res);
+                                 $targetEl.html('<option value="">Gagal: ' + (res.data || 'Unknown error') + '</option>');
+                            }
+                        },
+                        error: function(xhr, status, error) {
+                            console.error('AJAX Error:', error);
+                            console.log('Response Raw:', xhr.responseText);
+                            $targetEl.html('<option value="">Error Jaringan/Server</option>');
+                        }
+                    });
+                }
+
+                // --- 4. CASCADING ADDRESS LOGIC ---
+
+                // A. Load Provinsi on Load
+                var $selProv = $('select[name="pedagang_prov"]');
+                var curProv = $selProv.data('current');
+                if($selProv.find('option').length <= 1) {
+                     loadRegionOptions('dw_get_provinces', null, $selProv, curProv, 'Pilih Provinsi');
+                }
+
+                // B. Event Provinsi -> Kota
+                $(document).on('change', 'select[name="pedagang_prov"]', function() {
+                    var provId = $(this).val();
+                    var $selKota = $('select[name="pedagang_kota"]');
+                    var curKota = $selKota.data('current');
+                    
+                    // Reset dropdown di bawahnya
+                    $selKota.empty().prop('disabled', true);
+                    $('select[name="pedagang_kec"]').empty().prop('disabled', true);
+                    $('select[name="pedagang_nama_id"]').empty().prop('disabled', true);
+                    
+                    // Update Text Hidden Input
+                    $('input[name="provinsi_text"]').val($(this).find('option:selected').text());
+
+                    // Juga Reset Ongkir Section karena Provinsi Berubah
+                    $('#wrap_ojek_dekat_desa, #wrap_ojek_jauh_desa').html('<p class="dw-empty-msg">Silakan pilih Kecamatan kembali.</p>').data('loaded-parent', null);
+                    $('select[name="ojek_beda_kec_dekat_ids[]"], select[name="ojek_beda_kec_jauh_ids[]"]').empty().trigger('change').data('loaded-parent', null);
+
+                    if(provId) {
+                        if(String(provId) !== String($selProv.data('last-loaded'))) {
+                            curKota = null; // Reset selection jika parent berubah
+                        }
+                        loadRegionOptions('dw_get_cities', provId, $selKota, curKota, 'Pilih Kota/Kabupaten');
+                    }
+                    $selProv.data('last-loaded', provId);
+                });
+
+                // C. Event Kota -> Kecamatan
+                $(document).on('change', 'select[name="pedagang_kota"]', function() {
+                    var cityId = $(this).val();
+                    var $selKec = $('select[name="pedagang_kec"]');
+                    var curKec = $selKec.data('current');
+
+                    $('input[name="kabupaten_text"]').val($(this).find('option:selected').text());
+                    
+                    $selKec.empty().prop('disabled', true);
+                    $('select[name="pedagang_nama_id"]').empty().prop('disabled', true);
+
+                    // Update Ongkir Kota/Kabupaten Options
+                    $('select[name="ojek_beda_kec_dekat_ids[]"], select[name="ojek_beda_kec_jauh_ids[]"]').data('loaded-parent', null);
+                    loadOngkirOptions(true);
+
+                    if(cityId) {
+                         if(String(cityId) !== String($('select[name="pedagang_kota"]').data('last-loaded'))) {
+                            curKec = null;
+                        }
+                        loadRegionOptions('dw_get_districts', cityId, $selKec, curKec, 'Pilih Kecamatan');
+                    }
+                    $('select[name="pedagang_kota"]').data('last-loaded', cityId);
+                });
+
+                // D. Event Kecamatan -> Desa
+                $(document).on('change', 'select[name="pedagang_kec"]', function() {
+                    var kecId = $(this).val();
+                    var $selDesa = $('select[name="pedagang_nama_id"]');
+                    var curDesa = $selDesa.data('current');
+
+                    $('input[name="kecamatan_text"]').val($(this).find('option:selected').text());
+
+                    $selDesa.empty().prop('disabled', true);
+
+                    // Update Ongkir Desa Checkboxes
+                    $('#wrap_ojek_dekat_desa, #wrap_ojek_jauh_desa').data('loaded-parent', null);
+                    loadOngkirOptions(true);
+
+                    if(kecId) {
+                         if(String(kecId) !== String($('select[name="pedagang_kec"]').data('last-loaded'))) {
+                            curDesa = null;
+                        }
+                        loadRegionOptions('dw_get_villages', kecId, $selDesa, curDesa, 'Pilih Kelurahan/Desa');
+                    }
+                    $('select[name="pedagang_kec"]').data('last-loaded', kecId);
+                });
+                
+                // E. Update Desa Text
+                $(document).on('change', 'select[name="pedagang_nama_id"]', function() {
+                     $('input[name="kelurahan_text"]').val($(this).find('option:selected').text());
+                });
+
+
+                // --- 5. ONGKIR LOGIC (Existing logic, adapted) ---
+                function loadOngkirOptions(force = false) {
+                    var kecId = $('select[name="pedagang_kec"]').val();
+                    var kabId = $('select[name="pedagang_kota"]').val();
+                    
+                    if(!kecId) kecId = $('select[name="pedagang_kec"]').data('current');
+                    if(!kabId) kabId = $('select[name="pedagang_kota"]').data('current');
+
+                    // A. Handle Villages (Checkboxes)
+                    var $wrappers = $('#wrap_ojek_dekat_desa, #wrap_ojek_jauh_desa');
+                    var lastKecId = $wrappers.data('loaded-parent');
+
+                    if (kecId && (force || kecId != lastKecId)) {
+                        $wrappers.html('<div style="text-align:center; padding:10px; color:#666;">Memuat data desa...</div>');
+                        
+                        var data = { action: 'dw_get_villages', nonce: '<?php echo wp_create_nonce("dw_region_nonce"); ?>' };
+                        data.dist_id = kecId; data.kec_id = kecId; data.district_id = kecId;
+
+                        $.ajax({
+                            url: ajaxurl,
+                            type: 'POST',
+                            dataType: 'json',
+                            data: data,
+                            success: function(res) {
+                                $wrappers.empty(); 
+                                if(res.success) {
+                                    // Re-use robust logic
+                                    var villages = res.data;
+                                    if (villages && villages.data) villages = villages.data;
+                                    if (villages && villages.results) villages = villages.results;
+
+                                    if (villages && (Array.isArray(villages) || typeof villages === 'object')) {
+                                        var count = 0;
+                                        $wrappers.each(function(){
+                                            var $wrap = $(this);
+                                            var inputName = $wrap.data('name');
+                                            var savedData = $wrap.data('selected');
+                                            if(typeof savedData !== 'object' || savedData === null) savedData = [];
+
+                                            $.each(villages, function(i, v){
+                                                var val = null;
+                                                var txt = null;
+
+                                                if (typeof v === 'object' && v !== null) {
+                                                    val = v.code || v.id || v.village_id || v.kode || v.no;
+                                                    txt = v.name || v.nama || v.text || v.village_name || v.desa || v.kelurahan;
+                                                } else {
+                                                    if(Array.isArray(villages)) { val = v; txt = v; }
+                                                    else { val = i; txt = v; }
+                                                }
+                                                
+                                                if(val && txt) {
+                                                    var savedDataStrings = savedData.map(String);
+                                                    var isChecked = savedDataStrings.includes(String(val)) ? 'checked' : '';
+                                                    var html = '<label><input type="checkbox" name="' + inputName + '" value="' + val + '" ' + isChecked + '> ' + txt + '</label>';
+                                                    $wrap.append(html);
+                                                    count++;
+                                                }
+                                            });
+                                        });
+                                        
+                                        if (count === 0) {
+                                            $wrappers.html('<p class="dw-empty-msg">Tidak ada data desa.</p>');
+                                        }
+                                        $wrappers.data('loaded-parent', kecId);
+                                    } else {
+                                        $wrappers.html('<p class="dw-empty-msg">Data desa kosong atau format salah.</p>');
+                                    }
+                                } else {
+                                    $wrappers.html('<p class="dw-empty-msg">Gagal memuat data desa: ' + (res.data || 'Unknown error') + '</p>');
+                                }
+                            },
+                            error: function(xhr, status, error) {
+                                $wrappers.html('<p class="dw-empty-msg">Error jaringan saat memuat desa.</p>');
+                            }
+                        });
+
+                    } else if (!kecId) {
+                        $wrappers.html('<p class="dw-empty-msg"><span class="dashicons dashicons-arrow-left-alt"></span> Pilih Kecamatan dahulu.</p>');
+                        $wrappers.data('loaded-parent', '');
+                    }
+
+                    // B. Handle Districts (Select2) - SUPER ROBUST VERSION TOO
                     var $districtSelects = $('select[name="ojek_beda_kec_dekat_ids[]"], select[name="ojek_beda_kec_jauh_ids[]"]');
                     var lastKabId = $districtSelects.data('loaded-parent');
 
                     if (kabId && (force || kabId != lastKabId)) {
                         $districtSelects.prop('disabled', true);
                         
-                        $.post(ajaxurl, { action: 'dw_get_districts', city_id: kabId }, function(res){
-                            $districtSelects.prop('disabled', false);
-                            if(res.success && res.data && res.data.data) {
-                                var districts = res.data.data;
-                                
-                                $districtSelects.each(function(){
-                                    var $sel = $(this);
-                                    var currentVal = $sel.val() || [];
-                                    
-                                    $sel.empty();
-                                    
-                                    $.each(districts, function(i, d){
-                                        var isSelected = currentVal.includes(d.code);
-                                        var newOption = new Option(d.name, d.code, isSelected, isSelected);
-                                        $sel.append(newOption);
-                                    });
-                                    
-                                    $sel.trigger('change');
-                                    $sel.data('loaded-parent', kabId);
-                                });
+                        var data = { action: 'dw_get_districts', nonce: '<?php echo wp_create_nonce("dw_region_nonce"); ?>' };
+                        data.city_id = kabId; data.kab_id = kabId; data.regency_id = kabId;
+
+                        $.ajax({
+                            url: ajaxurl,
+                            type: 'POST',
+                            dataType: 'json',
+                            data: data,
+                            success: function(res) {
+                                $districtSelects.prop('disabled', false);
+                                if(res.success) {
+                                    var districts = res.data;
+                                    if (districts && districts.data) districts = districts.data;
+                                    if (districts && districts.results) districts = districts.results;
+
+                                    if (districts && (Array.isArray(districts) || typeof districts === 'object')) {
+                                        $districtSelects.each(function(){
+                                            var $sel = $(this);
+                                            var currentVal = $sel.val() || [];
+                                            $sel.empty();
+                                            $.each(districts, function(i, d){
+                                                var val = null;
+                                                var txt = null;
+
+                                                if (typeof d === 'object' && d !== null) {
+                                                    val = d.code || d.id || d.district_id || d.kode || d.no;
+                                                    txt = d.name || d.nama || d.text || d.district_name || d.kecamatan;
+                                                } else {
+                                                    if(Array.isArray(districts)) { val = d; txt = d; }
+                                                    else { val = i; txt = d; }
+                                                }
+
+                                                if(val && txt) {
+                                                    var isSelected = currentVal.includes(val);
+                                                    $sel.append(new Option(txt, val, isSelected, isSelected));
+                                                }
+                                            });
+                                            $sel.trigger('change');
+                                            $sel.data('loaded-parent', kabId);
+                                        });
+                                    }
+                                }
                             }
                         });
                     } else if (!kabId) {
                         $districtSelects.empty().trigger('change').data('loaded-parent', '');
                     }
                 }
-                
-                // Trigger load on settings tab click
-                $('.dw-tabs-nav li').click(function(){
-                    if($(this).text().includes('Pengaturan')) {
-                        loadOngkirOptions();
-                    }
-                });
 
-                // Also trigger when main location changes IF we are already on the settings tab
-                $('select[name="pedagang_kec"]').on('change', function(){
-                    $('select[name="ojek_dekat_desa[]"], select[name="ojek_jauh_desa[]"]').data('loaded-parent', null);
-                    if($('#tab-pengaturan').is(':visible')) loadOngkirOptions(true);
-                });
-
-                $('select[name="pedagang_kota"]').on('change', function(){
-                    $('select[name="ojek_beda_kec_dekat_ids[]"], select[name="ojek_beda_kec_jauh_ids[]"]').data('loaded-parent', null);
-                    if($('#tab-pengaturan').is(':visible')) loadOngkirOptions(true);
-                });
-
-                // Initial load if on edit page and data exists
+                // Initial Load (jika Edit)
                 if ($('select[name="pedagang_kec"]').data('current') || $('select[name="pedagang_kota"]').data('current')) {
                      loadOngkirOptions();
                 }
 
                 // Media Upload
-                $('.btn_upload').click(function(e){
+                $(document).on('click', '.btn_upload', function(e){
                     e.preventDefault();
                     var target = $(this).data('target');
                     var preview = $(this).data('preview');
+                    if ( typeof wp === 'undefined' || ! wp.media ) { alert('Media uploader error'); return; }
                     var frame = wp.media({ title: 'Pilih Gambar', multiple: false, library: { type: 'image' } });
                     frame.on('select', function(){
                         var url = frame.state().get('selection').first().toJSON().url;
@@ -938,21 +1197,6 @@ function dw_pedagang_page_render() {
                     frame.open();
                 });
             });
-            
-            function dwSwitchTab(tabId, el) {
-                var contents = document.getElementsByClassName('dw-tab-pane');
-                for (var i = 0; i < contents.length; i++) {
-                    contents[i].style.display = 'none';
-                    contents[i].classList.remove('active');
-                }
-                var tabs = document.querySelectorAll('.dw-tabs-nav li');
-                for (var i = 0; i < tabs.length; i++) {
-                    tabs[i].classList.remove('active');
-                }
-                document.getElementById(tabId).style.display = 'block';
-                setTimeout(function() { document.getElementById(tabId).classList.add('active'); }, 10);
-                el.classList.add('active');
-            }
             </script>
         <?php endif; ?>
     </div>
