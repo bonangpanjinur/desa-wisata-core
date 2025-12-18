@@ -79,11 +79,11 @@ function dw_pedagang_page_render() {
                 'satu_kecamatan' => [
                     'dekat' => [
                         'harga' => floatval($_POST['ojek_dekat_harga']),
-                        'desa_ids' => $safe_array_map($_POST['ojek_dekat_desa'] ?? null)
+                        'desa_ids' => $safe_array_map($_POST['ojek_dekat_desa_ids'] ?? null)
                     ],
                     'jauh' => [
                         'harga' => floatval($_POST['ojek_jauh_harga']),
-                        'desa_ids' => $safe_array_map($_POST['ojek_jauh_desa'] ?? null)
+                        'desa_ids' => $safe_array_map($_POST['ojek_jauh_desa_ids'] ?? null)
                     ]
                 ],
                 'beda_kecamatan' => [
@@ -236,7 +236,7 @@ function dw_pedagang_page_render() {
         .dw-col-4 { flex: 0 0 calc(33.333% - 13.33px); }
         .dw-col-8 { flex: 0 0 calc(66.666% - 6.66px); }
 
-        /* Checkbox List Styling */
+        /* Checkbox List Styling (DEPRECATED - BUT KEPT FOR BACKWARDS COMPAT IF NEEDED) */
         .dw-checkbox-list {
             max-height: 250px;
             overflow-y: auto;
@@ -794,14 +794,16 @@ function dw_pedagang_page_render() {
                                                         <input type="number" name="ojek_dekat_harga" class="dw-form-control" placeholder="5000" value="<?php echo esc_attr($ojek_zona['satu_kecamatan']['dekat']['harga'] ?? ''); ?>">
                                                     </div>
                                                     <div class="dw-col-8">
-                                                        <label>Pilih Desa (Checklist)</label>
-                                                        <?php 
-                                                            $saved_dekat = $ojek_zona['satu_kecamatan']['dekat']['desa_ids'] ?? [];
-                                                            $json_dekat = htmlspecialchars(json_encode($saved_dekat), ENT_QUOTES, 'UTF-8');
-                                                        ?>
-                                                        <div id="wrap_ojek_dekat_desa" class="dw-checkbox-list" data-name="ojek_dekat_desa[]" data-selected="<?php echo $json_dekat; ?>">
-                                                            <p class="dw-empty-msg"><span class="dashicons dashicons-arrow-left-alt"></span> Silakan pilih <strong>Kecamatan</strong> di tab "Lokasi & Wilayah" terlebih dahulu.</p>
-                                                        </div>
+                                                        <label>Pilih Desa</label>
+                                                        <select name="ojek_dekat_desa_ids[]" class="dw-form-control select2-villages" multiple="multiple">
+                                                            <?php 
+                                                            if(!empty($ojek_zona['satu_kecamatan']['dekat']['desa_ids'])){
+                                                                foreach($ojek_zona['satu_kecamatan']['dekat']['desa_ids'] as $vid){
+                                                                    echo "<option value='$vid' selected>$vid</option>";
+                                                                }
+                                                            }
+                                                            ?>
+                                                        </select>
                                                     </div>
                                                 </div>
                                             </div>
@@ -815,14 +817,16 @@ function dw_pedagang_page_render() {
                                                         <input type="number" name="ojek_jauh_harga" class="dw-form-control" placeholder="10000" value="<?php echo esc_attr($ojek_zona['satu_kecamatan']['jauh']['harga'] ?? ''); ?>">
                                                     </div>
                                                     <div class="dw-col-8">
-                                                        <label>Pilih Desa (Checklist)</label>
-                                                        <?php 
-                                                            $saved_jauh = $ojek_zona['satu_kecamatan']['jauh']['desa_ids'] ?? [];
-                                                            $json_jauh = htmlspecialchars(json_encode($saved_jauh), ENT_QUOTES, 'UTF-8');
-                                                        ?>
-                                                        <div id="wrap_ojek_jauh_desa" class="dw-checkbox-list" data-name="ojek_jauh_desa[]" data-selected="<?php echo $json_jauh; ?>">
-                                                            <p class="dw-empty-msg"><span class="dashicons dashicons-arrow-left-alt"></span> Silakan pilih <strong>Kecamatan</strong> di tab "Lokasi & Wilayah" terlebih dahulu.</p>
-                                                        </div>
+                                                        <label>Pilih Desa</label>
+                                                        <select name="ojek_jauh_desa_ids[]" class="dw-form-control select2-villages" multiple="multiple">
+                                                            <?php 
+                                                            if(!empty($ojek_zona['satu_kecamatan']['jauh']['desa_ids'])){
+                                                                foreach($ojek_zona['satu_kecamatan']['jauh']['desa_ids'] as $vid){
+                                                                    echo "<option value='$vid' selected>$vid</option>";
+                                                                }
+                                                            }
+                                                            ?>
+                                                        </select>
                                                     </div>
                                                 </div>
                                             </div>
@@ -912,7 +916,8 @@ function dw_pedagang_page_render() {
                     $('#' + target).fadeIn(200).addClass('active');
                     if(target === 'tab-pengaturan') {
                         if ($.fn.select2) {
-                            $('.select2-districts').select2({ width: '100%' });
+                            $('.select2-districts').select2({ width: '100%', placeholder: 'Pilih Kecamatan' });
+                            $('.select2-villages').select2({ width: '100%', placeholder: 'Pilih Desa' });
                         }
                     }
                 });
@@ -920,10 +925,78 @@ function dw_pedagang_page_render() {
                 // --- 2. INIT SELECT2 ---
                 if ($.fn.select2) {
                     $('.select2').select2({ width: '100%' });
-                    $('.select2-districts').select2({ width: '100%' });
+                    $('.select2-districts').select2({ width: '100%', placeholder: 'Pilih Kecamatan' });
+                    $('.select2-villages').select2({ width: '100%', placeholder: 'Pilih Desa' });
                 }
 
-                // --- 3. HELPER LOAD AJAX OPTION (UPDATED FOR YOUR API) ---
+                // --- 3. LOGIKA EKSKLUSI DESA (DEKAT vs JAUH) VIA SELECT2 ---
+                function syncDesaExclusion() {
+                    var $dekat = $('select[name="ojek_dekat_desa_ids[]"]');
+                    var $jauh = $('select[name="ojek_jauh_desa_ids[]"]');
+                    
+                    var valDekat = $dekat.val() || [];
+                    var valJauh = $jauh.val() || [];
+                    
+                    // Disable opsi di JAUH yang sudah dipilih di DEKAT
+                    $jauh.find('option').each(function(){
+                        if(valDekat.includes($(this).val())) {
+                            $(this).prop('disabled', true);
+                        } else {
+                            $(this).prop('disabled', false);
+                        }
+                    });
+
+                    // Disable opsi di DEKAT yang sudah dipilih di JAUH
+                    $dekat.find('option').each(function(){
+                        if(valJauh.includes($(this).val())) {
+                            $(this).prop('disabled', true);
+                        } else {
+                            $(this).prop('disabled', false);
+                        }
+                    });
+
+                    // Update UI Select2 agar status disabled terlihat
+                    // Note: Select2 v4 biasanya auto-detect perubahan DOM saat dibuka, tapi trigger change bisa membantu sinkronisasi
+                    // Kita tidak trigger change recursive di sini untuk menghindari loop
+                }
+
+                // Trigger saat ada perubahan di Desa Dekat ATAU Jauh
+                $('select[name="ojek_dekat_desa_ids[]"], select[name="ojek_jauh_desa_ids[]"]').on('select2:select select2:unselect', function (e) {
+                    syncDesaExclusion();
+                });
+
+                // --- 4. LOGIKA EKSKLUSI KECAMATAN (DEKAT vs JAUH) ---
+                function syncKecamatanExclusion() {
+                    var $dekat = $('select[name="ojek_beda_kec_dekat_ids[]"]');
+                    var $jauh = $('select[name="ojek_beda_kec_jauh_ids[]"]');
+                    
+                    var valDekat = $dekat.val() || [];
+                    var valJauh = $jauh.val() || [];
+                    
+                    // Disable opsi di JAUH yang sudah dipilih di DEKAT
+                    $jauh.find('option').each(function(){
+                        if(valDekat.includes($(this).val())) {
+                            $(this).prop('disabled', true);
+                        } else {
+                            $(this).prop('disabled', false);
+                        }
+                    });
+
+                    // Disable opsi di DEKAT yang sudah dipilih di JAUH
+                    $dekat.find('option').each(function(){
+                        if(valJauh.includes($(this).val())) {
+                            $(this).prop('disabled', true);
+                        } else {
+                            $(this).prop('disabled', false);
+                        }
+                    });
+                }
+
+                $('select[name="ojek_beda_kec_dekat_ids[]"], select[name="ojek_beda_kec_jauh_ids[]"]').on('select2:select select2:unselect', function (e) {
+                    syncKecamatanExclusion();
+                });
+
+                // --- 5. HELPER LOAD AJAX OPTION (UPDATED FOR YOUR API) ---
                 function loadRegionOptions(action, parentId, $targetEl, selectedId = null, placeholder = 'Pilih...') {
                     $targetEl.html('<option value="">Memuat...</option>').prop('disabled', true);
                     
@@ -932,16 +1005,16 @@ function dw_pedagang_page_render() {
                     var data = { nonce: '<?php echo wp_create_nonce("dw_region_nonce"); ?>' };
                     
                     if(action === 'dw_get_cities') { 
-                        ajaxAction = 'dw_fetch_regencies'; // SESUAI FILE ANDA
-                        data.province_id = parentId; // SESUAI PARAMETER API
+                        ajaxAction = 'dw_fetch_regencies'; 
+                        data.province_id = parentId;
                     }
                     if(action === 'dw_get_districts') { 
-                        ajaxAction = 'dw_fetch_districts'; // SESUAI FILE ANDA
-                        data.regency_id = parentId; // SESUAI PARAMETER API
+                        ajaxAction = 'dw_fetch_districts'; 
+                        data.regency_id = parentId;
                     }
                     if(action === 'dw_get_villages') { 
-                        ajaxAction = 'dw_fetch_villages'; // SESUAI FILE ANDA
-                        data.district_id = parentId; // SESUAI PARAMETER API
+                        ajaxAction = 'dw_fetch_villages';
+                        data.district_id = parentId;
                     }
                     if(action === 'dw_get_provinces') {
                         ajaxAction = 'dw_fetch_provinces';
@@ -951,7 +1024,7 @@ function dw_pedagang_page_render() {
 
                     $.ajax({
                         url: ajaxurl,
-                        type: 'GET', // GANTI DARI POST KE GET
+                        type: 'GET',
                         dataType: 'json',
                         data: data,
                         success: function(res) {
@@ -960,7 +1033,6 @@ function dw_pedagang_page_render() {
                             
                             if (res.success) {
                                 var items = res.data;
-                                // Handle berbagai format return data (jika ada wrapper 'data' atau 'results')
                                 if (items && items.data) items = items.data;
                                 if (items && items.results) items = items.results;
                                 
@@ -997,12 +1069,11 @@ function dw_pedagang_page_render() {
                     });
                 }
 
-                // --- 4. CASCADING ADDRESS LOGIC ---
+                // --- 6. CASCADING ADDRESS LOGIC ---
 
                 // A. Load Provinsi on Load
                 var $selProv = $('select[name="pedagang_prov"]');
                 var curProv = $selProv.data('current');
-                // MODIFIKASI: Hanya load AJAX jika PHP gagal load (opsi <= 1)
                 if($selProv.find('option').length <= 1) {
                      loadRegionOptions('dw_get_provinces', null, $selProv, curProv, 'Pilih Provinsi');
                 }
@@ -1013,21 +1084,19 @@ function dw_pedagang_page_render() {
                     var $selKota = $('select[name="pedagang_kota"]');
                     var curKota = $selKota.data('current');
                     
-                    // Reset dropdown di bawahnya
                     $selKota.empty().prop('disabled', true);
                     $('select[name="pedagang_kec"]').empty().prop('disabled', true);
                     $('select[name="pedagang_nama_id"]').empty().prop('disabled', true);
                     
-                    // Update Text Hidden Input
                     $('input[name="provinsi_text"]').val($(this).find('option:selected').text());
 
-                    // Juga Reset Ongkir Section karena Provinsi Berubah
-                    $('#wrap_ojek_dekat_desa, #wrap_ojek_jauh_desa').html('<p class="dw-empty-msg">Silakan pilih Kecamatan kembali.</p>').data('loaded-parent', null);
-                    $('select[name="ojek_beda_kec_dekat_ids[]"], select[name="ojek_beda_kec_jauh_ids[]"]').empty().trigger('change').data('loaded-parent', null);
+                    // Reset Ongkir: Disable dulu
+                    $('select[name="ojek_dekat_desa_ids[]"], select[name="ojek_jauh_desa_ids[]"]').prop('disabled', true).empty();
+                    $('select[name="ojek_beda_kec_dekat_ids[]"], select[name="ojek_beda_kec_jauh_ids[]"]').prop('disabled', true).empty();
 
                     if(provId) {
                         if(String(provId) !== String($selProv.data('last-loaded'))) {
-                            curKota = null; // Reset selection jika parent berubah
+                            curKota = null;
                         }
                         loadRegionOptions('dw_get_cities', provId, $selKota, curKota, 'Pilih Kota/Kabupaten');
                     }
@@ -1069,7 +1138,8 @@ function dw_pedagang_page_render() {
                     $selDesa.empty().prop('disabled', true);
 
                     // Update Ongkir Desa Checkboxes
-                    $('#wrap_ojek_dekat_desa, #wrap_ojek_jauh_desa').data('loaded-parent', null);
+                    // Karena sekarang pakai Select2, kita reset & disable dulu
+                    $('select[name="ojek_dekat_desa_ids[]"], select[name="ojek_jauh_desa_ids[]"]').data('loaded-parent', null);
                     loadOngkirOptions(true);
 
                     if(kecId) {
@@ -1087,7 +1157,7 @@ function dw_pedagang_page_render() {
                 });
 
 
-                // --- 5. ONGKIR LOGIC (Existing logic, adapted) ---
+                // --- 7. ONGKIR LOGIC (SELECT2 VERSION) ---
                 function loadOngkirOptions(force = false) {
                     var kecId = $('select[name="pedagang_kec"]').val();
                     var kabId = $('select[name="pedagang_kota"]').val();
@@ -1095,69 +1165,65 @@ function dw_pedagang_page_render() {
                     if(!kecId) kecId = $('select[name="pedagang_kec"]').data('current');
                     if(!kabId) kabId = $('select[name="pedagang_kota"]').data('current');
 
-                    // A. Handle Villages (Checkboxes)
-                    var $wrappers = $('#wrap_ojek_dekat_desa, #wrap_ojek_jauh_desa');
-                    var lastKecId = $wrappers.data('loaded-parent');
+                    // A. Handle Villages (Select2)
+                    var $villageSelects = $('select[name="ojek_dekat_desa_ids[]"], select[name="ojek_jauh_desa_ids[]"]');
+                    var lastKecId = $villageSelects.data('loaded-parent');
 
                     if (kecId && (force || kecId != lastKecId)) {
-                        $wrappers.html('<div style="text-align:center; padding:10px; color:#666;">Memuat data desa...</div>');
+                        $villageSelects.prop('disabled', true); // Disable while loading
                         
                         var data = { 
-                            action: 'dw_fetch_villages', // FIXED ACTION NAME
-                            district_id: kecId,          // FIXED PARAM NAME
+                            action: 'dw_fetch_villages', 
+                            district_id: kecId,
                             nonce: '<?php echo wp_create_nonce("dw_region_nonce"); ?>' 
                         };
 
                         $.ajax({
                             url: ajaxurl,
-                            type: 'GET', // GANTI DARI POST KE GET
+                            type: 'GET',
                             dataType: 'json',
                             data: data,
                             success: function(res) {
-                                $wrappers.empty(); 
+                                $villageSelects.prop('disabled', false); // Enable back
+                                
                                 if(res.success) {
                                     var villages = res.data;
                                     if (villages && Array.isArray(villages)) {
-                                        var count = 0;
-                                        $wrappers.each(function(){
-                                            var $wrap = $(this);
-                                            var inputName = $wrap.data('name');
-                                            var savedData = $wrap.data('selected');
-                                            if(typeof savedData !== 'object' || savedData === null) savedData = [];
+                                        // Update kedua dropdown (Dekat & Jauh)
+                                        $villageSelects.each(function(){
+                                            var $sel = $(this);
+                                            var currentVal = $sel.val() || [];
+                                            // Jangan kosongkan jika kita ingin pertahankan nilai lama, tapi karena context wilayah berubah,
+                                            // biasanya kita ingin reset option listnya.
+                                            // Value lama akan hilang jika ID option tidak ada di list baru.
+                                            $sel.empty(); 
 
                                             $.each(villages, function(i, v){
                                                 var val = v.id || v.code;
                                                 var txt = v.name || v.nama;
                                                 
                                                 if(val && txt) {
-                                                    var savedDataStrings = savedData.map(String);
-                                                    var isChecked = savedDataStrings.includes(String(val)) ? 'checked' : '';
-                                                    var html = '<label><input type="checkbox" name="' + inputName + '" value="' + val + '" ' + isChecked + '> ' + txt + '</label>';
-                                                    $wrap.append(html);
-                                                    count++;
+                                                    // Cek apakah value ini ada di currentVal (saved value)
+                                                    var isSelected = currentVal.includes(val);
+                                                    $sel.append(new Option(txt, val, isSelected, isSelected));
                                                 }
                                             });
+                                            $sel.trigger('change'); // Update Select2 UI
                                         });
                                         
-                                        if (count === 0) {
-                                            $wrappers.html('<p class="dw-empty-msg">Tidak ada data desa.</p>');
-                                        }
-                                        $wrappers.data('loaded-parent', kecId);
-                                    } else {
-                                        $wrappers.html('<p class="dw-empty-msg">Data desa kosong.</p>');
+                                        $villageSelects.data('loaded-parent', kecId);
+
+                                        // Jalankan Sync setelah options terisi
+                                        setTimeout(syncDesaExclusion, 500);
+
                                     }
-                                } else {
-                                    $wrappers.html('<p class="dw-empty-msg">Gagal memuat data desa.</p>');
                                 }
-                            },
-                            error: function(xhr, status, error) {
-                                $wrappers.html('<p class="dw-empty-msg">Error jaringan saat memuat desa.</p>');
                             }
                         });
 
                     } else if (!kecId) {
-                        $wrappers.html('<p class="dw-empty-msg"><span class="dashicons dashicons-arrow-left-alt"></span> Pilih Kecamatan dahulu.</p>');
-                        $wrappers.data('loaded-parent', '');
+                        $villageSelects.empty().prop('disabled', true).trigger('change');
+                        $villageSelects.data('loaded-parent', '');
                     }
 
                     // B. Handle Districts (Select2)
@@ -1168,14 +1234,14 @@ function dw_pedagang_page_render() {
                         $districtSelects.prop('disabled', true);
                         
                         var data = { 
-                            action: 'dw_fetch_districts', // FIXED ACTION NAME
-                            regency_id: kabId,            // FIXED PARAM NAME
+                            action: 'dw_fetch_districts', 
+                            regency_id: kabId,
                             nonce: '<?php echo wp_create_nonce("dw_region_nonce"); ?>' 
                         };
 
                         $.ajax({
                             url: ajaxurl,
-                            type: 'GET', // GANTI DARI POST KE GET
+                            type: 'GET', 
                             dataType: 'json',
                             data: data,
                             success: function(res) {
@@ -1199,12 +1265,15 @@ function dw_pedagang_page_render() {
                                             $sel.trigger('change');
                                             $sel.data('loaded-parent', kabId);
                                         });
+                                        
+                                        setTimeout(syncKecamatanExclusion, 500);
                                     }
                                 }
                             }
                         });
                     } else if (!kabId) {
-                        $districtSelects.empty().trigger('change').data('loaded-parent', '');
+                        $districtSelects.empty().prop('disabled', true).trigger('change');
+                        $districtSelects.data('loaded-parent', '');
                     }
                 }
 
