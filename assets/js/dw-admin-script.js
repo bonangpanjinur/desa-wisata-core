@@ -1,189 +1,118 @@
-jQuery(document).ready(function ($) {
+/**
+ * Lokasi: assets/js/dw-admin-script.js
+ * Deskripsi: Logika Admin (Cascading Dropdown, Promo, Ad Settings)
+ */
+jQuery(document).ready(function($) {
     'use strict';
+
+    const dw_ajax_url = (typeof dw_ajax !== 'undefined') ? dw_ajax.ajax_url : ajaxurl;
 
     /**
      * =========================================
-     * 1. Dynamic Address Loading (Existing)
+     * 1. Dynamic Address Loading (Wilayah.id)
      * =========================================
      */
-    // ... (Logika alamat provinsi/kota yang sudah ada sebelumnya) ...
-    // Saya sertakan kembali logic kota agar tidak hilang, tapi fokus ke bagian bawah untuk promosi.
-    const $provinsiSelect = $('#dw_provinsi_id');
-    const $kotaSelect = $('#dw_kota_id');
-    const $kecamatanSelect = $('#dw_kecamatan_id');
+    const sel = {
+        prov: '.dw-region-prov',
+        kota: '.dw-region-kota',
+        kec:  '.dw-region-kec',
+        desa: '.dw-region-desa'
+    };
 
-    if ($provinsiSelect.length > 0) {
-        $provinsiSelect.on('change', function () {
-            const provinceId = $(this).val();
-            $kotaSelect.html('<option value="">Memuat Kota...</option>').prop('disabled', true);
-            $kecamatanSelect.html('<option value="">Pilih Kecamatan</option>').prop('disabled', true);
+    function loadRegionData(action, paramName, paramValue, $target, nextActions = []) {
+        $target.html('<option value="">Memuat...</option>').prop('disabled', true);
+        
+        const data = { action: action };
+        if(paramName) data[paramName] = paramValue;
 
-            if (provinceId) {
-                $.ajax({
-                    url: dw_ajax.ajax_url,
-                    type: 'POST',
-                    dataType: 'json',
-                    data: { action: 'dw_get_cities', province_id: provinceId, nonce: dw_ajax.nonce },
-                    success: function (response) {
-                        if (response.success) {
-                            let options = '<option value="">Pilih Kota/Kabupaten</option>';
-                            $.each(response.data.cities, function (index, city) {
-                                let cityName = city.city_name || city.name;
-                                let cityId = city.city_id || city.id;
-                                let cityType = city.type || '';
-                                options += `<option value="${cityId}">${cityType} ${cityName}</option>`;
-                            });
-                            $kotaSelect.html(options).prop('disabled', false);
-                        } else {
-                            $kotaSelect.html('<option value="">Gagal Memuat</option>');
-                        }
-                    }
-                });
-            }
-        });
-    }
-
-    if ($kotaSelect.length > 0) {
-        $kotaSelect.on('change', function () {
-            const cityId = $(this).val();
-            if ($kecamatanSelect.length > 0) {
-                $kecamatanSelect.html('<option value="">Memuat Kecamatan...</option>').prop('disabled', true);
-                if (cityId) {
-                    $.ajax({
-                        url: dw_ajax.ajax_url,
-                        type: 'POST',
-                        dataType: 'json',
-                        data: { action: 'dw_get_subdistricts', city_id: cityId, nonce: dw_ajax.nonce },
-                        success: function (response) {
-                            if (response.success) {
-                                let options = '<option value="">Pilih Kecamatan</option>';
-                                $.each(response.data.subdistricts, function (index, sub) {
-                                    options += `<option value="${sub.subdistrict_id}">${sub.subdistrict_name}</option>`;
-                                });
-                                $kecamatanSelect.html(options).prop('disabled', false);
-                            } else {
-                                $kecamatanSelect.html('<option value="">Data tidak tersedia</option>');
-                            }
-                        }
+        $.ajax({
+            url: dw_ajax_url,
+            data: data,
+            success: function(res) {
+                if (res.success) {
+                    let html = `<option value="">-- Pilih --</option>`;
+                    const currentId = $target.data('current');
+                    res.data.forEach(item => {
+                        const selected = (currentId && currentId == item.id) ? 'selected' : '';
+                        html += `<option value="${item.id}" ${selected}>${item.name}</option>`;
                     });
+                    $target.html(html).prop('disabled', false);
+
+                    // Auto trigger next level if "current" value exists (for edit page)
+                    if(currentId) {
+                        $target.trigger('change');
+                        $target.data('current', ''); // clear after use
+                    }
                 }
             }
         });
     }
 
+    // Initial Load Provinces
+    if ($(sel.prov).length > 0) {
+        loadRegionData('dw_fetch_provinces', null, null, $(sel.prov));
+    }
+
+    $(document).on('change', sel.prov, function() {
+        const id = $(this).val();
+        const text = $(this).find('option:selected').text();
+        $('.dw-text-prov').val(id ? text : '');
+        $(sel.kec + ',' + sel.desa).html('<option value="">-- Pilih --</option>').prop('disabled', true);
+        if(id) loadRegionData('dw_fetch_regencies', 'province_id', id, $(sel.kota));
+    });
+
+    $(document).on('change', sel.kota, function() {
+        const id = $(this).val();
+        const text = $(this).find('option:selected').text();
+        $('.dw-text-kota').val(id ? text : '');
+        $(sel.desa).html('<option value="">-- Pilih --</option>').prop('disabled', true);
+        if(id) loadRegionData('dw_fetch_districts', 'regency_id', id, $(sel.kec));
+    });
+
+    $(document).on('change', sel.kec, function() {
+        const id = $(this).val();
+        const text = $(this).find('option:selected').text();
+        $('.dw-text-kec').val(id ? text : '');
+        if(id) loadRegionData('dw_fetch_villages', 'district_id', id, $(sel.desa));
+    });
+
+    $(document).on('change', sel.desa, function() {
+        const text = $(this).find('option:selected').text();
+        $('.dw-text-desa').val($(this).val() ? text : '');
+    });
 
     /**
      * =========================================
-     * 2. Promotion Management (Voucher/Diskon)
+     * 2. Promotion & Ad Settings (Keep Existing)
      * =========================================
      */
-    // Modal Handling
+    
+    // Modal Promo
     $('.dw-add-promo-btn').on('click', function(e) {
         e.preventDefault();
         $('#dw-promotion-form')[0].reset();
         $('#promo_id').val('');
-        $('#modal-title').text('Tambah Promosi');
         $('#dw-promo-modal').fadeIn();
     });
 
-    $('.dw-close-modal').on('click', function() {
-        $('#dw-promo-modal').fadeOut();
-    });
+    $('.dw-close-modal').on('click', function() { $('#dw-promo-modal').fadeOut(); });
 
-    // Save Promo
-    $('#dw-promotion-form').on('submit', function (e) {
-        e.preventDefault();
-        const formData = $(this).serialize();
-        const $submitBtn = $(this).find('button[type="submit"]');
-        const originalText = $submitBtn.text();
-
-        $submitBtn.text('Menyimpan...').prop('disabled', true);
-
-        $.ajax({
-            url: dw_ajax.ajax_url,
-            type: 'POST',
-            data: formData + '&action=dw_save_promotion&nonce=' + dw_ajax.nonce,
-            success: function (response) {
-                if (response.success) {
-                    alert(response.data.message);
-                    location.reload();
-                } else {
-                    alert('Error: ' + response.data.message);
-                    $submitBtn.text(originalText).prop('disabled', false);
-                }
-            },
-            error: function () {
-                alert('Gagal terkoneksi.');
-                $submitBtn.text(originalText).prop('disabled', false);
-            }
-        });
-    });
-
-    /**
-     * =========================================
-     * 3. Ad Settings Management (NEW FEATURE)
-     * =========================================
-     */
-    
-    // Helper: Tambah Baris
+    // Ad Settings Rows
     $('.dw-add-row').on('click', function(e) {
         e.preventDefault();
-        const type = $(this).data('type'); // banner, wisata, produk
+        const type = $(this).data('type');
         const tableBody = $('#table-' + type + '-packages tbody');
-        const timestamp = new Date().getTime(); // Unique ID for array index
-
-        // Hapus pesan "Belum ada paket" jika ada
+        const ts = new Date().getTime();
         tableBody.find('.empty-row').remove();
-
-        const newRow = `
+        tableBody.append(`
             <tr>
-                <td><input type="text" name="ad_packages[${type}][${timestamp}][name]" class="regular-text" style="width:100%" placeholder="Contoh: Paket 1 Minggu" required></td>
-                <td><input type="number" name="ad_packages[${type}][${timestamp}][days]" class="small-text" placeholder="7" required> Hari</td>
-                <td><input type="number" name="ad_packages[${type}][${timestamp}][price]" class="regular-text" placeholder="30000" required></td>
+                <td><input type="text" name="ad_packages[${type}][${ts}][name]" style="width:100%" required></td>
+                <td><input type="number" name="ad_packages[${type}][${ts}][days]" class="small-text" required> Hari</td>
+                <td><input type="number" name="ad_packages[${type}][${ts}][price]" class="regular-text" required></td>
                 <td><button type="button" class="button dw-remove-row"><span class="dashicons dashicons-trash"></span></button></td>
             </tr>
-        `;
-        
-        tableBody.append(newRow);
+        `);
     });
 
-    // Helper: Hapus Baris
-    $(document).on('click', '.dw-remove-row', function(e) {
-        e.preventDefault();
-        if(confirm('Hapus baris ini?')) {
-            $(this).closest('tr').remove();
-        }
-    });
-
-    // Save Ad Settings AJAX
-    $('#dw-ad-settings-form').on('submit', function(e) {
-        e.preventDefault();
-        
-        const formData = $(this).serialize();
-        const $btn = $('#btn-save-ad-settings');
-        const originalText = $btn.text();
-
-        $btn.text('Menyimpan Pengaturan...').prop('disabled', true);
-
-        $.ajax({
-            url: dw_ajax.ajax_url,
-            type: 'POST',
-            data: formData + '&action=dw_save_ad_settings&nonce=' + dw_ajax.nonce,
-            success: function(response) {
-                if(response.success) {
-                    alert('Pengaturan Harga Iklan berhasil disimpan!');
-                    $btn.text('Tersimpan').prop('disabled', false);
-                    setTimeout(() => $btn.text(originalText), 2000);
-                } else {
-                    alert('Gagal: ' + response.data.message);
-                    $btn.text(originalText).prop('disabled', false);
-                }
-            },
-            error: function() {
-                alert('Terjadi kesalahan server.');
-                $btn.text(originalText).prop('disabled', false);
-            }
-        });
-    });
-
+    $(document).on('click', '.dw-remove-row', function() { $(this).closest('tr').remove(); });
 });

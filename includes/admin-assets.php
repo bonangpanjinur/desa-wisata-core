@@ -27,17 +27,21 @@ function dw_enqueue_admin_assets( $hook ) {
     ));
 
     // 3. JS: admin-scripts.js (Script Lama/Legacy yang menyebabkan error)
-    // Kita enqueue ulang atau pastikan jika sudah ter-enqueue oleh file lain, dia punya variabelnya.
-    // Jika file ini ada di folder assets/js/admin-scripts.js:
-    if ( file_exists( dirname( dirname( __FILE__ ) ) . '/assets/js/admin-scripts.js' ) ) {
-        wp_enqueue_script( 'dw-legacy-admin-script', $plugin_url . 'assets/js/admin-scripts.js', array('jquery'), $version, true );
+    // Kita cek path absolut file untuk memastikan keberadaannya
+    $legacy_js_path = dirname( dirname( __FILE__ ) ) . '/assets/js/admin-scripts.js';
+    $legacy_js_url  = $plugin_url . 'assets/js/admin-scripts.js';
+
+    if ( file_exists( $legacy_js_path ) ) {
+        // Enqueue script lama dengan handle berbeda agar tidak bentrok
+        wp_enqueue_script( 'dw-legacy-admin-script', $legacy_js_url, array('jquery'), $version, true );
         
-        // FIX ERROR: "dw_admin_vars tidak ditemukan"
-        // Kita suntikkan variabel yang dibutuhkan oleh script lama ini.
+        // FIX ERROR CRITICAL: "dw_admin_vars tidak ditemukan"
+        // Kita suntikkan objek 'dw_admin_vars' yang dicari oleh admin-scripts.js
         wp_localize_script( 'dw-legacy-admin-script', 'dw_admin_vars', array(
             'ajax_url' => admin_url( 'admin-ajax.php' ),
             'nonce'    => wp_create_nonce( 'dw_admin_nonce' ),
-            'root'     => esc_url_raw( rest_url() )
+            'root'     => esc_url_raw( rest_url() ),
+            'site_url' => site_url() // Tambahan jika dibutuhkan
         ));
     }
 }

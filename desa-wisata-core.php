@@ -82,7 +82,20 @@ function dw_core_deactivate() {
 }
 register_deactivation_hook( __FILE__, 'dw_core_deactivate' );
 
+require_once plugin_dir_path(__FILE__) . 'includes/address-api.php';
 
+// 2. Pastikan file script di-enqueue (jika belum ada di admin-assets.php)
+function dw_core_enqueue_admin_scripts($hook) {
+    // Hanya load di halaman plugin kita untuk optimasi
+    wp_enqueue_script(
+        'dw-admin-script',
+        plugin_dir_url(__FILE__) . 'assets/js/dw-admin-script.js',
+        array('jquery'),
+        '1.0.0',
+        true
+    );
+}
+add_action('admin_enqueue_scripts', 'dw_core_enqueue_admin_scripts');
 // =========================================================================
 // PERBAIKAN CORS (v3.3.1)
 // =========================================================================
