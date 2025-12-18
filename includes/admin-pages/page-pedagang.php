@@ -9,6 +9,9 @@ if (!defined('ABSPATH')) exit;
 function dw_pedagang_page_render() {
     global $wpdb;
     $table_name = $wpdb->prefix . 'dw_pedagang';
+    $table_desa = $wpdb->prefix . 'dw_desa';
+    $table_users = $wpdb->users;
+    
     $message = '';
     $message_type = '';
 
@@ -16,7 +19,7 @@ function dw_pedagang_page_render() {
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_pedagang'])) {
         
         if (!isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'dw_pedagang_action')) {
-            echo '<div class="notice notice-error"><p>Keamanan tidak valid.</p></div>'; return;
+            echo '<div class="notice notice-error"><p>Keamanan tidak valid (Nonce Failed).</p></div>'; return;
         }
 
         $action = sanitize_text_field($_POST['action_pedagang']);
@@ -27,7 +30,7 @@ function dw_pedagang_page_render() {
             if ($deleted !== false) {
                 $message = 'Data pedagang berhasil dihapus.'; $message_type = 'success';
             } else {
-                $message = 'Gagal menghapus pedagang.'; $message_type = 'error';
+                $message = 'Gagal menghapus pedagang. Error: ' . $wpdb->last_error; $message_type = 'error';
             }
         
         // SAVE / UPDATE
@@ -38,7 +41,7 @@ function dw_pedagang_page_render() {
             
             // LOGIKA RELASI OTOMATIS: Cari Desa Wisata di Kelurahan yang sama
             $desa_terkait = $wpdb->get_row($wpdb->prepare(
-                "SELECT id, nama_desa, persentase_komisi_penjualan FROM {$wpdb->prefix}dw_desa WHERE api_kelurahan_id = %s LIMIT 1",
+                "SELECT id, nama_desa, persentase_komisi_penjualan FROM $table_desa WHERE api_kelurahan_id = %s LIMIT 1",
                 $kelurahan_id
             ));
 
@@ -48,12 +51,22 @@ function dw_pedagang_page_render() {
             $is_independent = ($id_desa == 0) ? 1 : 0;
 
             // Logika Penentu Verifikator (Siapa yang meng-ACC)
-            // Jika ini update dan status berubah jadi aktif, kita catat siapa yang melakukannya
             $status_sekarang = sanitize_text_field($_POST['status_akun']);
             $approved_by = '';
+            
+            // Jika status aktif, cek siapa user saat ini
             if ($status_sekarang === 'aktif') {
                 $current_user = wp_get_current_user();
-                $approved_by = in_array('administrator', (array) $current_user->roles) ? 'admin' : 'desa';
+                // Jika data lama sudah ada approved_by, pertahankan, kecuali diubah statusnya lagi
+                if (!empty($_POST['pedagang_id'])) {
+                    $old_data = $wpdb->get_row($wpdb->prepare("SELECT approved_by FROM $table_name WHERE id = %d", intval($_POST['pedagang_id'])));
+                    $approved_by = $old_data ? $old_data->approved_by : '';
+                }
+                
+                // Jika belum ada verifikator atau di-approve baru sekarang
+                if (empty($approved_by)) {
+                    $approved_by = in_array('administrator', (array) $current_user->roles) ? 'admin' : 'desa';
+                }
             }
 
             $data = [
@@ -64,7 +77,7 @@ function dw_pedagang_page_render() {
                 'deskripsi_toko'   => wp_kses_post($_POST['deskripsi_toko']),
                 'foto_toko'        => esc_url_raw($_POST['foto_toko_url']),
                 'status_akun'      => $status_sekarang,
-                'approved_by'      => $approved_by, // Menyimpan siapa yang meng-ACC untuk sistem komisi
+                'approved_by'      => $approved_by, 
                 
                 // WILAYAH (API ID)
                 'api_provinsi_id'  => sanitize_text_field($_POST['pedagang_prov']),
@@ -83,12 +96,20 @@ function dw_pedagang_page_render() {
             ];
 
             if (!empty($_POST['pedagang_id'])) {
-                $wpdb->update($table_name, $data, ['id' => intval($_POST['pedagang_id'])]);
-                $message = 'Data pedagang diperbarui.'; $message_type = 'success';
+                $result = $wpdb->update($table_name, $data, ['id' => intval($_POST['pedagang_id'])]);
+                if ($result !== false) {
+                    $message = 'Data pedagang diperbarui.'; $message_type = 'success';
+                } else {
+                    $message = 'Gagal update database: ' . $wpdb->last_error; $message_type = 'error';
+                }
             } else {
                 $data['created_at'] = current_time('mysql');
-                $wpdb->insert($table_name, $data);
-                $message = 'Pedagang baru berhasil ditambahkan.'; $message_type = 'success';
+                $result = $wpdb->insert($table_name, $data);
+                if ($result !== false) {
+                    $message = 'Pedagang baru berhasil ditambahkan.'; $message_type = 'success';
+                } else {
+                    $message = 'Gagal menyimpan database: ' . $wpdb->last_error; $message_type = 'error';
+                }
             }
         }
     }
@@ -100,9 +121,10 @@ function dw_pedagang_page_render() {
         $edit_data = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE id = %d", intval($_GET['id'])));
     }
     
+    // Ambil user untuk dropdown (Admin, Pedagang, Subscriber)
     $users = get_users(['role__in' => ['administrator', 'pedagang', 'subscriber']]);
 
-    // Statistik
+    // Statistik Dashboard
     $total_pedagang = $wpdb->get_var("SELECT COUNT(id) FROM $table_name");
     $independent_count = $wpdb->get_var("SELECT COUNT(id) FROM $table_name WHERE is_independent = 1");
     $with_desa_count = $wpdb->get_var("SELECT COUNT(id) FROM $table_name WHERE is_independent = 0");
@@ -161,7 +183,7 @@ function dw_pedagang_page_render() {
                 <div class="dw-info-icon"><span class="dashicons dashicons-info-outline"></span></div>
                 <div class="dw-info-text">
                     <strong>Ketentuan Relasi & Komisi:</strong>
-                    <p style="margin:5px 0;">Sistem akan otomatis menghubungkan pedagang ke Desa Wisata jika Kelurahan sama. Komisi hanya masuk ke kas Desa jika Admin Desa yang menyetujui (ACC) pendaftaran.</p>
+                    <p style="margin:5px 0;">Sistem akan otomatis menghubungkan pedagang ke Desa Wisata jika alamat Kelurahan sama. Komisi hanya masuk ke kas Desa jika Admin Desa yang menyetujui (ACC) pendaftaran.</p>
                 </div>
             </div>
         <?php endif; ?>
@@ -194,7 +216,7 @@ function dw_pedagang_page_render() {
                             <tr>
                                 <th><label>Nama Toko / Usaha <span class="required">*</span></label></th>
                                 <td>
-                                    <input name="nama_toko" type="text" value="<?php echo esc_attr($edit_data->nama_toko ?? ''); ?>" class="regular-text" required>
+                                    <input name="nama_toko" type="text" value="<?php echo esc_attr($edit_data->nama_toko ?? ''); ?>" class="regular-text" required placeholder="Contoh: Keripik Pisang Bu Ani">
                                     <p class="description">Nama toko atau usaha yang akan ditampilkan di platform.</p>
                                 </td>
                             </tr>
@@ -210,8 +232,10 @@ function dw_pedagang_page_render() {
                                 <td>
                                     <input type="text" name="foto_toko_url" id="foto_toko_url" value="<?php echo esc_attr($edit_data->foto_toko ?? ''); ?>" class="regular-text">
                                     <button type="button" class="button" id="btn_upload_toko">Unggah Foto</button>
-                                    <img id="preview_toko" src="<?php echo !empty($edit_data->foto_toko) ? esc_url($edit_data->foto_toko) : ''; ?>" style="max-height:100px; display:<?php echo !empty($edit_data->foto_toko) ? 'block' : 'none'; ?>; margin-top:10px; border-radius:8px; border:2px solid #e5e7eb;">
-                                    <p class="description">Ukuran rekomendasi: 800x800px (square).</p>
+                                    <div class="dw-preview-container">
+                                        <img id="preview_toko" src="<?php echo !empty($edit_data->foto_toko) ? esc_url($edit_data->foto_toko) : ''; ?>" style="max-height:150px; display:<?php echo !empty($edit_data->foto_toko) ? 'block' : 'none'; ?>; margin-top:10px; border-radius:8px; border:2px solid #e5e7eb;">
+                                    </div>
+                                    <p class="description">Ukuran rekomendasi: 800x800px (persegi).</p>
                                 </td>
                             </tr>
                         </table>
@@ -239,7 +263,7 @@ function dw_pedagang_page_render() {
                             <tr>
                                 <th><label>Alamat Lengkap</label></th>
                                 <td>
-                                    <textarea name="pedagang_detail" class="large-text" rows="3"><?php echo esc_textarea($edit_data->alamat_lengkap ?? ''); ?></textarea>
+                                    <textarea name="pedagang_detail" class="large-text" rows="3" placeholder="Jalan, RT/RW, No. Rumah"><?php echo esc_textarea($edit_data->alamat_lengkap ?? ''); ?></textarea>
                                     <p class="description">Alamat lengkap toko untuk informasi kontak dan pengiriman.</p>
                                 </td>
                             </tr>
@@ -299,19 +323,25 @@ function dw_pedagang_page_render() {
                 $offset = ($paged - 1) * $per_page;
                 $search = isset($_GET['s']) ? sanitize_text_field($_GET['s']) : '';
 
+                // FIX: Menambahkan alias 'p' pada query count untuk menghindari ambiguous column
                 $where_sql = "WHERE 1=1";
                 if (!empty($search)) {
-                    $where_sql .= $wpdb->prepare(" AND (nama_toko LIKE %s OR kelurahan LIKE %s)", "%$search%", "%$search%");
+                    // Gunakan p.nama_toko dan p.kelurahan agar spesifik ke tabel pedagang
+                    $where_sql .= $wpdb->prepare(" AND (p.nama_toko LIKE %s OR p.kelurahan LIKE %s)", "%$search%", "%$search%");
                 }
 
-                $total_items = $wpdb->get_var("SELECT COUNT(id) FROM $table_name $where_sql");
+                // FIX: Query Count menggunakan alias 'p'
+                $total_items = $wpdb->get_var("SELECT COUNT(p.id) FROM $table_name p $where_sql");
                 $total_pages = ceil($total_items / $per_page);
 
+                // FIX: Query Main menggunakan alias yang konsisten
                 $sql = "SELECT p.*, d.nama_desa, d.persentase_komisi_penjualan as komisi_desa, u.display_name as owner_name 
                         FROM $table_name p
-                        LEFT JOIN {$wpdb->prefix}dw_desa d ON p.id_desa = d.id
-                        LEFT JOIN {$wpdb->users} u ON p.id_user_pedagang = u.ID
-                        $where_sql ORDER BY p.created_at DESC LIMIT %d OFFSET %d";
+                        LEFT JOIN $table_desa d ON p.id_desa = d.id
+                        LEFT JOIN $table_users u ON p.id_user_pedagang = u.ID
+                        $where_sql 
+                        ORDER BY p.created_at DESC 
+                        LIMIT %d OFFSET %d";
                 
                 $rows = $wpdb->get_results($wpdb->prepare($sql, $per_page, $offset));
             ?>

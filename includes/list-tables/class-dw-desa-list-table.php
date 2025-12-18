@@ -1,13 +1,7 @@
 <?php
-/**
- * File Name:   class-dw-desa-list-table.php
- * File Folder: includes/list-tables/
- * File Path:   includes/list-tables/class-dw-desa-list-table.php
- *
- * --- UPDATE (STATISTIK DESA) ---
- * - Menambahkan kolom "Jml. Wisata" dan "Jml. Pedagang".
- * - Mengoptimalkan query dengan sub-query COUNT() agar performa tetap cepat.
- */
+if ( ! defined( 'ABSPATH' ) ) {
+    exit;
+}
 
 if ( ! class_exists( 'WP_List_Table' ) ) {
     require_once( ABSPATH . 'wp-admin/includes/class-wp-list-table.php' );
@@ -16,144 +10,124 @@ if ( ! class_exists( 'WP_List_Table' ) ) {
 class DW_Desa_List_Table extends WP_List_Table {
 
     public function __construct() {
-        parent::__construct( [ 'singular' => 'Desa', 'plural' => 'Desa', 'ajax' => false ] );
+        parent::__construct( [
+            'singular' => 'desa',
+            'plural'   => 'desa',
+            'ajax'     => false
+        ] );
     }
 
     public function get_columns() {
         return [
-            'cb'              => '<input type="checkbox" />',
-            'nama_desa'       => 'Nama Desa',
-            'kabupaten'       => 'Kabupaten/Kota',
-            'jumlah_wisata'   => 'Wisata',   // Kolom Baru
-            'jumlah_pedagang' => 'Pedagang', // Kolom Baru
-            'status'          => 'Status',
-            'created_at'      => 'Tanggal Dibuat'
+            'cb'             => '<input type="checkbox" />',
+            'display_name'   => 'Nama Desa',
+            'user_email'     => 'Email',
+            'user_login'     => 'Username',
+            'phone'          => 'No. Telepon',
+            'total_wisata'   => 'Total Wisata',   // Kolom Baru
+            'total_pedagang' => 'Total Pedagang', // Kolom Baru
+            'registered'     => 'Terdaftar',
+            'status'         => 'Status'
         ];
     }
-    
-    protected function get_bulk_actions() {
-        return ['delete' => 'Hapus'];
-    }
 
-    public function process_bulk_action() {
-        if ('delete' === $this->current_action()) {
-            $ids = isset($_REQUEST['ids']) ? array_map('intval', $_REQUEST['ids']) : [];
-            if (count($ids) > 0) {
-                global $wpdb;
-                foreach ($ids as $id) {
-                    // Logic hapus relasi bisa ditambahkan di sini jika perlu
-                    $wpdb->delete($wpdb->prefix . 'dw_desa', ['id' => $id]);
-                }
-            }
-        }
-    }
-
-    protected function get_sortable_columns() {
+    public function get_sortable_columns() {
         return [
-            'nama_desa'       => ['nama_desa', false],
-            'jumlah_wisata'   => ['count_wisata', false],   // Sortable berdasarkan count
-            'jumlah_pedagang' => ['count_pedagang', false], // Sortable berdasarkan count
-            'created_at'      => ['created_at', true]
+            'display_name' => [ 'display_name', true ],
+            'user_login'   => [ 'user_login', false ],
+            'registered'   => [ 'registered', false ]
         ];
     }
 
     protected function column_default( $item, $column_name ) {
-        switch($column_name) {
+        switch ( $column_name ) {
+            case 'user_email':
+            case 'user_login':
+                return $item[ $column_name ];
+            case 'phone':
+                return get_user_meta( $item['ID'], 'phone_number', true ) ?: '-';
+            case 'registered':
+                return date_i18n( get_option( 'date_format' ), strtotime( $item['user_registered'] ) );
             case 'status':
-                $status_style = ($item['status'] == 'aktif') ? 'color:green;font-weight:bold;' : 'color:orange;';
-                return sprintf('<span style="%s">%s</span>', $status_style, ucfirst(esc_html($item['status'])));
-            case 'created_at':
-                return date('d M Y', strtotime($item['created_at']));
-            // Renderer untuk kolom hitungan
-            case 'jumlah_wisata':
-                $count = isset($item['count_wisata']) ? $item['count_wisata'] : 0;
-                if ($count > 0) {
-                    return sprintf('<span class="dw-badge" style="background:#e0f2f1; color:#00695c; padding:4px 8px; border-radius:4px; font-weight:600;">%s Objek</span>', number_format_i18n($count));
-                }
-                return '<span style="color:#aaa;">-</span>';
-            case 'jumlah_pedagang':
-                $count = isset($item['count_pedagang']) ? $item['count_pedagang'] : 0;
-                if ($count > 0) {
-                    return sprintf('<span class="dw-badge" style="background:#fff3e0; color:#e65100; padding:4px 8px; border-radius:4px; font-weight:600;">%s Toko</span>', number_format_i18n($count));
-                }
-                return '<span style="color:#aaa;">-</span>';
+                $active = get_user_meta($item['ID'], 'account_status', true);
+                $badge_class = ($active === 'active') ? 'status-active' : 'status-inactive';
+                $badge_text  = ($active === 'active') ? 'Aktif' : 'Non-Aktif';
+                return sprintf('<span class="dw-badge %s">%s</span>', $badge_class, $badge_text);
+            
+            // Logika untuk menghitung jumlah wisata
+            case 'total_wisata':
+                $args = [
+                    'post_type'  => 'wisata',
+                    'meta_key'   => 'id_desa',
+                    'meta_value' => $item['ID'],
+                    'fields'     => 'ids',
+                    'numberposts' => -1
+                ];
+                $count = count( get_posts( $args ) );
+                return '<span class="dw-count-badge">' . $count . '</span>';
+
+            // Logika untuk menghitung jumlah pedagang yang terhubung
+            case 'total_pedagang':
+                $args = [
+                    'role'       => 'pedagang',
+                    'meta_key'   => 'id_desa',
+                    'meta_value' => $item['ID'],
+                    'fields'     => 'ID'
+                ];
+                $user_query = new WP_User_Query( $args );
+                $count = $user_query->get_total();
+                return '<span class="dw-count-badge">' . $count . '</span>';
+
             default:
-                return esc_html($item[ $column_name ]);
+                return print_r( $item, true );
         }
     }
 
-    protected function column_nama_desa( $item ) {
-        $page = $_REQUEST['page'] ?? 'dw-desa';
-        $nonce = wp_create_nonce('dw_desa_action');
-        
-        $actions = [
-            'edit'   => sprintf( '<a href="?page=%s&action=edit&id=%s">Edit</a>', $page, $item['id'] ),
-            'delete' => sprintf( 
-                '<a href="#" onclick="if(confirm(\'Hapus desa ini beserta data pedagang terkait?\')) { var f = document.createElement(\'form\'); f.method=\'POST\'; f.innerHTML=\'<input type=hidden name=action_desa value=delete><input type=hidden name=desa_id value=%s><input type=hidden name=_wpnonce value=%s>\'; document.body.appendChild(f); f.submit(); } return false;" style="color:red;">Hapus</a>', 
-                $item['id'], $nonce 
-            )
-        ];
-        
-        // Tambahkan foto kecil jika ada
-        $thumb = '';
-        if (!empty($item['foto'])) {
-            $thumb = sprintf('<img src="%s" style="width:32px; height:32px; object-fit:cover; border-radius:4px; float:left; margin-right:10px;" />', esc_url($item['foto']));
-        }
-        
-        return sprintf( '%1$s<strong>%2$s</strong> %3$s', $thumb, esc_html($item['nama_desa']), $this->row_actions( $actions ) );
+    protected function column_cb( $item ) {
+        return sprintf(
+            '<input type="checkbox" name="desa[]" value="%s" />', $item['ID']
+        );
     }
-    
-    protected function column_cb($item) {
-        return sprintf('<input type="checkbox" name="ids[]" value="%d" />', $item['id']);
+
+    protected function column_display_name( $item ) {
+        $actions = [
+            'edit'   => sprintf( '<a href="#" class="dw-edit-desa" data-id="%s">Edit</a>', $item['ID'] ),
+            'delete' => sprintf( '<a href="#" class="dw-delete-desa" data-id="%s">Hapus</a>', $item['ID'] ),
+        ];
+
+        return sprintf( '%1$s %2$s', '<strong>' . $item['display_name'] . '</strong>', $this->row_actions( $actions ) );
     }
 
     public function prepare_items() {
-        global $wpdb;
-        $table_desa     = $wpdb->prefix . 'dw_desa';
-        $table_wisata   = $wpdb->prefix . 'dw_wisata';
-        $table_pedagang = $wpdb->prefix . 'dw_pedagang';
-        
-        $this->process_bulk_action();
-        
-        $per_page = 20;
-        $this->_column_headers = [$this->get_columns(), [], $this->get_sortable_columns()];
-        
-        $where_sql = '';
-        if ( ! empty( $_REQUEST['s'] ) ) {
-            $search = '%' . $wpdb->esc_like( stripslashes( $_REQUEST['s'] ) ) . '%';
-            $where_sql = $wpdb->prepare(" WHERE d.nama_desa LIKE %s OR d.kabupaten LIKE %s", $search, $search);
-        }
+        $columns  = $this->get_columns();
+        $hidden   = [];
+        $sortable = $this->get_sortable_columns();
 
-        // Hitung total item
-        $total_items = $wpdb->get_var("SELECT COUNT(id) FROM $table_desa d $where_sql");
+        $this->_column_headers = [ $columns, $hidden, $sortable ];
 
+        $per_page     = 10;
         $current_page = $this->get_pagenum();
-        $offset = ( $current_page - 1 ) * $per_page;
-        
-        $orderby = $_REQUEST['orderby'] ?? 'created_at';
-        $order = $_REQUEST['order'] ?? 'desc';
-        
-        // Whitelist orderby untuk keamanan
-        $allowed_sorts = ['nama_desa', 'created_at', 'count_wisata', 'count_pedagang'];
-        if(!in_array($orderby, $allowed_sorts)) $orderby = 'created_at';
+        $search       = isset( $_REQUEST['s'] ) ? sanitize_text_field( $_REQUEST['s'] ) : '';
 
-        // --- QUERY UTAMA DENGAN SUB-QUERY HITUNGAN ---
-        // Ini lebih efisien daripada melakukan query COUNT di dalam loop (N+1 problem)
-        $query = "SELECT d.*, 
-                    (SELECT COUNT(w.id) FROM $table_wisata w WHERE w.id_desa = d.id AND w.status != 'trash') as count_wisata,
-                    (SELECT COUNT(p.id) FROM $table_pedagang p WHERE p.id_desa = d.id AND p.status_akun != 'suspend') as count_pedagang
-                  FROM $table_desa d 
-                  $where_sql 
-                  ORDER BY $orderby $order 
-                  LIMIT %d OFFSET %d";
-                  
-        $this->items = $wpdb->get_results( $wpdb->prepare($query, $per_page, $offset), ARRAY_A );
-        
-        $this->set_pagination_args([
-            'total_items' => $total_items,
+        $args = [
+            'role'    => 'desa',
+            'number'  => $per_page,
+            'offset'  => ( $current_page - 1 ) * $per_page,
+            'search'  => $search ? '*' . $search . '*' : '',
+            'orderby' => isset( $_REQUEST['orderby'] ) ? $_REQUEST['orderby'] : 'display_name',
+            'order'   => isset( $_REQUEST['order'] ) ? $_REQUEST['order'] : 'ASC',
+        ];
+
+        $user_query = new WP_User_Query( $args );
+
+        $this->items = array_map( function ( $user ) {
+            return (array) $user->data;
+        }, $user_query->get_results() );
+
+        $this->set_pagination_args( [
+            'total_items' => $user_query->get_total(),
             'per_page'    => $per_page,
-            'total_pages' => ceil($total_items / $per_page)
-        ]);
+            'total_pages' => ceil( $user_query->get_total() / $per_page ),
+        ] );
     }
 }
-?>

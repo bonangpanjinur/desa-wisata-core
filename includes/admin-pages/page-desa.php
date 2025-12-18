@@ -93,8 +93,7 @@ function dw_desa_page_render() {
     $total_pedagang = $wpdb->get_var("SELECT COUNT(id) FROM {$wpdb->prefix}dw_pedagang");
     $total_pedagang_independent = $wpdb->get_var("SELECT COUNT(id) FROM {$wpdb->prefix}dw_pedagang WHERE id_desa = 0");
     $total_pedagang_with_desa = $wpdb->get_var("SELECT COUNT(id) FROM {$wpdb->prefix}dw_pedagang WHERE id_desa > 0");
-    $total_komisi = $wpdb->get_var("SELECT SUM(persentase_komisi_penjualan) FROM $table_name");
-    $total_komisi = $total_komisi ? number_format($total_komisi, 2) : '0.00';
+    
     ?>
 
     <div class="wrap dw-wrap">
@@ -321,9 +320,14 @@ function dw_desa_page_render() {
                 $total_items = $wpdb->get_var("SELECT COUNT(id) FROM $table_name $where_sql");
                 $total_pages = ceil($total_items / $per_page);
 
+                // Modified SQL to include Wisata Count
                 $sql = "SELECT d.*, 
                         (SELECT COUNT(p.id) FROM {$wpdb->prefix}dw_pedagang p WHERE p.id_desa = d.id) as count_pedagang,
                         (SELECT SUM(p.sisa_transaksi) FROM {$wpdb->prefix}dw_pedagang p WHERE p.id_desa = d.id) as total_transaksi,
+                        (SELECT COUNT(pm.post_id) FROM {$wpdb->postmeta} pm 
+                         JOIN {$wpdb->posts} p ON pm.post_id = p.ID 
+                         WHERE pm.meta_key = 'id_desa' AND pm.meta_value = d.id 
+                         AND p.post_type = 'wisata' AND p.post_status = 'publish') as count_wisata,
                         u.display_name as admin_name
                         FROM $table_name d
                         LEFT JOIN {$wpdb->users} u ON d.id_user_desa = u.ID
@@ -349,7 +353,7 @@ function dw_desa_page_render() {
                             <th width="60">Foto</th>
                             <th width="25%">Nama Desa & Admin</th>
                             <th width="20%">Wilayah</th>
-                            <th width="18%">Relasi Pedagang</th>
+                            <th width="18%">Relasi & Aset</th>
                             <th width="12%">Total Transaksi</th>
                             <th width="10%">Status</th>
                             <th width="15%">Aksi</th>
@@ -371,21 +375,25 @@ function dw_desa_page_render() {
                             </td>
                             <td>
                                 <div class="dw-stat-pill"><span class="dashicons dashicons-store" style="font-size:14px; width:14px; height:14px;"></span> <?php echo $r->count_pedagang; ?> Pedagang</div>
-                                <div class="dw-stat-pill" style="margin-top:5px;"><span class="dashicons dashicons-chart-bar" style="font-size:14px; width:14px; height:14px;"></span> <?php echo $r->total_transaksi ? number_format($r->total_transaksi) : '0'; ?> Transaksi</div>
+                                <div class="dw-stat-pill" style="margin-top:5px; background: #e0f2f1; color: #004d40;"><span class="dashicons dashicons-location" style="font-size:14px; width:14px; height:14px;"></span> <?php echo $r->count_wisata; ?> Wisata</div>
                             </td>
                             <td>
-                                <div class="dw-stat-pill" style="background:#e7f9ed; color:#184a2c;"><span class="dashicons dashicons-money-alt" style="font-size:14px; width:14px; height:14px;"></span> <?php echo $r->persentase_komisi_penjualan; ?>%</div>
-                                <div class="dw-stat-pill" style="margin-top:5px; background:#fff7ed; color:#7c2d12;"><span class="dashicons dashicons-bank" style="font-size:14px; width:14px; height:14px;"></span> <?php echo esc_html($r->nama_bank_desa); ?></div>
+                                <div class="dw-stat-pill"><span class="dashicons dashicons-chart-bar" style="font-size:14px; width:14px; height:14px;"></span> <?php echo $r->total_transaksi ? number_format($r->total_transaksi) : '0'; ?></div>
                             </td>
                             <td><span class="dw-badge dw-badge-<?php echo $r->status; ?>"><?php echo ucfirst($r->status); ?></span></td>
                             <td>
-                                <a href="<?php echo $edit_url; ?>" class="button button-small">Edit</a>
-                                <form method="post" style="display:inline;" onsubmit="return confirm('Hapus desa ini? Data pedagang yang terhubung akan menjadi independen.');">
-                                    <?php wp_nonce_field('dw_desa_action'); ?>
-                                    <input type="hidden" name="action_desa" value="delete">
-                                    <input type="hidden" name="desa_id" value="<?php echo $r->id; ?>">
-                                    <button type="submit" class="button button-small" style="color:#d63638; border-color:#d63638;">Hapus</button>
-                                </form>
+                                <div style="display:flex; gap:5px;">
+                                    <a href="<?php echo $edit_url; ?>" class="button button-small">Edit</a>
+                                    <form method="post" onsubmit="return confirm('Hapus desa ini? Data pedagang yang terhubung akan menjadi independen.');">
+                                        <?php wp_nonce_field('dw_desa_action'); ?>
+                                        <input type="hidden" name="action_desa" value="delete">
+                                        <input type="hidden" name="desa_id" value="<?php echo $r->id; ?>">
+                                        <button type="submit" class="button button-small" style="color:#d63638; border-color:#d63638;">Hapus</button>
+                                    </form>
+                                </div>
+                                <div style="margin-top:5px;">
+                                    <div class="dw-stat-pill" style="background:#e7f9ed; color:#184a2c; font-size:10px;"><span class="dashicons dashicons-money-alt" style="font-size:10px;"></span> <?php echo $r->persentase_komisi_penjualan; ?>%</div>
+                                </div>
                             </td>
                         </tr>
                         <?php endforeach; else: ?>
