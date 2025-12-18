@@ -1,143 +1,141 @@
 <?php
-/**
- * File Name:   address-api.php
- * File Folder: includes/
- * File Path:   includes/address-api.php
- *
- * Mengelola integrasi dengan API eksternal untuk data wilayah Indonesia.
- * API Source: https://wilayah.id/
- *
- * PERBAIKAN: Menggunakan `set_transient` alih-alih `wp_cache_set` agar data
- * tersimpan di database dan tidak hilang saat refresh halaman (Persistent Cache).
- *
- * @package DesaWisataCore
- */
+// includes/address-api.php
 
 if ( ! defined( 'ABSPATH' ) ) {
-	exit;
+    exit;
 }
 
-// Durasi cache (dalam detik) - 1 Minggu agar sangat cepat
-define('DW_WILAYAH_CACHE_DURATION', WEEK_IN_SECONDS); 
+class DW_Address_API {
 
-/**
- * Mengambil daftar semua provinsi dari API.
- * Hasilnya disimpan dalam transient database.
- *
- * @return array Daftar provinsi atau array kosong jika gagal.
- */
-function dw_get_api_provinsi() {
-    $cache_key = 'dw_transient_provinsi_v4'; // Ganti versi key untuk refresh cache
-    $provinsi = get_transient( $cache_key ); // Ubah ke get_transient
-
-    if ( false === $provinsi ) {
-        $response = wp_remote_get( 'https://wilayah.id/api/provinces.json', ['timeout' => 15] ); // Tambah timeout
-        
-        if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) {
-            error_log("Gagal mengambil data provinsi: " . (is_wp_error($response) ? $response->get_error_message() : wp_remote_retrieve_response_code($response)));
-            return [];
-        }
-        
-        $body = json_decode( wp_remote_retrieve_body( $response ), true );
-        $provinsi = ( isset( $body['data'] ) && is_array( $body['data'] ) ) ? $body['data'] : [];
-        
-        if (!empty($provinsi)) {
-            set_transient( $cache_key, $provinsi, DW_WILAYAH_CACHE_DURATION ); // Simpan ke DB
-        }
+    /**
+     * Mendapatkan API Key dari settingan
+     */
+    private static function get_api_key() {
+        $options = get_option( 'dw_settings_ongkir', array() );
+        return isset( $options['api_key'] ) ? $options['api_key'] : '';
     }
-    return $provinsi;
-}
 
-/**
- * Mengambil daftar kabupaten/kota berdasarkan ID provinsi.
- *
- * @param string $provinsi_id ID provinsi dari API.
- * @return array Daftar kabupaten atau array kosong jika gagal.
- */
-function dw_get_api_kabupaten( $provinsi_id ) {
-    $provinsi_id = preg_replace( '/[^0-9]/', '', $provinsi_id );
-    if ( empty( $provinsi_id ) ) return [];
-
-    $cache_key = 'dw_transient_kabupaten_v4_' . $provinsi_id;
-    $kabupaten = get_transient( $cache_key );
-
-    if ( false === $kabupaten ) {
-        $response = wp_remote_get( "https://wilayah.id/api/regencies/{$provinsi_id}.json", ['timeout' => 15] );
-        
-        if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) {
-            error_log("Gagal mengambil data kabupaten (Prov ID: {$provinsi_id})");
-            return [];
-        }
-        
-        $body = json_decode( wp_remote_retrieve_body( $response ), true );
-        $kabupaten = ( isset( $body['data'] ) && is_array( $body['data'] ) ) ? $body['data'] : [];
-        
-        if (!empty($kabupaten)) {
-            set_transient( $cache_key, $kabupaten, DW_WILAYAH_CACHE_DURATION );
-        }
+    /**
+     * Mendapatkan Base URL API (Misal RajaOngkir Starter/Pro)
+     */
+    private static function get_base_url() {
+        // Ganti 'starter' dengan 'pro' jika menggunakan akun pro
+        return 'https://api.rajaongkir.com/starter'; 
     }
-    return $kabupaten;
-}
 
-/**
- * Mengambil daftar kecamatan berdasarkan ID kabupaten/kota.
- *
- * @param string $kabupaten_id ID kabupaten dari API.
- * @return array Daftar kecamatan atau array kosong jika gagal.
- */
-function dw_get_api_kecamatan( $kabupaten_id ) {
-    $kabupaten_id = preg_replace( '/[^0-9.]/', '', $kabupaten_id );
-    if ( empty( $kabupaten_id ) ) return [];
-
-    $cache_key = 'dw_transient_kecamatan_v4_' . $kabupaten_id;
-    $kecamatan = get_transient( $cache_key );
-
-    if ( false === $kecamatan ) {
-        $response = wp_remote_get( "https://wilayah.id/api/districts/{$kabupaten_id}.json", ['timeout' => 15] );
-        
-        if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) {
-             error_log("Gagal mengambil data kecamatan (Kab ID: {$kabupaten_id})");
-            return [];
+    /**
+     * Fetch all provinces
+     */
+    public static function get_provinces() {
+        // Cek Transient (Cache) WordPress selama 1 minggu
+        $cached_provinces = get_transient( 'dw_provinces_list' );
+        if ( false !== $cached_provinces ) {
+            return $cached_provinces;
         }
-        
-        $body = json_decode( wp_remote_retrieve_body( $response ), true );
-        $kecamatan = ( isset( $body['data'] ) && is_array( $body['data'] ) ) ? $body['data'] : [];
-        
-        if (!empty($kecamatan)) {
-            set_transient( $cache_key, $kecamatan, DW_WILAYAH_CACHE_DURATION );
+
+        $api_key = self::get_api_key();
+        if ( empty( $api_key ) ) return array();
+
+        $response = wp_remote_get( self::get_base_url() . '/province', array(
+            'headers' => array( 'key' => $api_key )
+        ) );
+
+        if ( is_wp_error( $response ) ) {
+            error_log( 'DW API Error (Provinces): ' . $response->get_error_message() );
+            return array();
         }
+
+        $body = wp_remote_retrieve_body( $response );
+        $data = json_decode( $body, true );
+
+        if ( isset( $data['rajaongkir']['results'] ) ) {
+            $provinces = $data['rajaongkir']['results'];
+            // Simpan cache
+            set_transient( 'dw_provinces_list', $provinces, WEEK_IN_SECONDS );
+            return $provinces;
+        }
+
+        return array();
     }
-    return $kecamatan;
-}
 
-/**
- * Mengambil daftar kelurahan/desa berdasarkan ID kecamatan.
- *
- * @param string $kecamatan_id ID kecamatan dari API.
- * @return array Daftar desa atau array kosong jika gagal.
- */
-function dw_get_api_desa( $kecamatan_id ) {
-    $kecamatan_id = preg_replace( '/[^0-9.]/', '', $kecamatan_id );
-    if ( empty( $kecamatan_id ) ) return [];
+    /**
+     * Fetch cities by province ID (Perbaikan Poin 2)
+     */
+    public static function get_cities( $province_id ) {
+        // Cek Cache spesifik per provinsi
+        $cache_key = 'dw_cities_' . $province_id;
+        $cached_cities = get_transient( $cache_key );
 
-    $cache_key = 'dw_transient_desa_v4_' . $kecamatan_id;
-    $desa = get_transient( $cache_key );
-
-    if ( false === $desa ) {
-        $response = wp_remote_get( "https://wilayah.id/api/villages/{$kecamatan_id}.json", ['timeout' => 15] );
-        
-         if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) {
-             error_log("Gagal mengambil data desa (Kec ID: {$kecamatan_id})");
-            return [];
+        if ( false !== $cached_cities ) {
+            return $cached_cities;
         }
-        
-        $body = json_decode( wp_remote_retrieve_body( $response ), true );
-        $desa = ( isset( $body['data'] ) && is_array( $body['data'] ) ) ? $body['data'] : [];
-        
-        if (!empty($desa)) {
-            set_transient( $cache_key, $desa, DW_WILAYAH_CACHE_DURATION );
+
+        $api_key = self::get_api_key();
+        if ( empty( $api_key ) ) {
+            return new WP_Error( 'no_api_key', 'API Key RajaOngkir belum diatur.' );
         }
+
+        $url = self::get_base_url() . '/city?province=' . $province_id;
+
+        $response = wp_remote_get( $url, array(
+            'headers' => array( 'key' => $api_key )
+        ) );
+
+        if ( is_wp_error( $response ) ) {
+            return new WP_Error( 'api_error', $response->get_error_message() );
+        }
+
+        $body = wp_remote_retrieve_body( $response );
+        $data = json_decode( $body, true );
+
+        if ( isset( $data['rajaongkir']['status']['code'] ) && $data['rajaongkir']['status']['code'] != 200 ) {
+            return new WP_Error( 'api_error', $data['rajaongkir']['status']['description'] );
+        }
+
+        if ( isset( $data['rajaongkir']['results'] ) ) {
+            $cities = $data['rajaongkir']['results'];
+            set_transient( $cache_key, $cities, WEEK_IN_SECONDS ); // Cache 1 minggu
+            return $cities;
+        }
+
+        return array();
     }
-    return $desa;
+
+    /**
+     * Mendapatkan ongkos kirim
+     */
+    public static function get_cost( $origin, $destination, $weight, $courier ) {
+        $api_key = self::get_api_key();
+        if ( empty( $api_key ) ) return new WP_Error('no_key', 'API Key missing');
+
+        $url = self::get_base_url() . '/cost';
+
+        $args = array(
+            'headers' => array(
+                'key' => $api_key,
+                'content-type' => 'application/x-www-form-urlencoded'
+            ),
+            'body' => array(
+                'origin' => $origin,
+                'destination' => $destination,
+                'weight' => $weight,
+                'courier' => $courier
+            )
+        );
+
+        $response = wp_remote_post( $url, $args );
+
+        if ( is_wp_error( $response ) ) {
+            return $response;
+        }
+
+        $body = wp_remote_retrieve_body( $response );
+        $data = json_decode( $body, true );
+
+        if ( isset( $data['rajaongkir']['results'][0]['costs'] ) ) {
+            return $data['rajaongkir']['results'][0]['costs'];
+        }
+
+        return new WP_Error( 'no_cost', 'Gagal mengambil data ongkir.' );
+    }
 }
-?>
