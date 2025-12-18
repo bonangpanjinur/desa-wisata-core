@@ -6,6 +6,12 @@
 
 defined('ABSPATH') || exit;
 
+// 1. Pastikan class API Address tersedia
+$address_api_path = dirname(dirname(__FILE__)) . '/address-api.php';
+if (file_exists($address_api_path)) {
+    require_once $address_api_path;
+}
+
 function dw_pedagang_page_render() {
     global $wpdb;
     $table_name = $wpdb->prefix . 'dw_pedagang';
@@ -566,7 +572,7 @@ function dw_pedagang_page_render() {
                                 </div>
                             </div>
 
-                            <!-- TAB 2: LOKASI -->
+                            <!-- TAB 2: LOKASI (DIPERBAIKI) -->
                             <div id="tab-lokasi" class="dw-tab-pane">
                                 <div class="dw-card">
                                     <div class="dw-card-header"><h3>Alamat & Wilayah</h3></div>
@@ -575,13 +581,42 @@ function dw_pedagang_page_render() {
                                             <div class="dw-col-6">
                                                 <div class="dw-form-group">
                                                     <label>Provinsi</label>
-                                                    <select name="pedagang_prov" class="dw-region-prov dw-form-control" data-current="<?php echo esc_attr($edit_data->api_provinsi_id ?? ''); ?>"><option value="">Memuat...</option></select>
+                                                    <!-- Load Provinsi via PHP -->
+                                                    <select name="pedagang_prov" class="dw-region-prov dw-form-control" data-current="<?php echo esc_attr($edit_data->api_provinsi_id ?? ''); ?>">
+                                                        <option value="">Pilih Provinsi...</option>
+                                                        <?php
+                                                        if (class_exists('DW_Address_API')) {
+                                                            $provs = DW_Address_API::get_provinces();
+                                                            foreach($provs as $v) {
+                                                                // Address API return format is array of arrays: [['id'=>..., 'name'=>...], ...]
+                                                                $id = $v['id'];
+                                                                $name = $v['name'];
+                                                                $selected = ($edit_data && $edit_data->api_provinsi_id == $id) ? 'selected' : '';
+                                                                echo "<option value='$id' $selected>$name</option>";
+                                                            }
+                                                        }
+                                                        ?>
+                                                    </select>
                                                 </div>
                                             </div>
                                             <div class="dw-col-6">
                                                 <div class="dw-form-group">
                                                     <label>Kota/Kabupaten</label>
-                                                    <select name="pedagang_kota" class="dw-region-kota dw-form-control" data-current="<?php echo esc_attr($edit_data->api_kabupaten_id ?? ''); ?>" disabled><option value="">Pilih Kota...</option></select>
+                                                    <!-- Load Kota via PHP jika Edit Mode -->
+                                                    <select name="pedagang_kota" class="dw-region-kota dw-form-control" data-current="<?php echo esc_attr($edit_data->api_kabupaten_id ?? ''); ?>">
+                                                        <option value="">Pilih Kota...</option>
+                                                        <?php
+                                                        if ($edit_data && !empty($edit_data->api_provinsi_id) && class_exists('DW_Address_API')) {
+                                                            $cities = DW_Address_API::get_cities($edit_data->api_provinsi_id);
+                                                            foreach($cities as $v) {
+                                                                $id = $v['id'];
+                                                                $name = $v['name'];
+                                                                $selected = ($edit_data->api_kabupaten_id == $id) ? 'selected' : '';
+                                                                echo "<option value='$id' $selected>$name</option>";
+                                                            }
+                                                        }
+                                                        ?>
+                                                    </select>
                                                 </div>
                                             </div>
                                         </div>
@@ -589,13 +624,41 @@ function dw_pedagang_page_render() {
                                             <div class="dw-col-6">
                                                 <div class="dw-form-group">
                                                     <label>Kecamatan</label>
-                                                    <select name="pedagang_kec" class="dw-region-kec dw-form-control" data-current="<?php echo esc_attr($edit_data->api_kecamatan_id ?? ''); ?>" disabled><option value="">Pilih Kecamatan...</option></select>
+                                                    <!-- Load Kecamatan via PHP jika Edit Mode -->
+                                                    <select name="pedagang_kec" class="dw-region-kec dw-form-control" data-current="<?php echo esc_attr($edit_data->api_kecamatan_id ?? ''); ?>">
+                                                        <option value="">Pilih Kecamatan...</option>
+                                                        <?php
+                                                        if ($edit_data && !empty($edit_data->api_kabupaten_id) && class_exists('DW_Address_API')) {
+                                                            $dists = DW_Address_API::get_subdistricts($edit_data->api_kabupaten_id);
+                                                            foreach($dists as $v) {
+                                                                $id = $v['id'];
+                                                                $name = $v['name'];
+                                                                $selected = ($edit_data->api_kecamatan_id == $id) ? 'selected' : '';
+                                                                echo "<option value='$id' $selected>$name</option>";
+                                                            }
+                                                        }
+                                                        ?>
+                                                    </select>
                                                 </div>
                                             </div>
                                             <div class="dw-col-6">
                                                 <div class="dw-form-group">
                                                     <label>Kelurahan / Desa <span class="required">*</span></label>
-                                                    <select name="pedagang_nama_id" class="dw-region-desa dw-form-control" data-current="<?php echo esc_attr($edit_data->api_kelurahan_id ?? ''); ?>" disabled><option value="">Pilih Kelurahan...</option></select>
+                                                    <!-- Load Desa via PHP jika Edit Mode -->
+                                                    <select name="pedagang_nama_id" class="dw-region-desa dw-form-control" data-current="<?php echo esc_attr($edit_data->api_kelurahan_id ?? ''); ?>">
+                                                        <option value="">Pilih Kelurahan...</option>
+                                                        <?php
+                                                        if ($edit_data && !empty($edit_data->api_kecamatan_id) && class_exists('DW_Address_API')) {
+                                                            $vills = DW_Address_API::get_villages($edit_data->api_kecamatan_id);
+                                                            foreach($vills as $v) {
+                                                                $id = $v['id'];
+                                                                $name = $v['name'];
+                                                                $selected = ($edit_data->api_kelurahan_id == $id) ? 'selected' : '';
+                                                                echo "<option value='$id' $selected>$name</option>";
+                                                            }
+                                                        }
+                                                        ?>
+                                                    </select>
                                                 </div>
                                             </div>
                                         </div>
@@ -860,66 +923,52 @@ function dw_pedagang_page_render() {
                     $('.select2-districts').select2({ width: '100%' });
                 }
 
-                // --- 3. HELPER LOAD AJAX OPTION (SUPER ROBUST VERSION) ---
+                // --- 3. HELPER LOAD AJAX OPTION (UPDATED FOR YOUR API) ---
                 function loadRegionOptions(action, parentId, $targetEl, selectedId = null, placeholder = 'Pilih...') {
                     $targetEl.html('<option value="">Memuat...</option>').prop('disabled', true);
                     
-                    var data = { action: action, nonce: '<?php echo wp_create_nonce("dw_region_nonce"); ?>' };
+                    // Gunakan action yang sesuai dengan address-api.php
+                    var ajaxAction = '';
+                    var data = { nonce: '<?php echo wp_create_nonce("dw_region_nonce"); ?>' };
                     
-                    // Kirim semua variasi parameter ID agar server pasti menerimanya
                     if(action === 'dw_get_cities') { 
-                        data.prov_id = parentId; data.province_id = parentId; data.id_prov = parentId; 
+                        ajaxAction = 'dw_fetch_regencies'; // SESUAI FILE ANDA
+                        data.province_id = parentId; // SESUAI PARAMETER API
                     }
                     if(action === 'dw_get_districts') { 
-                        data.city_id = parentId; data.kab_id = parentId; data.regency_id = parentId; 
+                        ajaxAction = 'dw_fetch_districts'; // SESUAI FILE ANDA
+                        data.regency_id = parentId; // SESUAI PARAMETER API
                     }
                     if(action === 'dw_get_villages') { 
-                        data.dist_id = parentId; data.kec_id = parentId; data.district_id = parentId; 
+                        ajaxAction = 'dw_fetch_villages'; // SESUAI FILE ANDA
+                        data.district_id = parentId; // SESUAI PARAMETER API
                     }
+                    if(action === 'dw_get_provinces') {
+                        ajaxAction = 'dw_fetch_provinces';
+                    }
+
+                    data.action = ajaxAction;
 
                     $.ajax({
                         url: ajaxurl,
-                        type: 'POST',
-                        dataType: 'json', // Paksa parse JSON
+                        type: 'GET', // GANTI DARI POST KE GET
+                        dataType: 'json',
                         data: data,
                         success: function(res) {
                             $targetEl.empty().prop('disabled', false);
                             $targetEl.append('<option value="">' + placeholder + '</option>');
                             
-                            console.log('API Response for ' + action + ':', res); // DEBUG
-
                             if (res.success) {
-                                // Normalisasi struktur data
                                 var items = res.data;
+                                // Handle berbagai format return data (jika ada wrapper 'data' atau 'results')
                                 if (items && items.data) items = items.data;
                                 if (items && items.results) items = items.results;
                                 
-                                // Pastikan items ada isinya
-                                if (items && (Array.isArray(items) || typeof items === 'object')) {
+                                if (items && Array.isArray(items)) {
                                     var count = 0;
                                     $.each(items, function(i, item) {
-                                        var val = null;
-                                        var txt = null;
-
-                                        if (typeof item === 'object' && item !== null) {
-                                            // Deteksi ID (berbagai kemungkinan key)
-                                            val = item.code || item.id || item.city_id || item.district_id || item.subdistrict_id || item.province_id || item.kode || item.no;
-                                            
-                                            // Deteksi Nama (berbagai kemungkinan key)
-                                            txt = item.name || item.nama || item.text || item.label || 
-                                                  item.city_name || item.district_name || item.province_name || item.village_name ||
-                                                  item.province || item.city || item.district || item.subdistrict || item.village ||
-                                                  item.kabupaten || item.kota || item.kecamatan || item.kelurahan || item.desa;
-                                        } else {
-                                            // Asumsi Key-Value pair (i=ID, item=Name) atau Array of Strings
-                                            if (Array.isArray(items)) {
-                                                val = item;
-                                                txt = item;
-                                            } else {
-                                                val = i;
-                                                txt = item;
-                                            }
-                                        }
+                                        var val = item.id || item.code;
+                                        var txt = item.name || item.nama;
                                         
                                         if(val && txt) {
                                             var isSelected = (selectedId && String(val) === String(selectedId)) ? 'selected' : '';
@@ -929,8 +978,7 @@ function dw_pedagang_page_render() {
                                     });
                                     
                                     if(count === 0) {
-                                        $targetEl.append('<option value="">Data kosong (Format Error)</option>');
-                                        console.warn('Data ditemukan tapi format item tidak dikenali:', items);
+                                        $targetEl.append('<option value="">Data kosong</option>');
                                     }
                                 } else {
                                     $targetEl.append('<option value="">Data tidak ditemukan</option>');
@@ -939,13 +987,12 @@ function dw_pedagang_page_render() {
                                 $targetEl.trigger('change');
                             } else {
                                  console.warn('API Response False:', res);
-                                 $targetEl.html('<option value="">Gagal: ' + (res.data || 'Unknown error') + '</option>');
+                                 $targetEl.html('<option value="">Gagal memuat data</option>');
                             }
                         },
                         error: function(xhr, status, error) {
                             console.error('AJAX Error:', error);
-                            console.log('Response Raw:', xhr.responseText);
-                            $targetEl.html('<option value="">Error Jaringan/Server</option>');
+                            $targetEl.html('<option value="">Error Jaringan</option>');
                         }
                     });
                 }
@@ -955,6 +1002,7 @@ function dw_pedagang_page_render() {
                 // A. Load Provinsi on Load
                 var $selProv = $('select[name="pedagang_prov"]');
                 var curProv = $selProv.data('current');
+                // MODIFIKASI: Hanya load AJAX jika PHP gagal load (opsi <= 1)
                 if($selProv.find('option').length <= 1) {
                      loadRegionOptions('dw_get_provinces', null, $selProv, curProv, 'Pilih Provinsi');
                 }
@@ -1035,7 +1083,7 @@ function dw_pedagang_page_render() {
                 
                 // E. Update Desa Text
                 $(document).on('change', 'select[name="pedagang_nama_id"]', function() {
-                     $('input[name="kelurahan_text"]').val($(this).find('option:selected').text());
+                      $('input[name="kelurahan_text"]').val($(this).find('option:selected').text());
                 });
 
 
@@ -1054,23 +1102,22 @@ function dw_pedagang_page_render() {
                     if (kecId && (force || kecId != lastKecId)) {
                         $wrappers.html('<div style="text-align:center; padding:10px; color:#666;">Memuat data desa...</div>');
                         
-                        var data = { action: 'dw_get_villages', nonce: '<?php echo wp_create_nonce("dw_region_nonce"); ?>' };
-                        data.dist_id = kecId; data.kec_id = kecId; data.district_id = kecId;
+                        var data = { 
+                            action: 'dw_fetch_villages', // FIXED ACTION NAME
+                            district_id: kecId,          // FIXED PARAM NAME
+                            nonce: '<?php echo wp_create_nonce("dw_region_nonce"); ?>' 
+                        };
 
                         $.ajax({
                             url: ajaxurl,
-                            type: 'POST',
+                            type: 'GET', // GANTI DARI POST KE GET
                             dataType: 'json',
                             data: data,
                             success: function(res) {
                                 $wrappers.empty(); 
                                 if(res.success) {
-                                    // Re-use robust logic
                                     var villages = res.data;
-                                    if (villages && villages.data) villages = villages.data;
-                                    if (villages && villages.results) villages = villages.results;
-
-                                    if (villages && (Array.isArray(villages) || typeof villages === 'object')) {
+                                    if (villages && Array.isArray(villages)) {
                                         var count = 0;
                                         $wrappers.each(function(){
                                             var $wrap = $(this);
@@ -1079,16 +1126,8 @@ function dw_pedagang_page_render() {
                                             if(typeof savedData !== 'object' || savedData === null) savedData = [];
 
                                             $.each(villages, function(i, v){
-                                                var val = null;
-                                                var txt = null;
-
-                                                if (typeof v === 'object' && v !== null) {
-                                                    val = v.code || v.id || v.village_id || v.kode || v.no;
-                                                    txt = v.name || v.nama || v.text || v.village_name || v.desa || v.kelurahan;
-                                                } else {
-                                                    if(Array.isArray(villages)) { val = v; txt = v; }
-                                                    else { val = i; txt = v; }
-                                                }
+                                                var val = v.id || v.code;
+                                                var txt = v.name || v.nama;
                                                 
                                                 if(val && txt) {
                                                     var savedDataStrings = savedData.map(String);
@@ -1105,10 +1144,10 @@ function dw_pedagang_page_render() {
                                         }
                                         $wrappers.data('loaded-parent', kecId);
                                     } else {
-                                        $wrappers.html('<p class="dw-empty-msg">Data desa kosong atau format salah.</p>');
+                                        $wrappers.html('<p class="dw-empty-msg">Data desa kosong.</p>');
                                     }
                                 } else {
-                                    $wrappers.html('<p class="dw-empty-msg">Gagal memuat data desa: ' + (res.data || 'Unknown error') + '</p>');
+                                    $wrappers.html('<p class="dw-empty-msg">Gagal memuat data desa.</p>');
                                 }
                             },
                             error: function(xhr, status, error) {
@@ -1121,44 +1160,36 @@ function dw_pedagang_page_render() {
                         $wrappers.data('loaded-parent', '');
                     }
 
-                    // B. Handle Districts (Select2) - SUPER ROBUST VERSION TOO
+                    // B. Handle Districts (Select2)
                     var $districtSelects = $('select[name="ojek_beda_kec_dekat_ids[]"], select[name="ojek_beda_kec_jauh_ids[]"]');
                     var lastKabId = $districtSelects.data('loaded-parent');
 
                     if (kabId && (force || kabId != lastKabId)) {
                         $districtSelects.prop('disabled', true);
                         
-                        var data = { action: 'dw_get_districts', nonce: '<?php echo wp_create_nonce("dw_region_nonce"); ?>' };
-                        data.city_id = kabId; data.kab_id = kabId; data.regency_id = kabId;
+                        var data = { 
+                            action: 'dw_fetch_districts', // FIXED ACTION NAME
+                            regency_id: kabId,            // FIXED PARAM NAME
+                            nonce: '<?php echo wp_create_nonce("dw_region_nonce"); ?>' 
+                        };
 
                         $.ajax({
                             url: ajaxurl,
-                            type: 'POST',
+                            type: 'GET', // GANTI DARI POST KE GET
                             dataType: 'json',
                             data: data,
                             success: function(res) {
                                 $districtSelects.prop('disabled', false);
                                 if(res.success) {
                                     var districts = res.data;
-                                    if (districts && districts.data) districts = districts.data;
-                                    if (districts && districts.results) districts = districts.results;
-
-                                    if (districts && (Array.isArray(districts) || typeof districts === 'object')) {
+                                    if (districts && Array.isArray(districts)) {
                                         $districtSelects.each(function(){
                                             var $sel = $(this);
                                             var currentVal = $sel.val() || [];
                                             $sel.empty();
                                             $.each(districts, function(i, d){
-                                                var val = null;
-                                                var txt = null;
-
-                                                if (typeof d === 'object' && d !== null) {
-                                                    val = d.code || d.id || d.district_id || d.kode || d.no;
-                                                    txt = d.name || d.nama || d.text || d.district_name || d.kecamatan;
-                                                } else {
-                                                    if(Array.isArray(districts)) { val = d; txt = d; }
-                                                    else { val = i; txt = d; }
-                                                }
+                                                var val = d.id || d.code;
+                                                var txt = d.name || d.nama;
 
                                                 if(val && txt) {
                                                     var isSelected = currentVal.includes(val);
