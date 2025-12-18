@@ -36,6 +36,8 @@ function dw_core_load_dependencies() {
 	require_once DW_CORE_PLUGIN_DIR . 'includes/helpers.php'; 
 	require_once DW_CORE_PLUGIN_DIR . 'includes/logs.php';
     require_once DW_CORE_PLUGIN_DIR . 'includes/address-api.php';
+	require_once DW_CORE_PLUGIN_DIR . 'includes/relasi-handler.php';
+	require_once DW_CORE_PLUGIN_DIR . 'includes/commission-handler.php';
 
     // -----------------------------------------------------------------
     // TAHAP 2: Logika Bisnis & Penanganan Data

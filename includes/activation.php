@@ -77,6 +77,8 @@ function dw_core_activate_plugin() {
         total_ulasan_toko INT DEFAULT 0,
         status_pendaftaran ENUM('menunggu','disetujui','ditolak','menunggu_desa') DEFAULT 'menunggu_desa',
         status_akun ENUM('aktif','nonaktif','suspend','nonaktif_habis_kuota') DEFAULT 'nonaktif',
+        is_independent TINYINT(1) DEFAULT 1,
+        approved_by VARCHAR(20) DEFAULT NULL,
         sisa_transaksi INT DEFAULT 0,
         shipping_ojek_lokal_aktif TINYINT(1) DEFAULT 0,
         shipping_ojek_lokal_zona JSON DEFAULT NULL,
