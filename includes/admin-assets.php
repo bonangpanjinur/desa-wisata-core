@@ -1,40 +1,44 @@
 <?php
-if ( ! defined( 'ABSPATH' ) ) exit;
+// includes/admin-assets.php
+
+if ( ! defined( 'ABSPATH' ) ) {
+    exit;
+}
 
 /**
- * Enqueue Admin Scripts & Styles
+ * Enqueue scripts and styles for admin
  */
 function dw_enqueue_admin_assets( $hook ) {
-    // Opsional: Batasi hanya di halaman plugin Anda agar tidak bentrok
-    // if ( strpos($hook, 'page_dw_') === false ) return; 
+    // Definisi URL Plugin yang aman
+    $plugin_url = defined('DW_PLUGIN_URL') ? DW_PLUGIN_URL : plugin_dir_url( dirname( __FILE__ ) );
+    $version = (defined('WP_DEBUG') && WP_DEBUG) ? time() : '1.0.1';
 
-    // Tentukan path file utama plugin untuk mendapatkan URL root yang benar
-    // dirname(__FILE__) = includes/
-    // dirname(dirname(__FILE__)) = root plugin/
-    $plugin_root = dirname( dirname( __FILE__ ) ) . '/desa-wisata-core.php';
+    // 1. CSS Admin
+    wp_enqueue_style( 'dw-admin-style', $plugin_url . 'assets/css/admin-styles.css', array(), $version );
 
-    // 1. CSS Admin (Arahkan ke root/assets/css/...)
-    wp_enqueue_style( 
-        'dw-admin-style', 
-        plugins_url( 'assets/css/admin-styles.css', $plugin_root ), 
-        array(), 
-        '1.0.0' 
-    );
+    // 2. JS: dw-admin-script.js (Script Baru/Utama kita)
+    wp_enqueue_script( 'dw-admin-script', $plugin_url . 'assets/js/dw-admin-script.js', array( 'jquery' ), $version, true );
 
-    // 2. JS Admin (Arahkan ke root/assets/js/...)
-    wp_enqueue_script( 
-        'dw-admin-script', 
-        plugins_url( 'assets/js/admin-scripts.js', $plugin_root ), 
-        array( 'jquery' ), // Wajib load jQuery
-        '1.0.0', 
-        true 
-    );
-
-    // 3. PENTING: Kirim variabel PHP ke JS (Localization)
-    // Pastikan handler AJAX di PHP memverifikasi nonce 'dw_admin_nonce'
-    wp_localize_script( 'dw-admin-script', 'dw_admin_vars', array(
-        'ajaxurl' => admin_url( 'admin-ajax.php' ),
-        'nonce'   => wp_create_nonce( 'dw_admin_nonce' ), // Kunci keamanan global admin
+    // Localize untuk dw-admin-script.js (menggunakan 'dw_ajax')
+    wp_localize_script( 'dw-admin-script', 'dw_ajax', array(
+        'ajax_url' => admin_url( 'admin-ajax.php' ),
+        'nonce'    => wp_create_nonce( 'dw_admin_nonce' ),
+        'site_url' => site_url()
     ));
+
+    // 3. JS: admin-scripts.js (Script Lama/Legacy yang menyebabkan error)
+    // Kita enqueue ulang atau pastikan jika sudah ter-enqueue oleh file lain, dia punya variabelnya.
+    // Jika file ini ada di folder assets/js/admin-scripts.js:
+    if ( file_exists( dirname( dirname( __FILE__ ) ) . '/assets/js/admin-scripts.js' ) ) {
+        wp_enqueue_script( 'dw-legacy-admin-script', $plugin_url . 'assets/js/admin-scripts.js', array('jquery'), $version, true );
+        
+        // FIX ERROR: "dw_admin_vars tidak ditemukan"
+        // Kita suntikkan variabel yang dibutuhkan oleh script lama ini.
+        wp_localize_script( 'dw-legacy-admin-script', 'dw_admin_vars', array(
+            'ajax_url' => admin_url( 'admin-ajax.php' ),
+            'nonce'    => wp_create_nonce( 'dw_admin_nonce' ),
+            'root'     => esc_url_raw( rest_url() )
+        ));
+    }
 }
 add_action( 'admin_enqueue_scripts', 'dw_enqueue_admin_assets' );

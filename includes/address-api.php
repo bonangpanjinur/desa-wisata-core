@@ -8,134 +8,209 @@ if ( ! defined( 'ABSPATH' ) ) {
 class DW_Address_API {
 
     /**
-     * Mendapatkan API Key dari settingan
-     */
-    private static function get_api_key() {
-        $options = get_option( 'dw_settings_ongkir', array() );
-        return isset( $options['api_key'] ) ? $options['api_key'] : '';
-    }
-
-    /**
-     * Mendapatkan Base URL API (Misal RajaOngkir Starter/Pro)
+     * URL API Wilayah Indonesia (Wilayah.id)
      */
     private static function get_base_url() {
-        // Ganti 'starter' dengan 'pro' jika menggunakan akun pro
-        return 'https://api.rajaongkir.com/starter'; 
+        return 'https://wilayah.id/api';
     }
 
     /**
      * Fetch all provinces
+     * Endpoint: https://wilayah.id/api/provinces.json
      */
     public static function get_provinces() {
-        // Cek Transient (Cache) WordPress selama 1 minggu
-        $cached_provinces = get_transient( 'dw_provinces_list' );
-        if ( false !== $cached_provinces ) {
+        // 1. Cek Cache (Cache Key Baru '_v4' untuk reset)
+        $cached_provinces = get_transient( 'dw_provinces_list_v4' );
+        if ( false !== $cached_provinces && !empty($cached_provinces) ) {
             return $cached_provinces;
         }
 
-        $api_key = self::get_api_key();
-        if ( empty( $api_key ) ) return array();
+        $provinces = array();
 
-        $response = wp_remote_get( self::get_base_url() . '/province', array(
-            'headers' => array( 'key' => $api_key )
-        ) );
+        // 2. Fetch API
+        $response = wp_remote_get( self::get_base_url() . '/provinces.json', array( 'timeout' => 10 ) );
 
-        if ( is_wp_error( $response ) ) {
-            error_log( 'DW API Error (Provinces): ' . $response->get_error_message() );
-            return array();
+        if ( ! is_wp_error( $response ) ) {
+            $body = wp_remote_retrieve_body( $response );
+            $data = json_decode( $body, true );
+
+            // Struktur Wilayah.id: { "data": [ { "code": "11", "name": "ACEH" }, ... ] }
+            if ( isset( $data['data'] ) && is_array( $data['data'] ) ) {
+                foreach ( $data['data'] as $prov ) {
+                    $provinces[] = array(
+                        'province_id' => $prov['code'], // Menggunakan 'code' sebagai ID
+                        'province'    => ucwords(strtolower($prov['name']))
+                    );
+                }
+                
+                // Simpan cache 30 hari
+                set_transient( 'dw_provinces_list_v4', $provinces, 30 * DAY_IN_SECONDS );
+                return $provinces;
+            }
         }
 
-        $body = wp_remote_retrieve_body( $response );
-        $data = json_decode( $body, true );
-
-        if ( isset( $data['rajaongkir']['results'] ) ) {
-            $provinces = $data['rajaongkir']['results'];
-            // Simpan cache
-            set_transient( 'dw_provinces_list', $provinces, WEEK_IN_SECONDS );
-            return $provinces;
+        // 3. Fallback jika API Gagal
+        if ( empty( $provinces ) ) {
+            $provinces = self::get_fallback_provinces();
         }
 
-        return array();
+        return $provinces;
     }
 
     /**
-     * Fetch cities by province ID (Perbaikan Poin 2)
+     * Fetch cities by province ID
+     * Endpoint: https://wilayah.id/api/regencies/[PROVINCE_CODE].json
      */
     public static function get_cities( $province_id ) {
-        // Cek Cache spesifik per provinsi
-        $cache_key = 'dw_cities_' . $province_id;
+        if ( empty( $province_id ) ) return array();
+
+        $cache_key = 'dw_cities_v4_' . $province_id;
         $cached_cities = get_transient( $cache_key );
 
-        if ( false !== $cached_cities ) {
+        if ( false !== $cached_cities && !empty($cached_cities) ) {
             return $cached_cities;
         }
 
-        $api_key = self::get_api_key();
-        if ( empty( $api_key ) ) {
-            return new WP_Error( 'no_api_key', 'API Key RajaOngkir belum diatur.' );
+        $cities = array();
+
+        // Fetch API
+        $url = self::get_base_url() . "/regencies/{$province_id}.json";
+        $response = wp_remote_get( $url, array( 'timeout' => 10 ) );
+
+        if ( ! is_wp_error( $response ) ) {
+            $body = wp_remote_retrieve_body( $response );
+            $data = json_decode( $body, true );
+
+            if ( isset( $data['data'] ) && is_array( $data['data'] ) ) {
+                foreach ( $data['data'] as $city ) {
+                    // Format Name: "KABUPATEN ACEH SELATAN" atau "KOTA BANDA ACEH"
+                    $full_name = $city['name'];
+                    
+                    // Deteksi Tipe (Kota/Kabupaten)
+                    if ( stripos( $full_name, 'KOTA ' ) === 0 ) {
+                        $type = 'Kota';
+                        $clean_name = trim( substr( $full_name, 5 ) ); // Hapus 'KOTA '
+                    } elseif ( stripos( $full_name, 'KABUPATEN ' ) === 0 ) {
+                        $type = 'Kabupaten';
+                        $clean_name = trim( substr( $full_name, 10 ) ); // Hapus 'KABUPATEN '
+                    } else {
+                        $type = 'Kabupaten'; // Default
+                        $clean_name = $full_name;
+                    }
+
+                    $cities[] = array(
+                        'city_id'   => $city['code'], // Menggunakan 'code'
+                        'city_name' => ucwords(strtolower($clean_name)),
+                        'type'      => $type
+                    );
+                }
+
+                set_transient( $cache_key, $cities, 30 * DAY_IN_SECONDS );
+                return $cities;
+            }
         }
 
-        $url = self::get_base_url() . '/city?province=' . $province_id;
-
-        $response = wp_remote_get( $url, array(
-            'headers' => array( 'key' => $api_key )
-        ) );
-
-        if ( is_wp_error( $response ) ) {
-            return new WP_Error( 'api_error', $response->get_error_message() );
-        }
-
-        $body = wp_remote_retrieve_body( $response );
-        $data = json_decode( $body, true );
-
-        if ( isset( $data['rajaongkir']['status']['code'] ) && $data['rajaongkir']['status']['code'] != 200 ) {
-            return new WP_Error( 'api_error', $data['rajaongkir']['status']['description'] );
-        }
-
-        if ( isset( $data['rajaongkir']['results'] ) ) {
-            $cities = $data['rajaongkir']['results'];
-            set_transient( $cache_key, $cities, WEEK_IN_SECONDS ); // Cache 1 minggu
-            return $cities;
-        }
-
-        return array();
+        // Fallback Error
+        return array(
+            array('city_id' => '0', 'city_name' => 'Gagal Memuat Kota (Cek Koneksi)', 'type' => 'System')
+        );
     }
 
     /**
-     * Mendapatkan ongkos kirim
+     * Fetch Districts (Kecamatan)
+     * Endpoint: https://wilayah.id/api/districts/[REGENCY_CODE].json
+     */
+    public static function get_subdistricts( $city_id ) {
+        if ( empty( $city_id ) ) return array();
+
+        $cache_key = 'dw_districts_v4_' . $city_id;
+        $cached = get_transient( $cache_key );
+        if ( $cached ) return $cached;
+
+        $subdistricts = array();
+        $url = self::get_base_url() . "/districts/{$city_id}.json";
+        $response = wp_remote_get( $url, array( 'timeout' => 10 ) );
+
+        if ( ! is_wp_error( $response ) ) {
+            $body = wp_remote_retrieve_body( $response );
+            $data = json_decode( $body, true );
+
+            if ( isset( $data['data'] ) && is_array( $data['data'] ) ) {
+                foreach ( $data['data'] as $dist ) {
+                    $subdistricts[] = array(
+                        'subdistrict_id'   => $dist['code'],
+                        'subdistrict_name' => ucwords(strtolower($dist['name']))
+                    );
+                }
+                set_transient( $cache_key, $subdistricts, 30 * DAY_IN_SECONDS );
+            }
+        }
+        
+        return $subdistricts;
+    }
+
+    /**
+     * Data Statis Provinsi (Fallback Manual)
+     * Kode disesuaikan dengan standar BPS/Wilayah.id (2 digit)
+     */
+    private static function get_fallback_provinces() {
+        return array(
+            array("province_id" => "11", "province" => "Aceh"),
+            array("province_id" => "12", "province" => "Sumatera Utara"),
+            array("province_id" => "13", "province" => "Sumatera Barat"),
+            array("province_id" => "14", "province" => "Riau"),
+            array("province_id" => "15", "province" => "Jambi"),
+            array("province_id" => "16", "province" => "Sumatera Selatan"),
+            array("province_id" => "17", "province" => "Bengkulu"),
+            array("province_id" => "18", "province" => "Lampung"),
+            array("province_id" => "19", "province" => "Kep. Bangka Belitung"),
+            array("province_id" => "21", "province" => "Kep. Riau"),
+            array("province_id" => "31", "province" => "DKI Jakarta"),
+            array("province_id" => "32", "province" => "Jawa Barat"),
+            array("province_id" => "33", "province" => "Jawa Tengah"),
+            array("province_id" => "34", "province" => "DI Yogyakarta"),
+            array("province_id" => "35", "province" => "Jawa Timur"),
+            array("province_id" => "36", "province" => "Banten"),
+            array("province_id" => "51", "province" => "Bali"),
+            array("province_id" => "52", "province" => "Nusa Tenggara Barat"),
+            array("province_id" => "53", "province" => "Nusa Tenggara Timur"),
+            array("province_id" => "61", "province" => "Kalimantan Barat"),
+            array("province_id" => "62", "province" => "Kalimantan Tengah"),
+            array("province_id" => "63", "province" => "Kalimantan Selatan"),
+            array("province_id" => "64", "province" => "Kalimantan Timur"),
+            array("province_id" => "65", "province" => "Kalimantan Utara"),
+            array("province_id" => "71", "province" => "Sulawesi Utara"),
+            array("province_id" => "72", "province" => "Sulawesi Tengah"),
+            array("province_id" => "73", "province" => "Sulawesi Selatan"),
+            array("province_id" => "74", "province" => "Sulawesi Tenggara"),
+            array("province_id" => "75", "province" => "Gorontalo"),
+            array("province_id" => "76", "province" => "Sulawesi Barat"),
+            array("province_id" => "81", "province" => "Maluku"),
+            array("province_id" => "82", "province" => "Maluku Utara"),
+            array("province_id" => "91", "province" => "Papua Barat"),
+            array("province_id" => "94", "province" => "Papua")
+        );
+    }
+
+    /**
+     * Hitung Ongkir (Flat Rate Manual)
      */
     public static function get_cost( $origin, $destination, $weight, $courier ) {
-        $api_key = self::get_api_key();
-        if ( empty( $api_key ) ) return new WP_Error('no_key', 'API Key missing');
+        // Flat Rate Sederhana
+        $cost_value = 15000 * ceil($weight/1000);
 
-        $url = self::get_base_url() . '/cost';
-
-        $args = array(
-            'headers' => array(
-                'key' => $api_key,
-                'content-type' => 'application/x-www-form-urlencoded'
-            ),
-            'body' => array(
-                'origin' => $origin,
-                'destination' => $destination,
-                'weight' => $weight,
-                'courier' => $courier
+        return array(
+            array(
+                'service' => 'STD',
+                'description' => 'Standard Delivery',
+                'cost' => array(
+                    array(
+                        'value' => $cost_value,
+                        'etd' => '3-7 Hari',
+                        'note' => 'Tarif Estimasi (Manual)'
+                    )
+                )
             )
         );
-
-        $response = wp_remote_post( $url, $args );
-
-        if ( is_wp_error( $response ) ) {
-            return $response;
-        }
-
-        $body = wp_remote_retrieve_body( $response );
-        $data = json_decode( $body, true );
-
-        if ( isset( $data['rajaongkir']['results'][0]['costs'] ) ) {
-            return $data['rajaongkir']['results'][0]['costs'];
-        }
-
-        return new WP_Error( 'no_cost', 'Gagal mengambil data ongkir.' );
     }
 }
