@@ -90,13 +90,15 @@ function dw_render_promosi() {
     // Load file hanya saat dibutuhkan (Lazy Loading)
     if ( defined('DW_CORE_PLUGIN_DIR') ) {
         $file_path = DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-promosi.php';
+        
         if ( file_exists( $file_path ) ) {
             require_once $file_path;
-            // Panggil fungsi render utama dari file page-promosi.php
-            if ( function_exists( 'dw_render_promosi_page' ) ) {
-                dw_render_promosi_page();
+            
+            // PERBAIKAN: Panggil nama fungsi yang BARU (dw_promosi_page_render)
+            if ( function_exists( 'dw_promosi_page_render' ) ) {
+                dw_promosi_page_render();
             } else {
-                echo '<div class="notice notice-error"><p>Fungsi <code>dw_render_promosi_page</code> tidak ditemukan.</p></div>';
+                echo '<div class="notice notice-error"><p>Fungsi <code>dw_promosi_page_render</code> tidak ditemukan.</p></div>';
             }
         } else {
             echo '<div class="notice notice-error"><p>File page-promosi.php tidak ditemukan.</p></div>';
@@ -162,10 +164,10 @@ function dw_register_admin_menus() {
         add_submenu_page('dw-dashboard', 'Payout Komisi', 'Payout Komisi', 'manage_options', 'dw-komisi', 'dw_render_komisi');
     }
 
-    // SUBMENU: Admin Desa
-    if (current_user_can('admin_desa') || current_user_can('manage_options')) {
-          add_submenu_page('dw-dashboard', 'Verifikasi Pedagang', 'Verifikasi Pedagang', 'dw_approve_pedagang', 'dw-desa-verifikasi', 'dw_render_verifikasi_desa');
-    }
+    // // SUBMENU: Admin Desa
+    // if (current_user_can('admin_desa') || current_user_can('manage_options')) {
+    //       add_submenu_page('dw-dashboard', 'Verifikasi Pedagang', 'Verifikasi Pedagang', 'dw_approve_pedagang', 'dw-desa-verifikasi', 'dw_render_verifikasi_desa');
+    // }
 
     // SUBMENU: Tools Lain
     // [FIX] Menggunakan 'manage_options' sebagai fallback capability

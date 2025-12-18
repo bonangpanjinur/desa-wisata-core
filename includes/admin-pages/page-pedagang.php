@@ -1,10 +1,10 @@
 <?php
 /**
- * File Name:   includes/admin-pages/page-pedagang.php
- * Description: CRUD Pedagang utuh dengan UI Modern, Relasi Otomatis, dan Logika Komisi.
+ * File Name: includes/admin-pages/page-pedagang.php
+ * Description: Manajemen Pedagang dengan UI/UX Modern
  */
 
-if (!defined('ABSPATH')) exit;
+defined('ABSPATH') || exit;
 
 function dw_pedagang_page_render() {
     global $wpdb;
@@ -19,7 +19,8 @@ function dw_pedagang_page_render() {
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_pedagang'])) {
         
         if (!isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'dw_pedagang_action')) {
-            echo '<div class="notice notice-error"><p>Keamanan tidak valid (Nonce Failed).</p></div>'; return;
+            echo '<div class="notice notice-error is-dismissible"><p>Keamanan tidak valid (Nonce Failed).</p></div>'; 
+            return;
         }
 
         $action = sanitize_text_field($_POST['action_pedagang']);
@@ -37,94 +38,142 @@ function dw_pedagang_page_render() {
         } elseif ($action === 'save') {
             $nama_toko = sanitize_text_field($_POST['nama_toko']);
             $id_user = intval($_POST['id_user_pedagang']);
-            $kelurahan_id = sanitize_text_field($_POST['pedagang_nama_id']); // ID Kelurahan dari API Wilayah
+            $kelurahan_id = sanitize_text_field($_POST['pedagang_nama_id']); 
             
-            // LOGIKA RELASI OTOMATIS: Cari Desa Wisata di Kelurahan yang sama
+            // Relasi Otomatis
             $desa_terkait = $wpdb->get_row($wpdb->prepare(
-                "SELECT id, nama_desa, persentase_komisi_penjualan FROM $table_desa WHERE api_kelurahan_id = %s LIMIT 1",
+                "SELECT id, nama_desa FROM $table_desa WHERE api_kelurahan_id = %s LIMIT 1",
                 $kelurahan_id
             ));
-
             $id_desa = $desa_terkait ? $desa_terkait->id : 0;
-            $nama_desa_terkait = $desa_terkait ? $desa_terkait->nama_desa : '';
-            $komisi_desa = $desa_terkait ? $desa_terkait->persentase_komisi_penjualan : 0;
             $is_independent = ($id_desa == 0) ? 1 : 0;
 
-            // Logika Penentu Verifikator (Siapa yang meng-ACC)
+            // Status & Verifikasi
             $status_sekarang = sanitize_text_field($_POST['status_akun']);
             $approved_by = '';
-            
-            // Jika status aktif, cek siapa user saat ini
             if ($status_sekarang === 'aktif') {
                 $current_user = wp_get_current_user();
-                // Jika data lama sudah ada approved_by, pertahankan, kecuali diubah statusnya lagi
                 if (!empty($_POST['pedagang_id'])) {
                     $old_data = $wpdb->get_row($wpdb->prepare("SELECT approved_by FROM $table_name WHERE id = %d", intval($_POST['pedagang_id'])));
                     $approved_by = $old_data ? $old_data->approved_by : '';
                 }
-                
-                // Jika belum ada verifikator atau di-approve baru sekarang
                 if (empty($approved_by)) {
                     $approved_by = in_array('administrator', (array) $current_user->roles) ? 'admin' : 'desa';
                 }
             }
 
+            // --- LOGIC ONGKIR LOKAL (JSON) ---
+            $shipping_ojek = isset($_POST['shipping_ojek_lokal_aktif']) ? 1 : 0;
+            
+            $safe_array_map = function($input) {
+                return isset($input) && is_array($input) ? array_map('sanitize_text_field', $input) : [];
+            };
+
+            $ojek_zona_data = [
+                'satu_kecamatan' => [
+                    'dekat' => [
+                        'harga' => floatval($_POST['ojek_dekat_harga']),
+                        'desa_ids' => $safe_array_map($_POST['ojek_dekat_desa'] ?? null)
+                    ],
+                    'jauh' => [
+                        'harga' => floatval($_POST['ojek_jauh_harga']),
+                        'desa_ids' => $safe_array_map($_POST['ojek_jauh_desa'] ?? null)
+                    ]
+                ],
+                'beda_kecamatan' => [
+                    'dekat' => [
+                        'harga' => floatval($_POST['ojek_beda_kec_dekat_harga']),
+                        'kecamatan_ids' => $safe_array_map($_POST['ojek_beda_kec_dekat_ids'] ?? null)
+                    ],
+                    'jauh' => [
+                        'harga' => floatval($_POST['ojek_beda_kec_jauh_harga']),
+                        'kecamatan_ids' => $safe_array_map($_POST['ojek_beda_kec_jauh_ids'] ?? null)
+                    ]
+                ]
+            ];
+
+            // DATA UTAMA
             $data = [
-                'id_user_pedagang' => $id_user,
-                'id_desa'          => $id_desa, // Relasi Otomatis
+                'id_user'          => $id_user,
+                'id_desa'          => $id_desa,
                 'is_independent'   => $is_independent,
                 'nama_toko'        => $nama_toko,
-                'deskripsi_toko'   => wp_kses_post($_POST['deskripsi_toko']),
-                'foto_toko'        => esc_url_raw($_POST['foto_toko_url']),
-                'status_akun'      => $status_sekarang,
-                'approved_by'      => $approved_by, 
+                'slug_toko'        => sanitize_title($nama_toko),
+                'nama_pemilik'     => sanitize_text_field($_POST['nama_pemilik']),
+                'nomor_wa'         => sanitize_text_field($_POST['nomor_wa']),
+                'alamat_lengkap'   => sanitize_textarea_field($_POST['pedagang_detail']),
+                'url_gmaps'        => esc_url_raw($_POST['url_gmaps']),
                 
-                // WILAYAH (API ID)
+                // LEGALITAS & PROFIL
+                'nik'              => sanitize_text_field($_POST['nik']),
+                'url_ktp'          => esc_url_raw($_POST['url_ktp']),
+                'foto_profil'      => esc_url_raw($_POST['foto_profil']),
+                'foto_sampul'      => esc_url_raw($_POST['foto_sampul']),
+                
+                // KEUANGAN
+                'no_rekening'        => sanitize_text_field($_POST['no_rekening']),
+                'nama_bank'          => sanitize_text_field($_POST['nama_bank']),
+                'atas_nama_rekening' => sanitize_text_field($_POST['atas_nama_rekening']),
+                'qris_image_url'     => esc_url_raw($_POST['qris_image_url']),
+                
+                // STATUS & SISTEM
+                'status_pendaftaran' => sanitize_text_field($_POST['status_pendaftaran']),
+                'status_akun'        => $status_sekarang,
+                'approved_by'        => $approved_by,
+                'sisa_transaksi'     => intval($_POST['sisa_transaksi']),
+                
+                // PENGIRIMAN
+                'shipping_ojek_lokal_aktif' => $shipping_ojek,
+                'shipping_ojek_lokal_zona'  => json_encode($ojek_zona_data),
+                'shipping_nasional_aktif'   => isset($_POST['shipping_nasional_aktif']) ? 1 : 0,
+                'allow_pesan_di_tempat'     => isset($_POST['allow_pesan_di_tempat']) ? 1 : 0,
+                
+                // WILAYAH
                 'api_provinsi_id'  => sanitize_text_field($_POST['pedagang_prov']),
                 'api_kabupaten_id' => sanitize_text_field($_POST['pedagang_kota']),
                 'api_kecamatan_id' => sanitize_text_field($_POST['pedagang_kec']),
                 'api_kelurahan_id' => $kelurahan_id,
+                'provinsi_nama'    => sanitize_text_field($_POST['provinsi_text']),
+                'kabupaten_nama'   => sanitize_text_field($_POST['kabupaten_text']),
+                'kecamatan_nama'   => sanitize_text_field($_POST['kecamatan_text']),
+                'kelurahan_nama'   => sanitize_text_field($_POST['kelurahan_text']),
                 
-                // NAMA WILAYAH (TEXT)
-                'provinsi'         => sanitize_text_field($_POST['provinsi_text']),
-                'kabupaten'        => sanitize_text_field($_POST['kabupaten_text']),
-                'kecamatan'        => sanitize_text_field($_POST['kecamatan_text']),
-                'kelurahan'        => sanitize_text_field($_POST['kelurahan_text']),
-                
-                'alamat_lengkap'   => sanitize_textarea_field($_POST['pedagang_detail']),
                 'updated_at'       => current_time('mysql')
             ];
 
             if (!empty($_POST['pedagang_id'])) {
                 $result = $wpdb->update($table_name, $data, ['id' => intval($_POST['pedagang_id'])]);
-                if ($result !== false) {
-                    $message = 'Data pedagang diperbarui.'; $message_type = 'success';
-                } else {
-                    $message = 'Gagal update database: ' . $wpdb->last_error; $message_type = 'error';
-                }
+                $message = 'Data pedagang berhasil diperbarui.'; $message_type = 'success';
             } else {
                 $data['created_at'] = current_time('mysql');
                 $result = $wpdb->insert($table_name, $data);
-                if ($result !== false) {
-                    $message = 'Pedagang baru berhasil ditambahkan.'; $message_type = 'success';
-                } else {
-                    $message = 'Gagal menyimpan database: ' . $wpdb->last_error; $message_type = 'error';
-                }
+                $message = 'Pedagang baru berhasil ditambahkan.'; $message_type = 'success';
             }
         }
     }
 
-    // --- PREPARE DATA FOR VIEW ---
+    // --- PREPARE DATA ---
     $is_edit = isset($_GET['action']) && ($_GET['action'] == 'edit' || $_GET['action'] == 'new');
     $edit_data = null;
+    $ojek_zona = null;
+
     if ($is_edit && isset($_GET['id'])) {
         $edit_data = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE id = %d", intval($_GET['id'])));
+        if($edit_data && !empty($edit_data->shipping_ojek_lokal_zona)) {
+            $ojek_zona = json_decode($edit_data->shipping_ojek_lokal_zona, true);
+        }
     }
     
-    // Ambil user untuk dropdown (Admin, Pedagang, Subscriber)
+    if (!$ojek_zona) {
+        $ojek_zona = [
+            'satu_kecamatan' => ['dekat' => [], 'jauh' => []],
+            'beda_kecamatan' => ['dekat' => [], 'jauh' => []]
+        ];
+    }
+    
     $users = get_users(['role__in' => ['administrator', 'pedagang', 'subscriber']]);
 
-    // Statistik Dashboard
+    // Statistik Dashboard (Calculated via WPDB to avoid memory issues)
     $total_pedagang = $wpdb->get_var("SELECT COUNT(id) FROM $table_name");
     $independent_count = $wpdb->get_var("SELECT COUNT(id) FROM $table_name WHERE is_independent = 1");
     $with_desa_count = $wpdb->get_var("SELECT COUNT(id) FROM $table_name WHERE is_independent = 0");
@@ -132,358 +181,781 @@ function dw_pedagang_page_render() {
     $total_transaksi = $total_transaksi ? number_format($total_transaksi) : '0';
     ?>
 
-    <div class="wrap dw-wrap">
-        <h1 class="wp-heading-inline">Manajemen Pedagang & Toko</h1>
-        <?php if(!$is_edit): ?><a href="?page=dw-pedagang&action=new" class="page-title-action">Tambah Pedagang</a><?php endif; ?>
+    <!-- CSS STYLING UI/UX -->
+    <style>
+        .dw-admin-wrap { max-width: 1200px; margin: 20px 20px 0 0; }
+        .dw-header-action { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+        .dw-btn-primary { background: #2271b1; color: #fff; text-decoration: none; padding: 8px 15px; border-radius: 4px; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; font-weight: 500; transition: all 0.2s; }
+        .dw-btn-primary:hover { background: #135e96; color: #fff; }
+        
+        /* Stats Grid */
+        .dw-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 25px; }
+        .dw-stat-card { background: #fff; border: 1px solid #dcdcde; border-radius: 8px; padding: 20px; display: flex; align-items: center; gap: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+        .dw-stat-icon { width: 45px; height: 45px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+        .dw-stat-icon.blue { background: #e6f0ff; color: #2271b1; }
+        .dw-stat-icon.green { background: #e7f6e9; color: #00a32a; }
+        .dw-stat-icon.orange { background: #fef4e6; color: #dba617; }
+        .dw-stat-icon.purple { background: #f0f0f1; color: #826eb4; }
+        .dw-stat-info { display: flex; flex-direction: column; }
+        .dw-stat-label { font-size: 12px; color: #646970; text-transform: uppercase; font-weight: 600; }
+        .dw-stat-number { font-size: 20px; font-weight: 700; color: #1d2327; line-height: 1.2; }
+
+        /* Card System */
+        .dw-card { background: #fff; border: 1px solid #c3c4c7; border-radius: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); margin-bottom: 20px; overflow: hidden; }
+        .dw-card-header { padding: 15px 20px; border-bottom: 1px solid #f0f0f1; display: flex; justify-content: space-between; align-items: center; background: #fff; }
+        .dw-card-header h3 { margin: 0; font-size: 16px; font-weight: 600; color: #1d2327; }
+        .dw-card-body { padding: 20px; }
+
+        /* Form Layout */
+        .dw-form-container { display: block; }
+        .dw-form-layout { display: flex; gap: 20px; align-items: flex-start; }
+        .dw-form-sidebar { width: 250px; flex-shrink: 0; position: sticky; top: 40px; }
+        .dw-form-content { flex: 1; min-width: 0; }
+        
+        /* Tabs */
+        .dw-tabs-nav { list-style: none; padding: 0; margin: 0; }
+        .dw-tabs-nav li { padding: 12px 15px; border-bottom: 1px solid #f0f0f1; cursor: pointer; display: flex; align-items: center; gap: 10px; color: #50575e; transition: all 0.2s; border-left: 3px solid transparent; }
+        .dw-tabs-nav li:hover { background: #f6f7f7; color: #2271b1; }
+        .dw-tabs-nav li.active { background: #f0f6fc; color: #2271b1; border-left-color: #2271b1; font-weight: 600; }
+        .dw-tab-pane { display: none; }
+        .dw-tab-pane.active { display: block; animation: fadeIn 0.3s; }
+        
+        /* Form Elements */
+        .dw-form-group { margin-bottom: 15px; }
+        .dw-form-group label { display: block; margin-bottom: 5px; font-weight: 500; color: #1d2327; font-size: 13px; }
+        .dw-form-control { width: 100%; height: 40px; border: 1px solid #8c8f94; border-radius: 4px; padding: 0 10px; font-size: 14px; }
+        textarea.dw-form-control { height: auto; padding: 10px; }
+        .dw-row { display: flex; gap: 20px; margin-bottom: 15px; }
+        .dw-col-6 { flex: 0 0 calc(50% - 10px); }
+        .dw-col-4 { flex: 0 0 calc(33.333% - 13.33px); }
+        .dw-col-8 { flex: 0 0 calc(66.666% - 6.66px); }
+
+        /* Status Badges */
+        .dw-status-badge { display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+        .dw-status-verified { background: #e7f6e9; color: #00a32a; }
+        .dw-status-pending { background: #fef4e6; color: #dba617; }
+        .dw-status-rejected { background: #fbeaea; color: #d63638; }
+
+        /* Toggle Switch */
+        .dw-toggle-switch { position: relative; display: inline-flex; align-items: center; gap: 10px; cursor: pointer; margin-right: 20px; }
+        .dw-toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: relative; width: 40px; height: 22px; background-color: #ccc; transition: .4s; border-radius: 34px; display: inline-block; }
+        .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: #2271b1; }
+        input:checked + .slider:before { transform: translateX(18px); }
+        .label-text { font-weight: 500; font-size: 13px; }
+
+        /* Table Enhancement */
+        .dw-modern-table { border: none !important; box-shadow: none !important; }
+        .dw-modern-table thead th { border-bottom: 2px solid #e2e4e7; font-weight: 600; color: #1d2327; }
+        .dw-modern-table td { padding: 15px 10px; vertical-align: middle; }
+        .dw-table-toolbar { padding: 15px; background: #f6f7f7; border-bottom: 1px solid #f0f0f1; display: flex; justify-content: flex-end; }
+        .dw-thumb-wrapper { width: 50px; height: 50px; border-radius: 6px; overflow: hidden; background: #f0f0f1; border: 1px solid #dcdcde; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        @media (max-width: 960px) { .dw-form-layout { flex-direction: column; } .dw-form-sidebar { width: 100%; position: static; } .dw-row { flex-wrap: wrap; } .dw-col-6, .dw-col-4, .dw-col-8 { flex: 100%; } }
+    </style>
+
+    <div class="wrap dw-admin-wrap">
+        <!-- HEADER -->
+        <div class="dw-header-action">
+            <h1 class="wp-heading-inline">
+                <span class="dashicons dashicons-store" style="font-size: 28px; width: 28px; height: 28px; margin-right: 10px; vertical-align: middle;"></span>
+                <?php _e('Manajemen Pedagang', 'desa-wisata-core'); ?>
+            </h1>
+            <?php if(!$is_edit): ?>
+                <a href="<?php echo esc_url(add_query_arg(array('action' => 'new'), admin_url('admin.php?page=dw-pedagang'))); ?>" class="dw-btn-primary">
+                    <span class="dashicons dashicons-plus-alt2" style="vertical-align: middle;"></span> <?php _e('Tambah Pedagang', 'desa-wisata-core'); ?>
+                </a>
+            <?php endif; ?>
+        </div>
+
         <hr class="wp-header-end">
 
+        <!-- NOTIFIKASI -->
         <?php if ($message): ?>
-            <div class="notice notice-<?php echo $message_type; ?> is-dismissible"><p><?php echo $message; ?></p></div>
+            <div class="notice notice-<?php echo $message_type; ?> is-dismissible">
+                <p><?php echo $message; ?></p>
+            </div>
         <?php endif; ?>
 
         <?php if (!$is_edit): ?>
-            <!-- === DASHBOARD STATS (IMPROVED UI) === -->
+            <!-- STATS CARDS GRID -->
             <div class="dw-stats-grid">
-                <div class="dw-stat-card border-blue">
-                    <div class="dw-stat-icon bg-blue"><span class="dashicons dashicons-store"></span></div>
-                    <div class="dw-stat-content">
+                <div class="dw-stat-card">
+                    <div class="dw-stat-icon blue"><span class="dashicons dashicons-groups"></span></div>
+                    <div class="dw-stat-info">
                         <span class="dw-stat-label">Total Pedagang</span>
-                        <span class="dw-stat-value"><?php echo number_format($total_pedagang); ?></span>
-                        <span class="dw-stat-desc">Pedagang Terdaftar</span>
+                        <span class="dw-stat-number"><?php echo number_format($total_pedagang); ?></span>
                     </div>
                 </div>
-                <div class="dw-stat-card border-green">
-                    <div class="dw-stat-icon bg-green"><span class="dashicons dashicons-location-alt"></span></div>
-                    <div class="dw-stat-content">
-                        <span class="dw-stat-label">Terhubung Desa</span>
-                        <span class="dw-stat-value"><?php echo number_format($with_desa_count); ?></span>
-                        <span class="dw-stat-desc">Dengan Desa Wisata</span>
+
+                <div class="dw-stat-card">
+                    <div class="dw-stat-icon green"><span class="dashicons dashicons-yes-alt"></span></div>
+                    <div class="dw-stat-info">
+                        <span class="dw-stat-label">Mitra Desa</span>
+                        <span class="dw-stat-number"><?php echo number_format($with_desa_count); ?></span>
                     </div>
                 </div>
-                <div class="dw-stat-card border-orange">
-                    <div class="dw-stat-icon bg-orange"><span class="dashicons dashicons-admin-users"></span></div>
-                    <div class="dw-stat-content">
+
+                <div class="dw-stat-card">
+                    <div class="dw-stat-icon orange"><span class="dashicons dashicons-admin-users"></span></div>
+                    <div class="dw-stat-info">
                         <span class="dw-stat-label">Independen</span>
-                        <span class="dw-stat-value"><?php echo number_format($independent_count); ?></span>
-                        <span class="dw-stat-desc">Belum Terhubung</span>
+                        <span class="dw-stat-number"><?php echo number_format($independent_count); ?></span>
                     </div>
                 </div>
-                <div class="dw-stat-card border-purple">
-                    <div class="dw-stat-icon bg-purple"><span class="dashicons dashicons-chart-bar"></span></div>
-                    <div class="dw-stat-content">
-                        <span class="dw-stat-label">Total Transaksi</span>
-                        <span class="dw-stat-value"><?php echo $total_transaksi; ?></span>
-                        <span class="dw-stat-desc">Transaksi Tercatat</span>
+
+                <div class="dw-stat-card">
+                    <div class="dw-stat-icon purple"><span class="dashicons dashicons-chart-pie"></span></div>
+                    <div class="dw-stat-info">
+                        <span class="dw-stat-label">Total Kuota</span>
+                        <span class="dw-stat-number"><?php echo $total_transaksi; ?></span>
                     </div>
                 </div>
             </div>
 
-            <!-- === INFO BANNER === -->
-            <div class="dw-info-banner">
-                <div class="dw-info-icon"><span class="dashicons dashicons-info-outline"></span></div>
-                <div class="dw-info-text">
-                    <strong>Ketentuan Relasi & Komisi:</strong>
-                    <p style="margin:5px 0;">Sistem akan otomatis menghubungkan pedagang ke Desa Wisata jika alamat Kelurahan sama. Komisi hanya masuk ke kas Desa jika Admin Desa yang menyetujui (ACC) pendaftaran.</p>
+            <!-- TABLE VIEW -->
+            <div class="dw-card">
+                <div class="dw-card-header">
+                    <h3><?php _e('Daftar Pedagang', 'desa-wisata-core'); ?></h3>
+                    <p class="description">Kelola data toko, lokasi, dan status keaktifan.</p>
+                </div>
+                
+                <div class="dw-card-body">
+                    <?php 
+                        $per_page = 10;
+                        $paged = isset($_GET['paged']) ? max(1, intval($_GET['paged'])) : 1;
+                        $offset = ($paged - 1) * $per_page;
+                        $search = isset($_GET['s']) ? sanitize_text_field($_GET['s']) : '';
+
+                        $where_sql = "WHERE 1=1";
+                        if (!empty($search)) {
+                            $where_sql .= $wpdb->prepare(" AND (p.nama_toko LIKE %s OR p.kelurahan_nama LIKE %s)", "%$search%", "%$search%");
+                        }
+
+                        $sql = "SELECT p.*, d.nama_desa, u.display_name as owner_name 
+                                FROM $table_name p
+                                LEFT JOIN $table_desa d ON p.id_desa = d.id
+                                LEFT JOIN $table_users u ON p.id_user = u.ID
+                                $where_sql 
+                                ORDER BY p.created_at DESC 
+                                LIMIT $per_page OFFSET $offset";
+                        
+                        $rows = $wpdb->get_results($sql);
+                        $total_items = $wpdb->get_var("SELECT COUNT(p.id) FROM $table_name p $where_sql");
+                        $total_pages = ceil($total_items / $per_page);
+                    ?>
+
+                    <div class="dw-table-toolbar">
+                        <form method="get" class="dw-search-box">
+                            <input type="hidden" name="page" value="dw-pedagang">
+                            <input type="search" name="s" value="<?php echo esc_attr($search); ?>" placeholder="Cari Toko..." class="dw-form-control" style="display:inline-block; width:250px;">
+                            <button type="submit" class="button"><span class="dashicons dashicons-search" style="margin-top:4px;"></span></button>
+                        </form>
+                    </div>
+
+                    <table class="wp-list-table widefat fixed striped dw-modern-table">
+                        <thead>
+                            <tr>
+                                <th width="70">Toko</th>
+                                <th>Info Toko</th>
+                                <th>Lokasi</th>
+                                <th width="120">Status</th>
+                                <th width="100">Kuota</th>
+                                <th width="120" style="text-align:right;">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if($rows): foreach($rows as $r): $edit_url = "?page=dw-pedagang&action=edit&id={$r->id}"; ?>
+                            <tr>
+                                <td class="column-thumb">
+                                    <div class="dw-thumb-wrapper">
+                                        <img src="<?php echo esc_url($r->foto_sampul ? $r->foto_sampul : 'https://placehold.co/100x100?text=Toko'); ?>" alt="Foto" style="width:50px; height:50px; object-fit:cover; border-radius:6px;">
+                                    </div>
+                                </td>
+                                <td>
+                                    <strong><a href="<?php echo $edit_url; ?>" class="row-title" style="font-size:14px;"><?php echo esc_html($r->nama_toko); ?></a></strong>
+                                    <div class="dw-meta-info" style="color:#646970; font-size:12px; margin-top:4px;">
+                                        <span class="dashicons dashicons-id-alt" style="font-size:14px;"></span> <?php echo esc_html($r->nama_pemilik); ?>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="dw-location-info">
+                                        <?php echo esc_html($r->kelurahan_nama ? $r->kelurahan_nama : '-'); ?><br>
+                                        <span class="muted" style="color:#646970; font-size:12px;"><?php echo esc_html($r->kecamatan_nama); ?></span>
+                                    </div>
+                                    <?php if($r->id_desa > 0): ?>
+                                        <span class="dw-status-badge dw-status-verified" style="margin-top:4px;">Desa <?php echo esc_html($r->nama_desa); ?></span>
+                                    <?php else: ?>
+                                        <span class="dw-status-badge dw-status-pending" style="margin-top:4px;">Independen</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <?php 
+                                        $status_class = ($r->status_akun == 'aktif') ? 'dw-status-verified' : 'dw-status-rejected';
+                                        $status_label = ucfirst($r->status_akun);
+                                    ?>
+                                    <span class="dw-status-badge <?php echo $status_class; ?>"><?php echo $status_label; ?></span>
+                                </td>
+                                <td>
+                                    <strong style="color:#2271b1; font-size:14px;"><?php echo number_format($r->sisa_transaksi); ?></strong>
+                                </td>
+                                <td style="text-align:right;">
+                                    <div class="dw-actions">
+                                        <a href="<?php echo $edit_url; ?>" class="button button-small" title="Edit"><span class="dashicons dashicons-edit"></span></a>
+                                        <form method="post" style="display:inline;" onsubmit="return confirm('Hapus permanen data ini?');">
+                                            <?php wp_nonce_field('dw_pedagang_action'); ?>
+                                            <input type="hidden" name="action_pedagang" value="delete">
+                                            <input type="hidden" name="pedagang_id" value="<?php echo $r->id; ?>">
+                                            <button type="submit" class="button button-small button-link-delete" title="Hapus"><span class="dashicons dashicons-trash" style="color:#d63638;"></span></button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                            <?php endforeach; else: ?>
+                            <tr><td colspan="6" style="text-align:center; padding:30px;">Belum ada data pedagang.</td></tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+
+                    <?php if ($total_pages > 1): ?>
+                        <div class="tablenav bottom">
+                            <div class="tablenav-pages">
+                                <?php echo paginate_links(['total' => $total_pages, 'current' => $paged, 'base' => add_query_arg('paged', '%#%')]); ?>
+                            </div>
+                        </div>
+                    <?php endif; ?>
                 </div>
             </div>
-        <?php endif; ?>
 
-        <?php if ($is_edit): ?>
-            <!-- === FORM EDIT/TAMBAH UTUH (IMPROVED UI) === -->
-            <div class="card dw-form-card">
+        <?php else: ?>
+            <!-- FORM EDIT / TAMBAH -->
+            <div class="dw-form-container">
                 <form method="post" id="dw-pedagang-form">
                     <?php wp_nonce_field('dw_pedagang_action'); ?>
                     <input type="hidden" name="action_pedagang" value="save">
                     <?php if ($edit_data): ?><input type="hidden" name="pedagang_id" value="<?php echo $edit_data->id; ?>"><?php endif; ?>
 
-                    <div class="dw-form-section">
-                        <h3 class="dw-section-title"><span class="dashicons dashicons-admin-users"></span> Informasi Akun & Toko</h3>
-                        <table class="form-table">
-                            <tr>
-                                <th><label>Pemilik Akun <span class="required">*</span></label></th>
-                                <td>
-                                    <select name="id_user_pedagang" class="regular-text" required>
-                                        <option value="">-- Pilih User --</option>
-                                        <?php foreach ($users as $user): ?>
-                                            <option value="<?php echo $user->ID; ?>" <?php selected($edit_data ? $edit_data->id_user_pedagang : '', $user->ID); ?>>
-                                                <?php echo $user->display_name; ?> (<?php echo $user->user_email; ?>)
-                                            </option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                    <p class="description">Pilih user yang akan menjadi pemilik toko/pedagang ini.</p>
-                                </td>
-                            </tr>
-                            <tr>
-                                <th><label>Nama Toko / Usaha <span class="required">*</span></label></th>
-                                <td>
-                                    <input name="nama_toko" type="text" value="<?php echo esc_attr($edit_data->nama_toko ?? ''); ?>" class="regular-text" required placeholder="Contoh: Keripik Pisang Bu Ani">
-                                    <p class="description">Nama toko atau usaha yang akan ditampilkan di platform.</p>
-                                </td>
-                            </tr>
-                            <tr>
-                                <th><label>Deskripsi Toko</label></th>
-                                <td>
-                                    <?php wp_editor($edit_data->deskripsi_toko ?? '', 'deskripsi_toko', ['textarea_rows'=>6, 'media_buttons'=>false]); ?>
-                                    <p class="description">Jelaskan tentang toko, produk yang dijual, dan keunikan usaha.</p>
-                                </td>
-                            </tr>
-                            <tr>
-                                <th><label>Foto Toko</label></th>
-                                <td>
-                                    <input type="text" name="foto_toko_url" id="foto_toko_url" value="<?php echo esc_attr($edit_data->foto_toko ?? ''); ?>" class="regular-text">
-                                    <button type="button" class="button" id="btn_upload_toko">Unggah Foto</button>
-                                    <div class="dw-preview-container">
-                                        <img id="preview_toko" src="<?php echo !empty($edit_data->foto_toko) ? esc_url($edit_data->foto_toko) : ''; ?>" style="max-height:150px; display:<?php echo !empty($edit_data->foto_toko) ? 'block' : 'none'; ?>; margin-top:10px; border-radius:8px; border:2px solid #e5e7eb;">
-                                    </div>
-                                    <p class="description">Ukuran rekomendasi: 800x800px (persegi).</p>
-                                </td>
-                            </tr>
-                        </table>
-                    </div>
+                    <div class="dw-form-layout">
+                        <!-- SIDEBAR NAVIGATION -->
+                        <div class="dw-form-sidebar">
+                            <div class="dw-card">
+                                <div class="dw-nav-title" style="padding:15px; border-bottom:1px solid #f0f0f1; font-weight:600;">Navigasi Form</div>
+                                <ul class="dw-tabs-nav">
+                                    <li class="active" onclick="dwSwitchTab('tab-umum', this)"><span class="dashicons dashicons-store"></span> Informasi Toko</li>
+                                    <li onclick="dwSwitchTab('tab-lokasi', this)"><span class="dashicons dashicons-location"></span> Lokasi & Wilayah</li>
+                                    <li onclick="dwSwitchTab('tab-legalitas', this)"><span class="dashicons dashicons-id-alt"></span> Legalitas</li>
+                                    <li onclick="dwSwitchTab('tab-keuangan', this)"><span class="dashicons dashicons-money-alt"></span> Keuangan</li>
+                                    <li onclick="dwSwitchTab('tab-pengaturan', this)"><span class="dashicons dashicons-admin-settings"></span> Pengaturan & Ongkir</li>
+                                </ul>
+                            </div>
+                            
+                            <div class="dw-card" style="padding:15px; text-align:center;">
+                                <button type="submit" class="dw-btn-primary" style="width:100%; justify-content:center; margin-bottom:10px;">
+                                    <span class="dashicons dashicons-saved"></span> Simpan Data
+                                </button>
+                                <a href="?page=dw-pedagang" class="button" style="width:100%;">Batal / Kembali</a>
+                            </div>
+                        </div>
 
-                    <div class="dw-form-section">
-                        <h3 class="dw-section-title"><span class="dashicons dashicons-location-alt"></span> Lokasi Usaha (Relasi Wilayah)</h3>
-                        <table class="form-table">
-                            <tr>
-                                <th><label>Wilayah Administratif <span class="required">*</span></label></th>
-                                <td>
-                                    <div class="dw-region-grid">
-                                        <select name="pedagang_prov" class="dw-region-prov regular-text" data-current="<?php echo esc_attr($edit_data->api_provinsi_id ?? ''); ?>" disabled><option value="">Provinsi...</option></select>
-                                        <select name="pedagang_kota" class="dw-region-kota regular-text" data-current="<?php echo esc_attr($edit_data->api_kabupaten_id ?? ''); ?>" disabled><option value="">Kota/Kab...</option></select>
-                                        <select name="pedagang_kec" class="dw-region-kec regular-text" data-current="<?php echo esc_attr($edit_data->api_kecamatan_id ?? ''); ?>" disabled><option value="">Kecamatan...</option></select>
-                                        <select name="pedagang_nama_id" class="dw-region-desa regular-text" data-current="<?php echo esc_attr($edit_data->api_kelurahan_id ?? ''); ?>" disabled><option value="">Kelurahan...</option></select>
-                                    </div>
-                                    <input type="hidden" name="provinsi_text" class="dw-text-prov" value="<?php echo esc_attr($edit_data->provinsi ?? ''); ?>">
-                                    <input type="hidden" name="kabupaten_text" class="dw-text-kota" value="<?php echo esc_attr($edit_data->kabupaten ?? ''); ?>">
-                                    <input type="hidden" name="kecamatan_text" class="dw-text-kec" value="<?php echo esc_attr($edit_data->kecamatan ?? ''); ?>">
-                                    <input type="hidden" name="kelurahan_text" class="dw-text-desa" value="<?php echo esc_attr($edit_data->kelurahan ?? ''); ?>">
-                                    <p class="description"><strong>Penting:</strong> Sistem akan otomatis mencari Desa Wisata di kelurahan yang sama untuk relasi.</p>
-                                </td>
-                            </tr>
-                            <tr>
-                                <th><label>Alamat Lengkap</label></th>
-                                <td>
-                                    <textarea name="pedagang_detail" class="large-text" rows="3" placeholder="Jalan, RT/RW, No. Rumah"><?php echo esc_textarea($edit_data->alamat_lengkap ?? ''); ?></textarea>
-                                    <p class="description">Alamat lengkap toko untuk informasi kontak dan pengiriman.</p>
-                                </td>
-                            </tr>
-                        </table>
-                    </div>
-
-                    <div class="dw-form-section">
-                        <h3 class="dw-section-title"><span class="dashicons dashicons-visibility"></span> Status & Verifikasi</h3>
-                        <table class="form-table">
-                            <tr>
-                                <th><label>Status Akun <span class="required">*</span></label></th>
-                                <td>
-                                    <select name="status_akun" class="regular-text">
-                                        <option value="pending" <?php selected($edit_data->status_akun ?? '', 'pending'); ?>>Pending (Butuh Verifikasi)</option>
-                                        <option value="aktif" <?php selected($edit_data->status_akun ?? '', 'aktif'); ?>>Aktif / Terverifikasi</option>
-                                        <option value="suspend" <?php selected($edit_data->status_akun ?? '', 'suspend'); ?>>Suspend / Nonaktif</option>
-                                    </select>
-                                    <?php if(!empty($edit_data->approved_by)): ?>
-                                        <div class="dw-verifier-info">
-                                            <span class="dashicons dashicons-yes-alt" style="color:#10b981;"></span> 
-                                            <strong>Diverifikasi oleh:</strong> <?php echo ucfirst($edit_data->approved_by); ?>
+                        <!-- CONTENT AREA -->
+                        <div class="dw-form-content">
+                            
+                            <!-- TAB 1: UMUM -->
+                            <div id="tab-umum" class="dw-tab-pane active">
+                                <div class="dw-card">
+                                    <div class="dw-card-header"><h3>Informasi Dasar</h3></div>
+                                    <div class="dw-card-body">
+                                        <div class="dw-row">
+                                            <div class="dw-col-6">
+                                                <div class="dw-form-group">
+                                                    <label>Akun Pengguna <span class="required">*</span></label>
+                                                    <select name="id_user_pedagang" class="dw-form-control select2" required>
+                                                        <option value="">-- Pilih User --</option>
+                                                        <?php foreach ($users as $user): ?>
+                                                            <option value="<?php echo $user->ID; ?>" <?php selected($edit_data ? $edit_data->id_user : '', $user->ID); ?>>
+                                                                <?php echo $user->display_name; ?> (<?php echo $user->user_email; ?>)
+                                                            </option>
+                                                        <?php endforeach; ?>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <div class="dw-col-6">
+                                                <div class="dw-form-group">
+                                                    <label>Nomor WhatsApp <span class="required">*</span></label>
+                                                    <input name="nomor_wa" type="text" value="<?php echo esc_attr($edit_data->nomor_wa ?? ''); ?>" class="dw-form-control" required placeholder="08xxxxxxxxxx">
+                                                </div>
+                                            </div>
                                         </div>
-                                    <?php endif; ?>
-                                    <p class="description">Status akun pedagang. Jika aktif, toko akan ditampilkan di platform.</p>
-                                </td>
-                            </tr>
-                        </table>
-                    </div>
+                                        <div class="dw-row">
+                                            <div class="dw-col-6">
+                                                <div class="dw-form-group">
+                                                    <label>Nama Toko <span class="required">*</span></label>
+                                                    <input name="nama_toko" type="text" value="<?php echo esc_attr($edit_data->nama_toko ?? ''); ?>" class="dw-form-control" required>
+                                                </div>
+                                            </div>
+                                            <div class="dw-col-6">
+                                                <div class="dw-form-group">
+                                                    <label>Nama Pemilik <span class="required">*</span></label>
+                                                    <input name="nama_pemilik" type="text" value="<?php echo esc_attr($edit_data->nama_pemilik ?? ''); ?>" class="dw-form-control" required>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
 
-                    <p class="submit">
-                        <input type="submit" class="button button-primary button-large" value="<?php echo $edit_data ? 'Perbarui Data Pedagang' : 'Simpan Data Pedagang Baru'; ?>">
-                        <a href="?page=dw-pedagang" class="button">Batal</a>
-                    </p>
+                                <div class="dw-card">
+                                    <div class="dw-card-header"><h3>Visual Toko</h3></div>
+                                    <div class="dw-card-body">
+                                        <div class="dw-row">
+                                            <div class="dw-col-4">
+                                                <div class="dw-form-group">
+                                                    <label>Foto Profil</label>
+                                                    <div class="dw-media-uploader">
+                                                        <div class="dw-media-preview-small" style="margin-bottom:10px;">
+                                                            <img id="preview_profil" src="<?php echo !empty($edit_data->foto_profil) ? esc_url($edit_data->foto_profil) : 'https://placehold.co/150x150?text=Profil'; ?>" style="width:100px; height:100px; border-radius:50%; object-fit:cover; border:1px solid #ddd;">
+                                                        </div>
+                                                        <input type="text" name="foto_profil" id="foto_profil" value="<?php echo esc_attr($edit_data->foto_profil ?? ''); ?>" class="dw-form-control" readonly style="margin-bottom:5px;">
+                                                        <button type="button" class="button btn_upload" data-target="#foto_profil" data-preview="#preview_profil">Upload Foto</button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="dw-col-8">
+                                                <div class="dw-form-group">
+                                                    <label>Foto Sampul</label>
+                                                    <div class="dw-media-uploader">
+                                                        <div class="dw-media-preview" style="margin-bottom:10px;">
+                                                            <img id="preview_sampul" src="<?php echo !empty($edit_data->foto_sampul) ? esc_url($edit_data->foto_sampul) : 'https://placehold.co/600x300?text=Sampul'; ?>" style="width:100%; height:150px; object-fit:cover; border-radius:6px; border:1px solid #ddd;">
+                                                        </div>
+                                                        <input type="text" name="foto_sampul" id="foto_sampul" value="<?php echo esc_attr($edit_data->foto_sampul ?? ''); ?>" class="dw-form-control" readonly style="margin-bottom:5px;">
+                                                        <button type="button" class="button btn_upload" data-target="#foto_sampul" data-preview="#preview_sampul">Upload Sampul</button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- TAB 2: LOKASI -->
+                            <div id="tab-lokasi" class="dw-tab-pane">
+                                <div class="dw-card">
+                                    <div class="dw-card-header"><h3>Alamat & Wilayah</h3></div>
+                                    <div class="dw-card-body">
+                                        <div class="dw-row">
+                                            <div class="dw-col-6">
+                                                <div class="dw-form-group">
+                                                    <label>Provinsi</label>
+                                                    <select name="pedagang_prov" class="dw-region-prov dw-form-control" data-current="<?php echo esc_attr($edit_data->api_provinsi_id ?? ''); ?>"><option value="">Memuat...</option></select>
+                                                </div>
+                                            </div>
+                                            <div class="dw-col-6">
+                                                <div class="dw-form-group">
+                                                    <label>Kota/Kabupaten</label>
+                                                    <select name="pedagang_kota" class="dw-region-kota dw-form-control" data-current="<?php echo esc_attr($edit_data->api_kabupaten_id ?? ''); ?>" disabled><option value="">Pilih Kota...</option></select>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="dw-row">
+                                            <div class="dw-col-6">
+                                                <div class="dw-form-group">
+                                                    <label>Kecamatan</label>
+                                                    <select name="pedagang_kec" class="dw-region-kec dw-form-control" data-current="<?php echo esc_attr($edit_data->api_kecamatan_id ?? ''); ?>" disabled><option value="">Pilih Kecamatan...</option></select>
+                                                </div>
+                                            </div>
+                                            <div class="dw-col-6">
+                                                <div class="dw-form-group">
+                                                    <label>Kelurahan / Desa <span class="required">*</span></label>
+                                                    <select name="pedagang_nama_id" class="dw-region-desa dw-form-control" data-current="<?php echo esc_attr($edit_data->api_kelurahan_id ?? ''); ?>" disabled><option value="">Pilih Kelurahan...</option></select>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Hidden Inputs for Names -->
+                                        <input type="hidden" name="provinsi_text" class="dw-text-prov" value="<?php echo esc_attr($edit_data->provinsi_nama ?? ''); ?>">
+                                        <input type="hidden" name="kabupaten_text" class="dw-text-kota" value="<?php echo esc_attr($edit_data->kabupaten_nama ?? ''); ?>">
+                                        <input type="hidden" name="kecamatan_text" class="dw-text-kec" value="<?php echo esc_attr($edit_data->kecamatan_nama ?? ''); ?>">
+                                        <input type="hidden" name="kelurahan_text" class="dw-text-desa" value="<?php echo esc_attr($edit_data->kelurahan_nama ?? ''); ?>">
+
+                                        <div class="dw-form-group">
+                                            <label>Alamat Lengkap</label>
+                                            <textarea name="pedagang_detail" class="dw-form-control" rows="3"><?php echo esc_textarea($edit_data->alamat_lengkap ?? ''); ?></textarea>
+                                        </div>
+                                        <div class="dw-form-group">
+                                            <label>URL Google Maps</label>
+                                            <input name="url_gmaps" type="url" value="<?php echo esc_attr($edit_data->url_gmaps ?? ''); ?>" class="dw-form-control" placeholder="https://maps.google.com/...">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- TAB 3: LEGALITAS -->
+                            <div id="tab-legalitas" class="dw-tab-pane">
+                                <div class="dw-card">
+                                    <div class="dw-card-header"><h3>Data Identitas</h3></div>
+                                    <div class="dw-card-body">
+                                        <div class="dw-form-group">
+                                            <label>NIK</label>
+                                            <input name="nik" type="text" value="<?php echo esc_attr($edit_data->nik ?? ''); ?>" class="dw-form-control">
+                                        </div>
+                                        <div class="dw-form-group">
+                                            <label>Foto KTP</label>
+                                            <div class="dw-media-controls" style="display:flex; gap:10px;">
+                                                <input type="text" name="url_ktp" id="url_ktp" value="<?php echo esc_attr($edit_data->url_ktp ?? ''); ?>" class="dw-form-control" readonly>
+                                                <button type="button" class="button btn_upload" data-target="#url_ktp">Pilih File</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- TAB 4: KEUANGAN -->
+                            <div id="tab-keuangan" class="dw-tab-pane">
+                                <div class="dw-card">
+                                    <div class="dw-card-header"><h3>Rekening & Pembayaran</h3></div>
+                                    <div class="dw-card-body">
+                                        <div class="dw-row">
+                                            <div class="dw-col-4">
+                                                <div class="dw-form-group">
+                                                    <label>Nama Bank</label>
+                                                    <input name="nama_bank" type="text" value="<?php echo esc_attr($edit_data->nama_bank ?? ''); ?>" class="dw-form-control">
+                                                </div>
+                                            </div>
+                                            <div class="dw-col-8">
+                                                <div class="dw-form-group">
+                                                    <label>Nomor Rekening</label>
+                                                    <input name="no_rekening" type="text" value="<?php echo esc_attr($edit_data->no_rekening ?? ''); ?>" class="dw-form-control">
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="dw-form-group">
+                                            <label>Atas Nama</label>
+                                            <input name="atas_nama_rekening" type="text" value="<?php echo esc_attr($edit_data->atas_nama_rekening ?? ''); ?>" class="dw-form-control">
+                                        </div>
+                                        <div class="dw-form-group">
+                                            <label>QRIS URL</label>
+                                            <div class="dw-media-controls" style="display:flex; gap:10px;">
+                                                <input type="text" name="qris_image_url" id="qris_image_url" value="<?php echo esc_attr($edit_data->qris_image_url ?? ''); ?>" class="dw-form-control">
+                                                <button type="button" class="button btn_upload" data-target="#qris_image_url">Upload</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- TAB 5: PENGATURAN (TERMASUK ONGKIR) -->
+                            <div id="tab-pengaturan" class="dw-tab-pane">
+                                <div class="dw-card">
+                                    <div class="dw-card-header"><h3>Status Akun</h3></div>
+                                    <div class="dw-card-body">
+                                        <div class="dw-row">
+                                            <div class="dw-col-6">
+                                                <div class="dw-form-group">
+                                                    <label>Status Keaktifan</label>
+                                                    <select name="status_akun" class="dw-form-control">
+                                                        <option value="nonaktif" <?php selected($edit_data->status_akun ?? '', 'nonaktif'); ?>>Non-Aktif</option>
+                                                        <option value="aktif" <?php selected($edit_data->status_akun ?? '', 'aktif'); ?>>Aktif</option>
+                                                        <option value="suspend" <?php selected($edit_data->status_akun ?? '', 'suspend'); ?>>Suspend</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <div class="dw-col-6">
+                                                <div class="dw-form-group">
+                                                    <label>Status Pendaftaran</label>
+                                                    <select name="status_pendaftaran" class="dw-form-control">
+                                                        <option value="menunggu_desa" <?php selected($edit_data->status_pendaftaran ?? '', 'menunggu_desa'); ?>>Menunggu Desa</option>
+                                                        <option value="menunggu" <?php selected($edit_data->status_pendaftaran ?? '', 'menunggu'); ?>>Menunggu Review</option>
+                                                        <option value="disetujui" <?php selected($edit_data->status_pendaftaran ?? '', 'disetujui'); ?>>Disetujui</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="dw-form-group">
+                                            <label>Sisa Kuota Transaksi</label>
+                                            <input name="sisa_transaksi" type="number" value="<?php echo esc_attr($edit_data->sisa_transaksi ?? '0'); ?>" class="dw-form-control">
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- CARD ONGKIR LOKAL -->
+                                <div class="dw-card">
+                                    <div class="dw-card-header">
+                                        <h3><span class="dashicons dashicons-location-alt"></span> Pengaturan Ongkir Lokal</h3>
+                                        <p class="description">Atur tarif pengiriman untuk ojek lokal berdasarkan zona.</p>
+                                    </div>
+                                    <div class="dw-card-body">
+                                        <label class="dw-toggle-switch">
+                                            <input type="checkbox" name="shipping_ojek_lokal_aktif" value="1" <?php checked($edit_data->shipping_ojek_lokal_aktif ?? 0, 1); ?>>
+                                            <span class="slider round"></span>
+                                            <span class="label-text">Aktifkan Ojek Lokal</span>
+                                        </label>
+                                        
+                                        <div class="dw-ongkir-settings">
+                                            <h4 class="dw-zone-title">Zona 1: Satu Kecamatan (Desa)</h4>
+                                            
+                                            <!-- Sub Zona Dekat -->
+                                            <div class="dw-ongkir-subzone">
+                                                <label class="subzone-label">Desa Area Dekat</label>
+                                                <div class="dw-row">
+                                                    <div class="dw-col-4">
+                                                        <label>Tarif (Rp)</label>
+                                                        <input type="number" name="ojek_dekat_harga" class="dw-form-control" placeholder="5000" value="<?php echo esc_attr($ojek_zona['satu_kecamatan']['dekat']['harga'] ?? ''); ?>">
+                                                    </div>
+                                                    <div class="dw-col-8">
+                                                        <label>Pilih Desa</label>
+                                                        <select name="ojek_dekat_desa[]" class="dw-form-control select2-villages" multiple="multiple">
+                                                            <?php 
+                                                            if(!empty($ojek_zona['satu_kecamatan']['dekat']['desa_ids'])){
+                                                                foreach($ojek_zona['satu_kecamatan']['dekat']['desa_ids'] as $vid){
+                                                                    echo "<option value='$vid' selected>$vid</option>"; 
+                                                                }
+                                                            }
+                                                            ?>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Sub Zona Jauh -->
+                                            <div class="dw-ongkir-subzone">
+                                                <label class="subzone-label">Desa Area Jauh</label>
+                                                <div class="dw-row">
+                                                    <div class="dw-col-4">
+                                                        <label>Tarif (Rp)</label>
+                                                        <input type="number" name="ojek_jauh_harga" class="dw-form-control" placeholder="10000" value="<?php echo esc_attr($ojek_zona['satu_kecamatan']['jauh']['harga'] ?? ''); ?>">
+                                                    </div>
+                                                    <div class="dw-col-8">
+                                                        <label>Pilih Desa</label>
+                                                        <select name="ojek_jauh_desa[]" class="dw-form-control select2-villages" multiple="multiple">
+                                                            <?php 
+                                                            if(!empty($ojek_zona['satu_kecamatan']['jauh']['desa_ids'])){
+                                                                foreach($ojek_zona['satu_kecamatan']['jauh']['desa_ids'] as $vid){
+                                                                    echo "<option value='$vid' selected>$vid</option>";
+                                                                }
+                                                            }
+                                                            ?>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div class="dw-divider"></div>
+
+                                            <h4 class="dw-zone-title">Zona 2: Beda Kecamatan (Satu Kabupaten)</h4>
+                                            
+                                            <!-- Sub Zona Dekat (Kecamatan) -->
+                                            <div class="dw-ongkir-subzone">
+                                                <label class="subzone-label">Kecamatan Dekat</label>
+                                                <div class="dw-row">
+                                                    <div class="dw-col-4">
+                                                        <label>Tarif (Rp)</label>
+                                                        <input type="number" name="ojek_beda_kec_dekat_harga" class="dw-form-control" placeholder="15000" value="<?php echo esc_attr($ojek_zona['beda_kecamatan']['dekat']['harga'] ?? ''); ?>">
+                                                    </div>
+                                                    <div class="dw-col-8">
+                                                        <label>Pilih Kecamatan</label>
+                                                        <select name="ojek_beda_kec_dekat_ids[]" class="dw-form-control select2-districts" multiple="multiple">
+                                                            <?php 
+                                                            if(!empty($ojek_zona['beda_kecamatan']['dekat']['kecamatan_ids'])){
+                                                                foreach($ojek_zona['beda_kecamatan']['dekat']['kecamatan_ids'] as $kid){
+                                                                    echo "<option value='$kid' selected>$kid</option>";
+                                                                }
+                                                            }
+                                                            ?>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Sub Zona Jauh (Kecamatan) -->
+                                            <div class="dw-ongkir-subzone">
+                                                <label class="subzone-label">Kecamatan Jauh</label>
+                                                <div class="dw-row">
+                                                    <div class="dw-col-4">
+                                                        <label>Tarif (Rp)</label>
+                                                        <input type="number" name="ojek_beda_kec_jauh_harga" class="dw-form-control" placeholder="25000" value="<?php echo esc_attr($ojek_zona['beda_kecamatan']['jauh']['harga'] ?? ''); ?>">
+                                                    </div>
+                                                    <div class="dw-col-8">
+                                                        <label>Pilih Kecamatan</label>
+                                                        <select name="ojek_beda_kec_jauh_ids[]" class="dw-form-control select2-districts" multiple="multiple">
+                                                            <?php 
+                                                            if(!empty($ojek_zona['beda_kecamatan']['jauh']['kecamatan_ids'])){
+                                                                foreach($ojek_zona['beda_kecamatan']['jauh']['kecamatan_ids'] as $kid){
+                                                                    echo "<option value='$kid' selected>$kid</option>";
+                                                                }
+                                                            }
+                                                            ?>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div style="margin-top:20px;">
+                                            <label class="dw-toggle-switch">
+                                                <input type="checkbox" name="allow_pesan_di_tempat" value="1" <?php checked($edit_data->allow_pesan_di_tempat ?? 0, 1); ?>>
+                                                <span class="slider round"></span>
+                                                <span class="label-text">Izinkan Pesan di Tempat</span>
+                                            </label>
+                                            <label class="dw-toggle-switch">
+                                                <input type="checkbox" name="shipping_nasional_aktif" value="1" <?php checked($edit_data->shipping_nasional_aktif ?? 0, 1); ?>>
+                                                <span class="slider round"></span>
+                                                <span class="label-text">Aktifkan Pengiriman Nasional (JNE/TIKI)</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div> <!-- End Content -->
+                    </div> <!-- End Layout -->
                 </form>
             </div>
             
             <script>
             jQuery(document).ready(function($){
-                $('#btn_upload_toko').click(function(e){
+                // Init Select2
+                if ($.fn.select2) {
+                    $('.select2-villages, .select2-districts').select2({ width: '100%' });
+                }
+
+                // Load Ongkir Options Logic
+                function loadOngkirOptions(force = false) {
+                    // Get Main Location IDs
+                    // Priority: Current selected value -> Data attribute (initial load)
+                    var kecId = $('select[name="pedagang_kec"]').val();
+                    if(!kecId) kecId = $('select[name="pedagang_kec"]').data('current');
+                    
+                    var kabId = $('select[name="pedagang_kota"]').val();
+                    if(!kabId) kabId = $('select[name="pedagang_kota"]').data('current');
+
+                    // 1. Handle Villages (Satu Kecamatan)
+                    var $villageSelects = $('select[name="ojek_dekat_desa[]"], select[name="ojek_jauh_desa[]"]');
+                    var lastKecId = $villageSelects.data('loaded-parent');
+
+                    if (kecId && (force || kecId != lastKecId)) {
+                        $villageSelects.prop('disabled', true);
+                        
+                        // Fetch
+                        $.post(ajaxurl, { action: 'dw_get_villages', dist_id: kecId }, function(res){
+                            $villageSelects.prop('disabled', false);
+                            if(res.success && res.data && res.data.data) {
+                                var villages = res.data.data;
+                                
+                                // Process each select
+                                $villageSelects.each(function(){
+                                    var $sel = $(this);
+                                    var currentVal = $sel.val() || []; // Preserve selection (IDs)
+                                    
+                                    // Clear existing options
+                                    $sel.empty();
+                                    
+                                    // Append new options
+                                    $.each(villages, function(i, v){
+                                        var isSelected = currentVal.includes(v.code);
+                                        var newOption = new Option(v.name, v.code, isSelected, isSelected);
+                                        $sel.append(newOption);
+                                    });
+                                    
+                                    // Trigger change for Select2 to update UI
+                                    $sel.trigger('change');
+                                    $sel.data('loaded-parent', kecId);
+                                });
+                            }
+                        });
+                    } else if (!kecId) {
+                        $villageSelects.empty().trigger('change').data('loaded-parent', '');
+                    }
+
+                    // 2. Handle Districts (Beda Kecamatan)
+                    var $districtSelects = $('select[name="ojek_beda_kec_dekat_ids[]"], select[name="ojek_beda_kec_jauh_ids[]"]');
+                    var lastKabId = $districtSelects.data('loaded-parent');
+
+                    if (kabId && (force || kabId != lastKabId)) {
+                        $districtSelects.prop('disabled', true);
+                        
+                        $.post(ajaxurl, { action: 'dw_get_districts', city_id: kabId }, function(res){
+                            $districtSelects.prop('disabled', false);
+                            if(res.success && res.data && res.data.data) {
+                                var districts = res.data.data;
+                                
+                                $districtSelects.each(function(){
+                                    var $sel = $(this);
+                                    var currentVal = $sel.val() || [];
+                                    
+                                    $sel.empty();
+                                    
+                                    $.each(districts, function(i, d){
+                                        var isSelected = currentVal.includes(d.code);
+                                        var newOption = new Option(d.name, d.code, isSelected, isSelected);
+                                        $sel.append(newOption);
+                                    });
+                                    
+                                    $sel.trigger('change');
+                                    $sel.data('loaded-parent', kabId);
+                                });
+                            }
+                        });
+                    } else if (!kabId) {
+                        $districtSelects.empty().trigger('change').data('loaded-parent', '');
+                    }
+                }
+                
+                // Trigger load on settings tab click
+                $('.dw-tabs-nav li').click(function(){
+                    if($(this).text().includes('Pengaturan')) {
+                        loadOngkirOptions();
+                    }
+                });
+
+                // Also trigger when main location changes IF we are already on the settings tab
+                $('select[name="pedagang_kec"]').on('change', function(){
+                    $('select[name="ojek_dekat_desa[]"], select[name="ojek_jauh_desa[]"]').data('loaded-parent', null);
+                    if($('#tab-pengaturan').is(':visible')) loadOngkirOptions(true);
+                });
+
+                $('select[name="pedagang_kota"]').on('change', function(){
+                    $('select[name="ojek_beda_kec_dekat_ids[]"], select[name="ojek_beda_kec_jauh_ids[]"]').data('loaded-parent', null);
+                    if($('#tab-pengaturan').is(':visible')) loadOngkirOptions(true);
+                });
+
+                // Initial load if on edit page and data exists
+                if ($('select[name="pedagang_kec"]').data('current') || $('select[name="pedagang_kota"]').data('current')) {
+                     loadOngkirOptions();
+                }
+
+                // Media Upload
+                $('.btn_upload').click(function(e){
                     e.preventDefault();
-                    var frame = wp.media({ title: 'Pilih Foto Toko', multiple: false, library: { type: 'image' } });
+                    var target = $(this).data('target');
+                    var preview = $(this).data('preview');
+                    var frame = wp.media({ title: 'Pilih Gambar', multiple: false, library: { type: 'image' } });
                     frame.on('select', function(){
                         var url = frame.state().get('selection').first().toJSON().url;
-                        $('#foto_toko_url').val(url);
-                        $('#preview_toko').attr('src', url).show();
+                        $(target).val(url);
+                        if(preview) $(preview).attr('src', url);
                     });
                     frame.open();
                 });
             });
-            </script>
-
-        <?php else: ?>
-            <!-- === TABEL LIST PEDAGANG UTUH (IMPROVED UI) === -->
-            <?php 
-                $per_page = 15;
-                $paged = isset($_GET['paged']) ? max(1, intval($_GET['paged'])) : 1;
-                $offset = ($paged - 1) * $per_page;
-                $search = isset($_GET['s']) ? sanitize_text_field($_GET['s']) : '';
-
-                // FIX: Menambahkan alias 'p' pada query count untuk menghindari ambiguous column
-                $where_sql = "WHERE 1=1";
-                if (!empty($search)) {
-                    // Gunakan p.nama_toko dan p.kelurahan agar spesifik ke tabel pedagang
-                    $where_sql .= $wpdb->prepare(" AND (p.nama_toko LIKE %s OR p.kelurahan LIKE %s)", "%$search%", "%$search%");
+            
+            function dwSwitchTab(tabId, el) {
+                var contents = document.getElementsByClassName('dw-tab-pane');
+                for (var i = 0; i < contents.length; i++) {
+                    contents[i].style.display = 'none';
+                    contents[i].classList.remove('active');
                 }
-
-                // FIX: Query Count menggunakan alias 'p'
-                $total_items = $wpdb->get_var("SELECT COUNT(p.id) FROM $table_name p $where_sql");
-                $total_pages = ceil($total_items / $per_page);
-
-                // FIX: Query Main menggunakan alias yang konsisten
-                $sql = "SELECT p.*, d.nama_desa, d.persentase_komisi_penjualan as komisi_desa, u.display_name as owner_name 
-                        FROM $table_name p
-                        LEFT JOIN $table_desa d ON p.id_desa = d.id
-                        LEFT JOIN $table_users u ON p.id_user_pedagang = u.ID
-                        $where_sql 
-                        ORDER BY p.created_at DESC 
-                        LIMIT %d OFFSET %d";
-                
-                $rows = $wpdb->get_results($wpdb->prepare($sql, $per_page, $offset));
-            ?>
-
-            <div class="tablenav top">
-                <form method="get">
-                    <input type="hidden" name="page" value="dw-pedagang">
-                    <p class="search-box">
-                        <input type="search" name="s" value="<?php echo esc_attr($search); ?>" placeholder="Cari Toko atau Wilayah...">
-                        <input type="submit" class="button" value="Cari">
-                    </p>
-                </form>
-            </div>
-
-            <div class="dw-card-table">
-                <table class="wp-list-table widefat fixed striped">
-                    <thead>
-                        <tr>
-                            <th width="50">Foto</th>
-                            <th width="25%">Nama Toko & Owner</th>
-                            <th width="25%">Lokasi & Relasi</th>
-                            <th width="20%">Status & Verifikasi</th>
-                            <th width="15%">Transaksi</th>
-                            <th width="15%">Aksi</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php if($rows): foreach($rows as $r): $edit_url = "?page=dw-pedagang&action=edit&id={$r->id}"; ?>
-                        <tr>
-                            <td><img src="<?php echo esc_url($r->foto_toko ? $r->foto_toko : 'https://placehold.co/50'); ?>" style="width:50px; height:50px; border-radius:8px; object-fit:cover; border:2px solid #e5e7eb;"></td>
-                            <td>
-                                <strong><a href="<?php echo $edit_url; ?>" class="row-title"><?php echo esc_html($r->nama_toko); ?></a></strong><br>
-                                <small style="color:#666;"><span class="dashicons dashicons-admin-users" style="font-size:12px;"></span> <?php echo esc_html($r->owner_name); ?></small>
-                            </td>
-                            <td>
-                                <small><?php echo esc_html($r->kelurahan); ?></small><br>
-                                <small style="color:#999;"><?php echo esc_html($r->kecamatan); ?></small><br>
-                                <?php if($r->id_desa > 0): ?>
-                                    <div class="dw-relasi-tag linked">
-                                        <span class="dashicons dashicons-location-alt" style="font-size:14px;"></span>
-                                        <span><?php echo esc_html($r->nama_desa); ?></span>
-                                    </div>
-                                    <?php if($r->komisi_desa > 0): ?>
-                                        <div class="dw-stat-pill" style="margin-top:5px; background:#e7f9ed; color:#184a2c;">
-                                            <span class="dashicons dashicons-money-alt" style="font-size:12px;"></span>
-                                            <span><?php echo $r->komisi_desa; ?>% Komisi</span>
-                                        </div>
-                                    <?php endif; ?>
-                                <?php else: ?>
-                                    <div class="dw-relasi-tag independent">
-                                        <span class="dashicons dashicons-admin-users" style="font-size:14px;"></span>
-                                        <span>Independen</span>
-                                    </div>
-                                <?php endif; ?>
-                            </td>
-                            <td>
-                                <div class="dw-badge-status <?php echo $r->status_akun; ?>">
-                                    <?php echo ucfirst($r->status_akun); ?>
-                                </div>
-                                <?php if($r->approved_by): ?>
-                                    <div class="dw-verifier">
-                                        <span class="dashicons dashicons-yes-alt" style="font-size:10px;"></span>
-                                        By: <?php echo ucfirst($r->approved_by); ?>
-                                    </div>
-                                <?php endif; ?>
-                            </td>
-                            <td>
-                                <div class="dw-stat-pill">
-                                    <span class="dashicons dashicons-chart-bar" style="font-size:12px;"></span>
-                                    <span><?php echo $r->sisa_transaksi ? number_format($r->sisa_transaksi) : '0'; ?> Transaksi</span>
-                                </div>
-                            </td>
-                            <td>
-                                <a href="<?php echo $edit_url; ?>" class="button button-small">Edit</a>
-                                <form method="post" style="display:inline;" onsubmit="return confirm('Hapus pedagang ini?');">
-                                    <?php wp_nonce_field('dw_pedagang_action'); ?>
-                                    <input type="hidden" name="action_pedagang" value="delete">
-                                    <input type="hidden" name="pedagang_id" value="<?php echo $r->id; ?>">
-                                    <button type="submit" class="button button-small" style="color:#d63638; border-color:#d63638;">Hapus</button>
-                                </form>
-                            </td>
-                        </tr>
-                        <?php endforeach; else: ?>
-                        <tr><td colspan="6">Belum ada data pedagang.</td></tr>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
-            </div>
-
-            <?php if ($total_pages > 1): ?>
-            <div class="tablenav bottom"><div class="tablenav-pages"><?php echo paginate_links(['total'=>$total_pages, 'current'=>$paged]); ?></div></div>
-            <?php endif; ?>
-
+                var tabs = document.querySelectorAll('.dw-tabs-nav li');
+                for (var i = 0; i < tabs.length; i++) {
+                    tabs[i].classList.remove('active');
+                }
+                document.getElementById(tabId).style.display = 'block';
+                setTimeout(function() { document.getElementById(tabId).classList.add('active'); }, 10);
+                el.classList.add('active');
+            }
+            </script>
         <?php endif; ?>
     </div>
-
-    <style>
-        .dw-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; margin: 20px 0; }
-        .dw-stat-card { background: #fff; padding: 25px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); display: flex; align-items: center; border-left: 5px solid #ccd0d4; transition: transform 0.2s; }
-        .dw-stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
-        .dw-stat-icon { width: 56px; height: 56px; border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-right: 18px; flex-shrink: 0; }
-        .dw-stat-icon .dashicons { color: #fff; font-size: 28px; }
-        .dw-stat-label { display: block; font-size: 13px; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; }
-        .dw-stat-value { display: block; font-size: 28px; font-weight: 700; color: #1e293b; line-height: 1; }
-        .dw-stat-desc { display: block; font-size: 12px; color: #94a3b8; margin-top: 5px; }
-        
-        .bg-blue { background: #2271b1; } .bg-green { background: #00a32a; } .bg-purple { background: #7c3aed; } .bg-orange { background: #dba617; }
-        .border-blue { border-left-color: #2271b1; } .border-green { border-left-color: #00a32a; } .border-purple { border-left-color: #7c3aed; } .border-orange { border-left-color: #dba617; }
-
-        .dw-info-banner { background: #eff6ff; border-left: 4px solid #2271b1; padding: 18px 20px; border-radius: 8px; margin: 20px 0; display: flex; align-items: flex-start; gap: 15px; }
-        .dw-info-icon { width: 40px; height: 40px; background: #2271b1; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-        .dw-info-icon .dashicons { color: #fff; font-size: 20px; }
-        .dw-info-text { flex: 1; }
-        .dw-info-text strong { color: #1e293b; font-size: 15px; }
-        .dw-info-text p { color: #334155; font-size: 14px; margin: 8px 0 0; }
-
-        .dw-form-card { padding: 30px; max-width: 1000px; margin-top: 20px; border-radius: 12px; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
-        .dw-form-section { margin-bottom: 30px; padding-bottom: 30px; border-bottom: 1px solid #e5e7eb; }
-        .dw-form-section:last-child { border-bottom: none; }
-        .dw-section-title { margin: 0 0 20px 0; padding-bottom: 12px; border-bottom: 2px solid #2271b1; color: #1d2327; font-size: 18px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
-        .dw-section-title .dashicons { color: #2271b1; font-size: 22px; }
-        .dw-badge-status { padding: 6px 14px; border-radius: 16px; font-size: 12px; font-weight: 600; display: inline-block; }
-        .dw-badge-status.aktif { background: #e7f9ed; color: #184a2c; }
-        .dw-badge-status.pending { background: #fff7ed; color: #7c2d12; }
-        .dw-badge-status.suspend { background: #f1f5f9; color: #475569; }
-        .dw-relasi-tag { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; margin-top: 5px; padding: 6px 12px; border-radius: 8px; font-weight: 500; }
-        .dw-relasi-tag.linked { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
-        .dw-relasi-tag.independent { background: #f8fafc; color: #64748b; border: 1px solid #e2e8f0; }
-        .dw-stat-pill { background: #f0f0f1; padding: 6px 12px; border-radius: 8px; font-size: 12px; color: #50575e; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; }
-        .dw-verifier { font-size: 11px; color: #94a3b8; margin-top: 5px; display: flex; align-items: center; gap: 4px; }
-        .dw-verifier-info { background: #f0fdf4; padding: 8px 12px; border-radius: 8px; border-left: 3px solid #10b981; margin-top: 10px; }
-        .dw-region-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; max-width: 500px; }
-        .required { color: #dc3545; font-weight: bold; }
-        .description { font-size: 13px; color: #64748b; margin-top: 5px; }
-        .form-table th { font-weight: 600; }
-        .form-table td { padding: 15px 10px; }
-        .submit { padding: 20px 0; border-top: 2px solid #e5e7eb; margin-top: 20px; }
-        .button-large { padding: 12px 24px; font-size: 15px; }
-        .row-actions { margin-top: 8px; }
-        .row-actions span { margin-right: 10px; }
-        .row-actions a { color: #2271b1; text-decoration: none; }
-        .row-actions a:hover { text-decoration: underline; }
-    </style>
     <?php
 }
+?>
