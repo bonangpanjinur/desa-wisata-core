@@ -6,7 +6,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Handle AJAX request for fetching cities based on province ID.
+ * Handle AJAX request for fetching cities
  */
 function dw_get_cities_handler() {
     if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( $_POST['nonce'], 'dw_admin_nonce' ) ) {
@@ -33,7 +33,7 @@ function dw_get_cities_handler() {
 add_action( 'wp_ajax_dw_get_cities', 'dw_get_cities_handler' );
 
 /**
- * Handle AJAX request for fetching subdistricts.
+ * Handle AJAX request for fetching subdistricts
  */
 function dw_get_subdistricts_handler() {
     check_ajax_referer( 'dw_admin_nonce', 'nonce' );
@@ -76,7 +76,7 @@ function dw_save_promotion_ajax_handler() {
         $result = ($promo_id > 0) ? $promotions->update_promotion( $promo_id, $promo_data ) : $promotions->add_promotion( $promo_data );
         
         if ( $result ) {
-            wp_send_json_success( array( 'message' => 'Promosi berhasil disimpan.' ) );
+            wp_send_json_success( array( 'message' => 'Voucher berhasil disimpan.' ) );
         } else {
             wp_send_json_error( array( 'message' => 'Gagal menyimpan. Cek kode duplikat.' ) );
         }
@@ -86,21 +86,17 @@ add_action( 'wp_ajax_dw_save_promotion', 'dw_save_promotion_ajax_handler' );
 
 /**
  * NEW: Handle AJAX for Saving Ad Pricing Settings
- * Menyimpan paket harga untuk Banner, Wisata, dan Produk
+ * Menyimpan paket harga dan KUOTA
  */
 function dw_save_ad_settings_handler() {
-    // 1. Verifikasi Keamanan
     check_ajax_referer( 'dw_admin_nonce', 'nonce' );
 
-    // 2. Verifikasi Izin
     if ( ! current_user_can( 'manage_options' ) ) {
         wp_send_json_error( array( 'message' => 'Unauthorized access.' ) );
     }
 
-    // 3. Ambil data mentah
     $raw_data = isset( $_POST['ad_packages'] ) ? $_POST['ad_packages'] : array();
 
-    // 4. Sanitasi Data (PENTING untuk keamanan array multidimensi)
     $clean_data = array(
         'banner' => array(),
         'wisata' => array(),
@@ -114,20 +110,17 @@ function dw_save_ad_settings_handler() {
                     $clean_data[$type][] = array(
                         'name'  => sanitize_text_field( $item['name'] ),
                         'days'  => intval( $item['days'] ),
-                        'price' => floatval( $item['price'] )
+                        'price' => floatval( $item['price'] ),
+                        'quota' => isset($item['quota']) ? intval($item['quota']) : 0 // Simpan Kuota
                     );
                 }
             }
         }
-        // Urutkan berdasarkan harga termurah atau hari tersedikit (opsional)
-        // usort($clean_data[$type], function($a, $b) { return $a['price'] - $b['price']; });
     }
 
-    // 5. Simpan ke WP Options
     if ( update_option( 'dw_ad_packages', $clean_data ) ) {
-        wp_send_json_success( array( 'message' => 'Pengaturan harga berhasil diperbarui.' ) );
+        wp_send_json_success( array( 'message' => 'Pengaturan harga & kuota berhasil diperbarui.' ) );
     } else {
-        // Jika data tidak berubah, update_option return false, tapi ini bukan error sebenarnya.
         wp_send_json_success( array( 'message' => 'Pengaturan tersimpan (tidak ada perubahan data).' ) );
     }
 }

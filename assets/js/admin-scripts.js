@@ -1,142 +1,202 @@
-jQuery(document).ready(function($) {
+jQuery(document).ready(function ($) {
+    'use strict';
 
-    console.log('DW Admin Script Initialized');
+    /**
+     * =========================================
+     * 1. Dynamic Address Loading (Alamat)
+     * =========================================
+     */
+    const $provinsiSelect = $('#dw_provinsi_id');
+    const $kotaSelect = $('#dw_kota_id');
+    const $kecamatanSelect = $('#dw_kecamatan_id');
 
-    // Cek apakah variabel dari PHP masuk
-    if (typeof dw_admin_vars === 'undefined') {
-        console.error('ERROR CRITICAL: dw_admin_vars tidak ditemukan. Cek file admin-assets.php Anda.');
-        // Fallback darurat (Mencegah crash, tapi mungkin nonce expired)
-        var dw_admin_vars = { ajaxurl: ajaxurl, nonce: '' }; 
+    if ($provinsiSelect.length > 0) {
+        $provinsiSelect.on('change', function () {
+            const provinceId = $(this).val();
+            $kotaSelect.html('<option value="">Memuat Kota...</option>').prop('disabled', true);
+            $kecamatanSelect.html('<option value="">Pilih Kecamatan</option>').prop('disabled', true);
+
+            if (provinceId) {
+                $.ajax({
+                    url: dw_ajax.ajax_url,
+                    type: 'POST',
+                    dataType: 'json',
+                    data: { action: 'dw_get_cities', province_id: provinceId, nonce: dw_ajax.nonce },
+                    success: function (response) {
+                        if (response.success) {
+                            let options = '<option value="">Pilih Kota/Kabupaten</option>';
+                            $.each(response.data.cities, function (index, city) {
+                                let cityName = city.city_name || city.name;
+                                let cityId = city.city_id || city.id;
+                                let cityType = city.type || '';
+                                options += `<option value="${cityId}">${cityType} ${cityName}</option>`;
+                            });
+                            $kotaSelect.html(options).prop('disabled', false);
+                        } else {
+                            $kotaSelect.html('<option value="">Gagal Memuat</option>');
+                        }
+                    }
+                });
+            }
+        });
     }
 
-    // =================================================
-    // HANDLER VERIFIKASI PAKET (Sesuai ID/Class dari File Anda)
-    // =================================================
-    $(document).on('click', '.dw-verify-paket-btn', function(e) {
+    if ($kotaSelect.length > 0) {
+        $kotaSelect.on('change', function () {
+            const cityId = $(this).val();
+            if ($kecamatanSelect.length > 0) {
+                $kecamatanSelect.html('<option value="">Memuat Kecamatan...</option>').prop('disabled', true);
+                if (cityId) {
+                    $.ajax({
+                        url: dw_ajax.ajax_url,
+                        type: 'POST',
+                        dataType: 'json',
+                        data: { action: 'dw_get_subdistricts', city_id: cityId, nonce: dw_ajax.nonce },
+                        success: function (response) {
+                            if (response.success) {
+                                let options = '<option value="">Pilih Kecamatan</option>';
+                                $.each(response.data.subdistricts, function (index, sub) {
+                                    options += `<option value="${sub.subdistrict_id}">${sub.subdistrict_name}</option>`;
+                                });
+                                $kecamatanSelect.html(options).prop('disabled', false);
+                            } else {
+                                $kecamatanSelect.html('<option value="">Data tidak tersedia</option>');
+                            }
+                        }
+                    });
+                }
+            }
+        });
+    }
+
+
+    /**
+     * =========================================
+     * 2. Promotion Management (Voucher)
+     * =========================================
+     */
+    // Menggunakan delegate event agar lebih robust
+    $(document).on('click', '.dw-add-promo-btn', function(e) {
+        e.preventDefault();
+        $('#dw-promotion-form')[0].reset();
+        $('#promo_id').val('');
+        $('#modal-title').text('Tambah Voucher Diskon');
+        $('#dw-promo-modal').fadeIn();
+    });
+
+    $(document).on('click', '.dw-close-modal', function() {
+        $('#dw-promo-modal').fadeOut();
+    });
+
+    // Close modal when clicking outside
+    $(window).on('click', function(e) {
+        if ($(e.target).is('#dw-promo-modal')) {
+            $('#dw-promo-modal').fadeOut();
+        }
+    });
+
+    $('#dw-promotion-form').on('submit', function (e) {
+        e.preventDefault();
+        const formData = $(this).serialize();
+        const $submitBtn = $(this).find('button[type="submit"]');
+        const originalText = $submitBtn.text();
+
+        $submitBtn.text('Menyimpan...').prop('disabled', true);
+
+        $.ajax({
+            url: dw_ajax.ajax_url,
+            type: 'POST',
+            data: formData + '&action=dw_save_promotion&nonce=' + dw_ajax.nonce,
+            success: function (response) {
+                if (response.success) {
+                    alert(response.data.message);
+                    location.reload();
+                } else {
+                    alert('Error: ' + response.data.message);
+                    $submitBtn.text(originalText).prop('disabled', false);
+                }
+            },
+            error: function () {
+                alert('Gagal terkoneksi ke server.');
+                $submitBtn.text(originalText).prop('disabled', false);
+            }
+        });
+    });
+
+    /**
+     * =========================================
+     * 3. Ad Settings Management (Paket Iklan)
+     * =========================================
+     */
+    
+    // Helper: Tambah Baris (Menggunakan Event Delegation)
+    $(document).on('click', '.dw-add-row', function(e) {
         e.preventDefault();
         
-        var button = $(this);
-        var card = button.closest('.dw-request-card');
-        var postId = button.data('id');       // ID Transaksi
-        var actionType = button.data('type'); // approve / reject
-        var spinner = $('#spinner-' + postId);
-        var originalText = button.html();
-
-        // 1. Konfirmasi User
-        var pesan = (actionType === 'approve') 
-            ? 'Yakin ingin MENERIMA pembayaran ini dan mengaktifkan paket?' 
-            : 'Yakin ingin MENOLAK permintaan ini?';
+        const type = $(this).data('type'); // banner, wisata, produk
+        const tableBody = $('#table-' + type + '-packages tbody');
         
-        if (!confirm(pesan)) {
+        // Debugging: Cek apakah tombol terdeteksi
+        console.log('Tombol Tambah Baris Diklik: ' + type);
+
+        if (tableBody.length === 0) {
+            console.error('Tabel tidak ditemukan: #table-' + type + '-packages tbody');
             return;
         }
 
-        // 2. UI Loading State
-        button.prop('disabled', true).text('Memproses...');
-        button.siblings('button').prop('disabled', true); // Matikan tombol sebelahnya juga
-        if(spinner.length) spinner.show();
+        const timestamp = new Date().getTime(); // Unique ID
 
-        // 3. Kirim AJAX
-        $.ajax({
-            url: dw_admin_vars.ajaxurl,
-            type: 'POST',
-            dataType: 'json',
-            data: {
-                action: 'dw_process_verifikasi_paket', // Action sesuai di ajax-handlers.php (Handler LAMA/EXISTING)
-                security: dw_admin_vars.nonce,         // Nonce keamanan
-                post_id: postId,
-                action_type: actionType
-            },
-            success: function(response) {
-                if(spinner.length) spinner.hide();
+        // Hapus pesan "Belum ada paket" jika ada
+        tableBody.find('.empty-row').remove();
 
-                if (response.success) {
-                    // Sukses: Beri efek visual lalu reload
-                    card.css('background-color', '#dcfce7').fadeOut(500, function() {
-                        alert(response.data);
-                        location.reload(); 
-                    });
-                } else {
-                    // Gagal: Kembalikan tombol
-                    alert('GAGAL: ' + (response.data || 'Terjadi kesalahan sistem.'));
-                    button.html(originalText).prop('disabled', false);
-                    button.siblings('button').prop('disabled', false);
-                }
-            },
-            error: function(xhr, status, error) {
-                if(spinner.length) spinner.hide();
-                console.error('AJAX Error:', error);
-                console.log(xhr.responseText);
-                
-                alert('Terjadi kesalahan koneksi server. Cek console browser untuk detail.');
-                button.html(originalText).prop('disabled', false);
-                button.siblings('button').prop('disabled', false);
-            }
-        });
-    });
-
-    // =================================================
-    // HANDLER VERIFIKASI PEDAGANG (KTP/SELFIE)
-    // =================================================
-    $(document).on('click', '.dw-verify-pedagang-btn', function(e) {
-        e.preventDefault();
-        var button = $(this);
-        var pedagangId = button.data('id');
-        var actionType = button.data('type');
-
-        if (!confirm('Proses verifikasi pedagang ini?')) return;
-
-        button.prop('disabled', true).text('...');
-
-        $.ajax({
-            url: dw_admin_vars.ajaxurl,
-            type: 'POST',
-            data: {
-                action: 'dw_verify_pedagang',
-                security: dw_admin_vars.nonce,
-                pedagang_id: pedagangId,
-                action_type: actionType
-            },
-            success: function(response) {
-                if (response.success) {
-                    alert(response.data);
-                    location.reload();
-                } else {
-                    alert('Error: ' + response.data);
-                    button.prop('disabled', false).text(actionType === 'approve' ? 'Terima' : 'Tolak');
-                }
-            }
-        });
-    });
-
-    // =================================================
-    // HANDLER BULK PAYOUT
-    // =================================================
-    $(document).on('click', '.dw-bulk-payout-btn', function(e) {
-        e.preventDefault();
-        var button = $(this);
-        var desaId = button.data('desa-id');
+        const newRow = `
+            <tr>
+                <td><input type="text" name="ad_packages[${type}][${timestamp}][name]" class="regular-text" style="width:100%" placeholder="Contoh: Paket 7 Hari" required></td>
+                <td><input type="number" name="ad_packages[${type}][${timestamp}][days]" class="small-text" placeholder="7" required> Hari</td>
+                <td><input type="number" name="ad_packages[${type}][${timestamp}][price]" class="regular-text" placeholder="50000" required></td>
+                <td><input type="number" name="ad_packages[${type}][${timestamp}][quota]" class="small-text" placeholder="5" required></td>
+                <td><button type="button" class="button dw-remove-row"><span class="dashicons dashicons-trash"></span></button></td>
+            </tr>
+        `;
         
-        if (!confirm('Konfirmasi pembayaran telah dilakukan?')) return;
+        tableBody.append(newRow);
+    });
 
-        button.prop('disabled', true).text('Processing...');
+    // Helper: Hapus Baris
+    $(document).on('click', '.dw-remove-row', function(e) {
+        e.preventDefault();
+        if(confirm('Hapus baris ini?')) {
+            $(this).closest('tr').remove();
+        }
+    });
+
+    // Save Ad Settings AJAX
+    $('#dw-ad-settings-form').on('submit', function(e) {
+        e.preventDefault();
+        
+        const formData = $(this).serialize();
+        const $btn = $('#btn-save-ad-settings');
+        const originalText = $btn.text();
+
+        $btn.text('Menyimpan Pengaturan...').prop('disabled', true);
 
         $.ajax({
-            url: dw_admin_vars.ajaxurl,
+            url: dw_ajax.ajax_url,
             type: 'POST',
-            data: {
-                action: 'dw_process_bulk_payout_desa',
-                security: dw_admin_vars.nonce,
-                desa_id: desaId
-            },
+            data: formData + '&action=dw_save_ad_settings&nonce=' + dw_ajax.nonce,
             success: function(response) {
-                if (response.success) {
-                    alert(response.data);
-                    location.reload();
+                if(response.success) {
+                    alert('Pengaturan Harga & Kuota Iklan berhasil disimpan!');
+                    $btn.text('Tersimpan').prop('disabled', false);
+                    setTimeout(() => $btn.text(originalText), 2000);
                 } else {
-                    alert('Error: ' + response.data);
-                    button.prop('disabled', false).text('Tandai Lunas');
+                    alert('Gagal: ' + response.data.message);
+                    $btn.text(originalText).prop('disabled', false);
                 }
+            },
+            error: function() {
+                alert('Terjadi kesalahan server saat menyimpan.');
+                $btn.text(originalText).prop('disabled', false);
             }
         });
     });

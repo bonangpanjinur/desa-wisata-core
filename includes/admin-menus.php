@@ -5,6 +5,7 @@
  * Description: Mengatur menu admin dan meload halaman admin.
  * * [FIXED UPDATE]
  * - Menambahkan Menu Manajemen Kategori Wisata & Produk.
+ * - [UPDATE] Menggunakan callback function untuk menu Promosi agar tidak crash.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -32,7 +33,10 @@ if ( is_admin() ) {
     
     // Fitur Pendukung
     require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-komisi.php';
-    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-promosi.php';
+    
+    // [UPDATE] Page Promosi TIDAK di-require di sini secara langsung agar logic render aman
+    // require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-promosi.php'; 
+    
     require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-banner.php';
     require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-reviews.php';
     require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-chat.php';
@@ -69,7 +73,26 @@ function dw_render_pesanan() { if (function_exists('dw_pesanan_pedagang_page_ren
 function dw_render_komisi() { if (function_exists('dw_komisi_page_render')) dw_komisi_page_render(); }
 function dw_render_paket() { if (function_exists('dw_paket_transaksi_page_render')) dw_paket_transaksi_page_render(); }
 function dw_render_verifikasi_paket() { if (function_exists('dw_verifikasi_paket_page_render')) dw_verifikasi_paket_page_render(); }
-function dw_render_promosi() { if (function_exists('dw_admin_promosi_page_handler')) dw_admin_promosi_page_handler(); }
+
+// [UPDATE] Callback Khusus Promosi
+function dw_render_promosi() { 
+    // Load file hanya saat dibutuhkan (Lazy Loading)
+    if ( defined('DW_CORE_PLUGIN_DIR') ) {
+        $file_path = DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-promosi.php';
+        if ( file_exists( $file_path ) ) {
+            require_once $file_path;
+            // Panggil fungsi render utama dari file page-promosi.php
+            if ( function_exists( 'dw_render_promosi_page' ) ) {
+                dw_render_promosi_page();
+            } else {
+                echo '<div class="notice notice-error"><p>Fungsi <code>dw_render_promosi_page</code> tidak ditemukan.</p></div>';
+            }
+        } else {
+            echo '<div class="notice notice-error"><p>File page-promosi.php tidak ditemukan.</p></div>';
+        }
+    }
+}
+
 function dw_render_banner() { if (function_exists('dw_banner_page_render')) dw_banner_page_render(); }
 function dw_render_reviews() { if (function_exists('dw_reviews_moderation_page_render')) dw_reviews_moderation_page_render(); }
 function dw_render_chat() { if (function_exists('dw_chat_page_render')) dw_chat_page_render(); }
@@ -125,11 +148,12 @@ function dw_register_admin_menus() {
 
     // SUBMENU: Admin Desa
     if (current_user_can('admin_desa')) {
-         add_submenu_page('dw-dashboard', 'Verifikasi Pedagang', 'Verifikasi Pedagang', 'dw_approve_pedagang', 'dw-desa-verifikasi', 'dw_render_verifikasi_desa');
+          add_submenu_page('dw-dashboard', 'Verifikasi Pedagang', 'Verifikasi Pedagang', 'dw_approve_pedagang', 'dw-desa-verifikasi', 'dw_render_verifikasi_desa');
     }
 
     // SUBMENU: Tools Lain
     if (current_user_can('dw_manage_promosi')) {
+        // [UPDATE] Callback mengarah ke dw_render_promosi yang baru
         add_submenu_page('dw-dashboard', 'Promosi', 'Promosi', 'dw_manage_promosi', 'dw-promosi', 'dw_render_promosi');
     }
     if (current_user_can('dw_manage_banners')) {
@@ -159,4 +183,3 @@ function dw_cleanup_admin_menu() {
     remove_menu_page('edit-comments.php');
 }
 add_action('admin_menu', 'dw_cleanup_admin_menu', 999);
-?>
