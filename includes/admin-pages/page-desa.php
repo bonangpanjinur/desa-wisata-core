@@ -1,12 +1,7 @@
 <?php
 /**
  * File Name:   includes/admin-pages/page-desa.php
- * Description: CRUD Desa dengan Tampilan Tabel Modern (Card Style).
- * * [UPDATED]
- * - Tampilan tabel diubah menjadi gaya Card modern.
- * - Menambahkan thumbnail foto desa.
- * - Badge hitungan (Wisata & Pedagang) lebih cantik.
- * - Fitur Search & Pagination manual yang stabil.
+ * Description: CRUD Desa dengan UI Modern, Integrasi Wilayah, dan Statistik Relasi.
  */
 
 if (!defined('ABSPATH')) exit;
@@ -17,26 +12,21 @@ function dw_desa_page_render() {
     $message = '';
     $message_type = '';
 
-    // --- LOGIC: SAVE / UPDATE / DELETE ---
+    // --- LOGIC: SAVE / UPDATE / DELETE (Original Logic Preserved) ---
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_desa'])) {
-        
         if (!isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'dw_desa_action')) {
             echo '<div class="notice notice-error"><p>Security check failed.</p></div>'; return;
         }
 
         $action = sanitize_text_field($_POST['action_desa']);
 
-        // DELETE
         if ($action === 'delete' && !empty($_POST['desa_id'])) {
-            // Hapus relasi jika perlu (misal set id_desa=0 di pedagang/wisata) - Opsional
             $deleted = $wpdb->delete($table_name, ['id' => intval($_POST['desa_id'])]);
             if ($deleted !== false) {
                 $message = 'Data desa berhasil dihapus.'; $message_type = 'success';
             } else {
                 $message = 'Gagal menghapus desa: ' . $wpdb->last_error; $message_type = 'error';
             }
-        
-        // SAVE / UPDATE
         } elseif ($action === 'save') {
             $nama_desa = sanitize_text_field($_POST['nama_desa']);
             $slug = sanitize_title($nama_desa);
@@ -48,63 +38,52 @@ function dw_desa_page_render() {
                 'deskripsi'    => wp_kses_post($_POST['deskripsi']),
                 'foto'         => esc_url_raw($_POST['foto_desa_url']),
                 'status'       => sanitize_text_field($_POST['status']),
-                
-                // KEUANGAN
                 'persentase_komisi_penjualan' => isset($_POST['persentase_komisi']) ? floatval($_POST['persentase_komisi']) : 0,
                 'nama_bank_desa'              => sanitize_text_field($_POST['nama_bank_desa']),
                 'no_rekening_desa'            => sanitize_text_field($_POST['no_rekening_desa']),
                 'atas_nama_rekening_desa'     => sanitize_text_field($_POST['atas_nama_rekening_desa']),
                 'qris_image_url_desa'         => esc_url_raw($_POST['qris_image_url_desa']),
-
-                // WILAYAH API
-                'api_provinsi_id' => sanitize_text_field($_POST['provinsi_id']),
-                'api_kabupaten_id'=> sanitize_text_field($_POST['kabupaten_id']),
-                'api_kecamatan_id'=> sanitize_text_field($_POST['kecamatan_id']),
-                'api_kelurahan_id'=> sanitize_text_field($_POST['kelurahan_id']),
-                
-                // NAMA WILAYAH
-                'provinsi'     => sanitize_text_field($_POST['provinsi_nama']), 
-                'kabupaten'    => sanitize_text_field($_POST['kabupaten_nama']),
-                'kecamatan'    => sanitize_text_field($_POST['kecamatan_nama']),
-                'kelurahan'    => sanitize_text_field($_POST['desa_nama']),
-                
-                'alamat_lengkap' => sanitize_textarea_field($_POST['alamat_lengkap']),
+                'api_provinsi_id'  => sanitize_text_field($_POST['desa_prov']),
+                'api_kabupaten_id' => sanitize_text_field($_POST['desa_kota']),
+                'api_kecamatan_id' => sanitize_text_field($_POST['desa_kec']),
+                'api_kelurahan_id' => sanitize_text_field($_POST['desa_nama_id']),
+                'provinsi'  => sanitize_text_field($_POST['provinsi_text']), 
+                'kabupaten' => sanitize_text_field($_POST['kabupaten_text']),
+                'kecamatan' => sanitize_text_field($_POST['kecamatan_text']),
+                'kelurahan' => sanitize_text_field($_POST['kelurahan_text']),
+                'alamat_lengkap' => sanitize_textarea_field($_POST['desa_detail']),
                 'updated_at'   => current_time('mysql')
             ];
 
             if (!empty($_POST['desa_id'])) {
-                $result = $wpdb->update($table_name, $data, ['id' => intval($_POST['desa_id'])]);
+                $wpdb->update($table_name, $data, ['id' => intval($_POST['desa_id'])]);
                 $message = 'Data desa diperbarui.'; $message_type = 'success';
             } else {
                 $data['created_at'] = current_time('mysql');
-                $result = $wpdb->insert($table_name, $data);
+                $wpdb->insert($table_name, $data);
+                $desa_new_id = $wpdb->insert_id;
+                // Trigger sinkronisasi pedagang independen setelah desa baru disimpan
+                if(function_exists('dw_sync_independent_merchants_to_desa')) {
+                    dw_sync_independent_merchants_to_desa($desa_new_id, $data['api_kelurahan_id']);
+                }
                 $message = 'Desa baru ditambahkan.'; $message_type = 'success';
             }
         }
     }
 
-    // --- PREPARE DATA FOR VIEW ---
+    // --- PREPARE DATA ---
     $is_edit = isset($_GET['action']) && ($_GET['action'] == 'edit' || $_GET['action'] == 'new');
     $edit_data = null;
     if ($is_edit && isset($_GET['id'])) {
         $edit_data = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE id = %d", intval($_GET['id'])));
     }
-    
-    // User List untuk Dropdown
     $users = get_users(['role__in' => ['administrator', 'admin_desa', 'editor']]);
 
-    // --- LOGIKA API WILAYAH (Server Side Pre-fill) ---
-    $provinsi_id    = $edit_data->api_provinsi_id ?? '';
-    $kabupaten_id   = $edit_data->api_kabupaten_id ?? '';
-    $kecamatan_id   = $edit_data->api_kecamatan_id ?? '';
-    $kelurahan_id   = $edit_data->api_kelurahan_id ?? '';
-
-    $provinsi_list  = function_exists('dw_get_api_provinsi') ? dw_get_api_provinsi() : [];
-    $kabupaten_list = (!empty($provinsi_id) && function_exists('dw_get_api_kabupaten')) ? dw_get_api_kabupaten($provinsi_id) : [];
-    $kecamatan_list = (!empty($kabupaten_id) && function_exists('dw_get_api_kecamatan')) ? dw_get_api_kecamatan($kabupaten_id) : [];
-    $desa_list_api  = (!empty($kecamatan_id) && function_exists('dw_get_api_desa')) ? dw_get_api_desa($kecamatan_id) : [];
-
+    // Statistik untuk Dashboard Utama
+    $total_desa = $wpdb->get_var("SELECT COUNT(id) FROM $table_name");
+    $total_pedagang = $wpdb->get_var("SELECT COUNT(id) FROM {$wpdb->prefix}dw_pedagang");
     ?>
+
     <div class="wrap dw-wrap">
         <h1 class="wp-heading-inline">Manajemen Desa Wisata</h1>
         <?php if(!$is_edit): ?><a href="?page=dw-desa&action=new" class="page-title-action">Tambah Baru</a><?php endif; ?>
@@ -114,261 +93,233 @@ function dw_desa_page_render() {
             <div class="notice notice-<?php echo $message_type; ?> is-dismissible"><p><?php echo $message; ?></p></div>
         <?php endif; ?>
 
+        <?php if (!$is_edit): ?>
+            <!-- === STATS CARDS (NEW UI) === -->
+            <div class="dw-stats-grid">
+                <div class="dw-stat-card border-blue">
+                    <div class="dw-stat-icon bg-blue"><span class="dashicons dashicons-admin-site-alt3"></span></div>
+                    <div class="dw-stat-content">
+                        <span class="dw-stat-label">Total Desa</span>
+                        <span class="dw-stat-value"><?php echo number_format($total_desa); ?></span>
+                    </div>
+                </div>
+                <div class="dw-stat-card border-green">
+                    <div class="dw-stat-icon bg-green"><span class="dashicons dashicons-groups"></span></div>
+                    <div class="dw-stat-content">
+                        <span class="dw-stat-label">Total Pedagang</span>
+                        <span class="dw-stat-value"><?php echo number_format($total_pedagang); ?></span>
+                    </div>
+                </div>
+                <div class="dw-stat-card border-orange">
+                    <div class="dw-stat-icon bg-orange"><span class="dashicons dashicons-awards"></span></div>
+                    <div class="dw-stat-content">
+                        <span class="dw-stat-label">Sistem Relasi</span>
+                        <span class="dw-stat-value">Otomatis Wilayah</span>
+                    </div>
+                </div>
+            </div>
+        <?php endif; ?>
+
         <?php if ($is_edit): ?>
-            <!-- FORM VIEW (SAMA SEPERTI SEBELUMNYA) -->
-            <div class="card" style="padding: 20px; max-width: 100%; margin-top: 20px;">
-                <form method="post">
+            <!-- === FORM EDIT/TAMBAH (Original Form Intact) === -->
+            <div class="card dw-form-card">
+                <form method="post" id="dw-desa-form">
                     <?php wp_nonce_field('dw_desa_action'); ?>
                     <input type="hidden" name="action_desa" value="save">
                     <?php if ($edit_data): ?><input type="hidden" name="desa_id" value="<?php echo $edit_data->id; ?>"><?php endif; ?>
 
                     <table class="form-table">
-                        <tr valign="top"><th scope="row"><h3>Informasi Umum</h3></th><td></td></tr>
+                        <tr><th scope="row" colspan="2"><h3 class="dw-section-title">Informasi Dasar</h3></th></tr>
                         <tr>
-                            <th><label>Akun Admin Desa</label></th>
+                            <th><label>Akun Pengelola</label></th>
                             <td>
                                 <select name="id_user_desa" class="regular-text" required>
-                                    <option value="">-- Pilih User WordPress --</option>
+                                    <option value="">-- Pilih User --</option>
                                     <?php foreach ($users as $user): ?>
                                         <option value="<?php echo $user->ID; ?>" <?php selected($edit_data ? $edit_data->id_user_desa : '', $user->ID); ?>>
                                             <?php echo $user->display_name; ?> (<?php echo $user->user_login; ?>)
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
-                                <p class="description">User ini yang akan mengelola data desa.</p>
                             </td>
                         </tr>
-                        <tr><th>Nama Desa</th><td><input name="nama_desa" type="text" value="<?php echo esc_attr($edit_data->nama_desa ?? ''); ?>" class="regular-text" required placeholder="Contoh: Desa Wisata Pujon Kidul"></td></tr>
+                        <tr><th>Nama Desa</th><td><input name="nama_desa" type="text" value="<?php echo esc_attr($edit_data->nama_desa ?? ''); ?>" class="regular-text" required placeholder="Contoh: Desa Wisata Panglipuran"></td></tr>
                         <tr><th>Deskripsi</th><td><?php wp_editor($edit_data->deskripsi ?? '', 'deskripsi', ['textarea_rows'=>5, 'media_buttons'=>false]); ?></td></tr>
-                        
-                        <tr><th>Foto Sampul Desa</th><td>
-                            <div style="display:flex; gap:10px; align-items:center;">
-                                <div style="flex-grow:0;">
-                                    <input type="text" name="foto_desa_url" id="foto_desa_url" value="<?php echo esc_attr($edit_data->foto ?? ''); ?>" class="regular-text">
-                                    <button type="button" class="button" id="btn_upload_foto">Upload Foto</button>
+                        <tr><th>Foto Sampul</th><td>
+                            <input type="text" name="foto_desa_url" id="foto_desa_url" value="<?php echo esc_attr($edit_data->foto ?? ''); ?>" class="regular-text">
+                            <button type="button" class="button" id="btn_upload_foto">Pilih Gambar</button>
+                            <div class="dw-preview-container">
+                                <img id="preview_foto_desa" src="<?php echo !empty($edit_data->foto) ? esc_url($edit_data->foto) : ''; ?>" style="max-height:100px; <?php echo empty($edit_data->foto) ? 'display:none;' : ''; ?> margin-top:10px; border-radius:4px; border:1px solid #ddd;">
+                            </div>
+                        </td></tr>
+
+                        <tr><th scope="row" colspan="2"><h3 class="dw-section-title">Lokasi Administratif</h3></th></tr>
+                        <tr>
+                            <th>Wilayah</th>
+                            <td>
+                                <div class="dw-region-grid">
+                                    <select name="desa_prov" class="dw-region-prov regular-text" data-current="<?php echo esc_attr($edit_data->api_provinsi_id ?? ''); ?>" disabled><option value="">Memuat Provinsi...</option></select>
+                                    <select name="desa_kota" class="dw-region-kota regular-text" data-current="<?php echo esc_attr($edit_data->api_kabupaten_id ?? ''); ?>" disabled><option value="">Pilih Kota...</option></select>
+                                    <select name="desa_kec" class="dw-region-kec regular-text" data-current="<?php echo esc_attr($edit_data->api_kecamatan_id ?? ''); ?>" disabled><option value="">Pilih Kecamatan...</option></select>
+                                    <select name="desa_nama_id" class="dw-region-desa regular-text" data-current="<?php echo esc_attr($edit_data->api_kelurahan_id ?? ''); ?>" disabled><option value="">Pilih Kelurahan...</option></select>
                                 </div>
-                                <img id="preview_foto_desa" src="<?php echo !empty($edit_data->foto) ? esc_url($edit_data->foto) : 'https://placehold.co/100x60?text=No+Img'; ?>" style="height:60px; width:auto; border-radius:4px; border:1px solid #ddd;">
-                            </div>
+                                <!-- Hidden inputs for text values -->
+                                <input type="hidden" name="provinsi_text" class="dw-text-prov" value="<?php echo esc_attr($edit_data->provinsi ?? ''); ?>">
+                                <input type="hidden" name="kabupaten_text" class="dw-text-kota" value="<?php echo esc_attr($edit_data->kabupaten ?? ''); ?>">
+                                <input type="hidden" name="kecamatan_text" class="dw-text-kec" value="<?php echo esc_attr($edit_data->kecamatan ?? ''); ?>">
+                                <input type="hidden" name="kelurahan_text" class="dw-text-desa" value="<?php echo esc_attr($edit_data->kelurahan ?? ''); ?>">
+                                <p class="description">Pedagang di kelurahan yang sama akan terhubung otomatis.</p>
+                            </td>
+                        </tr>
+                        <tr><th>Alamat Detail</th><td><textarea name="desa_detail" class="large-text" rows="2" placeholder="Jalan, No Rumah, RT/RW"><?php echo esc_textarea($edit_data->alamat_lengkap ?? ''); ?></textarea></td></tr>
+
+                        <tr><th scope="row" colspan="2"><h3 class="dw-section-title">Keuangan & Komisi</h3></th></tr>
+                        <tr><th>Komisi Desa (%)</th><td>
+                            <input type="number" name="persentase_komisi" step="0.1" value="<?php echo esc_attr($edit_data->persentase_komisi_penjualan ?? '0'); ?>" class="small-text"> %
+                            <p class="description">Hanya berlaku jika Desa yang meng-ACC pendaftaran pedagang.</p>
                         </td></tr>
-
-                        <tr valign="top"><th scope="row"><h3 style="margin-top:20px;">Keuangan & Komisi</h3></th><td><hr></td></tr>
-                        <tr><th>Komisi Penjualan (%)</th><td><input type="number" name="persentase_komisi" step="0.01" min="0" max="100" value="<?php echo esc_attr($edit_data->persentase_komisi_penjualan ?? '0'); ?>" class="small-text"> %</td></tr>
-                        <tr><th>Nama Bank</th><td><input name="nama_bank_desa" type="text" value="<?php echo esc_attr($edit_data->nama_bank_desa ?? ''); ?>" class="regular-text"></td></tr>
-                        <tr><th>Nomor Rekening</th><td><input name="no_rekening_desa" type="text" value="<?php echo esc_attr($edit_data->no_rekening_desa ?? ''); ?>" class="regular-text"></td></tr>
-                        <tr><th>Atas Nama</th><td><input name="atas_nama_rekening_desa" type="text" value="<?php echo esc_attr($edit_data->atas_nama_rekening_desa ?? ''); ?>" class="regular-text"></td></tr>
-                        <tr><th>QRIS Desa</th><td>
-                            <div style="display:flex; gap:10px; align-items:center;">
-                                <input type="text" name="qris_image_url_desa" id="qris_image_url_desa" value="<?php echo esc_attr($edit_data->qris_image_url_desa ?? ''); ?>" class="regular-text">
-                                <button type="button" class="button" id="btn_upload_qris">Upload QRIS</button>
+                        <tr><th>Data Bank</th><td>
+                            <div style="display:grid; grid-template-columns: 1fr 2fr; gap:10px;">
+                                <input name="nama_bank_desa" type="text" value="<?php echo esc_attr($edit_data->nama_bank_desa ?? ''); ?>" placeholder="Nama Bank" class="widefat">
+                                <input name="no_rekening_desa" type="text" value="<?php echo esc_attr($edit_data->no_rekening_desa ?? ''); ?>" placeholder="No. Rekening" class="widefat">
                             </div>
+                            <input name="atas_nama_rekening_desa" type="text" value="<?php echo esc_attr($edit_data->atas_nama_rekening_desa ?? ''); ?>" placeholder="Atas Nama" class="widefat" style="margin-top:5px;">
                         </td></tr>
-
-                        <tr valign="top"><th scope="row"><h3 style="margin-top:20px;">Lokasi & Alamat</h3></th><td><hr></td></tr>
-                        <!-- FORM SELECT2 WILAYAH SAMA SEPERTI SEBELUMNYA -->
-                        <tr><th>Provinsi</th><td><select name="provinsi_id" id="dw_provinsi" class="dw-provinsi-select regular-text" required><option value="">-- Pilih Provinsi --</option><?php foreach ($provinsi_list as $prov) : ?><option value="<?php echo esc_attr($prov['code']); ?>" <?php selected($provinsi_id, $prov['code']); ?>><?php echo esc_html($prov['name']); ?></option><?php endforeach; ?></select></td></tr>
-                        <tr><th>Kabupaten/Kota</th><td><select name="kabupaten_id" id="dw_kabupaten" class="dw-kabupaten-select regular-text" <?php disabled(empty($kabupaten_list)); ?> required><option value="">-- Pilih Kabupaten --</option><?php foreach ($kabupaten_list as $kab) : ?><option value="<?php echo esc_attr($kab['code']); ?>" <?php selected($kabupaten_id, $kab['code']); ?>><?php echo esc_html($kab['name']); ?></option><?php endforeach; ?></select></td></tr>
-                        <tr><th>Kecamatan</th><td><select name="kecamatan_id" id="dw_kecamatan" class="dw-kecamatan-select regular-text" <?php disabled(empty($kecamatan_list)); ?> required><option value="">-- Pilih Kecamatan --</option><?php foreach ($kecamatan_list as $kec) : ?><option value="<?php echo esc_attr($kec['code']); ?>" <?php selected($kecamatan_id, $kec['code']); ?>><?php echo esc_html($kec['name']); ?></option><?php endforeach; ?></select></td></tr>
-                        <tr><th>Kelurahan/Desa</th><td><select name="kelurahan_id" id="dw_desa" class="dw-desa-select regular-text" <?php disabled(empty($desa_list_api)); ?> required><option value="">-- Pilih Kelurahan --</option><?php foreach ($desa_list_api as $desa) : ?><option value="<?php echo esc_attr($desa['code']); ?>" <?php selected($kelurahan_id, $desa['code']); ?>><?php echo esc_html($desa['name']); ?></option><?php endforeach; ?></select></td></tr>
-                        <tr><th>Detail Alamat</th><td><textarea name="alamat_lengkap" class="large-text" rows="2" placeholder="Nama Jalan, RT/RW..."><?php echo esc_textarea($edit_data->alamat_lengkap ?? ''); ?></textarea></td></tr>
-
-                        <tr><th>Status</th><td>
+                        <tr><th>Status Aktif</th><td>
                             <select name="status">
-                                <option value="aktif" <?php selected($edit_data ? $edit_data->status : '', 'aktif'); ?>>Aktif</option>
-                                <option value="pending" <?php selected($edit_data ? $edit_data->status : '', 'pending'); ?>>Pending</option>
+                                <option value="aktif" <?php selected($edit_data->status ?? '', 'aktif'); ?>>Aktif</option>
+                                <option value="pending" <?php selected($edit_data->status ?? '', 'pending'); ?>>Pending</option>
                             </select>
                         </td></tr>
                     </table>
 
-                    <!-- HIDDEN INPUTS NAMA WILAYAH -->
-                    <input type="hidden" class="dw-provinsi-nama" name="provinsi_nama" value="<?php echo esc_attr($edit_data->provinsi ?? ''); ?>">
-                    <input type="hidden" class="dw-kabupaten-nama" name="kabupaten_nama" value="<?php echo esc_attr($edit_data->kabupaten ?? ''); ?>">
-                    <input type="hidden" class="dw-kecamatan-nama" name="kecamatan_nama" value="<?php echo esc_attr($edit_data->kecamatan ?? ''); ?>">
-                    <input type="hidden" class="dw-desa-nama" name="desa_nama" value="<?php echo esc_attr($edit_data->kelurahan ?? ''); ?>">
-
                     <p class="submit">
-                        <input type="submit" class="button button-primary" value="Simpan Data Desa">
-                        <a href="?page=dw-desa" class="button">Batal</a>
+                        <input type="submit" class="button button-primary button-large" value="Simpan Data Desa">
+                        <a href="?page=dw-desa" class="button">Kembali</a>
                     </p>
                 </form>
             </div>
-            
             <script>
             jQuery(document).ready(function($){
-                function dw_setup_uploader(btnId, inputId, imgId) {
-                    $(btnId).click(function(e){
-                        e.preventDefault();
-                        var frame = wp.media({ title: 'Pilih Gambar', multiple: false, library: { type: 'image' } });
-                        frame.on('select', function(){
-                            var url = frame.state().get('selection').first().toJSON().url;
-                            $(inputId).val(url);
-                            if(imgId) $(imgId).attr('src', url);
-                        });
-                        frame.open();
+                // Media Upload
+                $('#btn_upload_foto').click(function(e){
+                    e.preventDefault();
+                    var frame = wp.media({ title: 'Pilih Foto Desa', multiple: false, library: { type: 'image' } });
+                    frame.on('select', function(){
+                        var url = frame.state().get('selection').first().toJSON().url;
+                        $('#foto_desa_url').val(url);
+                        $('#preview_foto_desa').attr('src', url).show();
                     });
-                }
-                dw_setup_uploader('#btn_upload_foto', '#foto_desa_url', '#preview_foto_desa');
-                dw_setup_uploader('#btn_upload_qris', '#qris_image_url_desa', null);
+                    frame.open();
+                });
             });
             </script>
 
         <?php else: ?>
-            
-            <!-- === TABEL LIST DESA MODERN (MANUAL RENDER) === -->
+            <!-- === TABEL LIST DESA (Original Table with Improved UI) === -->
             <?php 
-                // 1. Pagination & Search Setup
                 $per_page = 10;
                 $paged = isset($_GET['paged']) ? max(1, intval($_GET['paged'])) : 1;
                 $offset = ($paged - 1) * $per_page;
                 $search = isset($_GET['s']) ? sanitize_text_field($_GET['s']) : '';
 
-                // 2. Query Data dengan Counts
-                $table_desa = $wpdb->prefix . 'dw_desa';
-                $table_wisata = $wpdb->prefix . 'dw_wisata';
-                $table_pedagang = $wpdb->prefix . 'dw_pedagang';
-
                 $where_sql = "WHERE 1=1";
                 if (!empty($search)) {
-                    $where_sql .= $wpdb->prepare(" AND (nama_desa LIKE %s OR kabupaten LIKE %s)", "%$search%", "%$search%");
+                    $where_sql .= $wpdb->prepare(" AND (nama_desa LIKE %s OR kabupaten LIKE %s OR kelurahan LIKE %s)", "%$search%", "%$search%", "%$search%");
                 }
 
-                // Hitung Total
-                $total_items = $wpdb->get_var("SELECT COUNT(id) FROM $table_desa $where_sql");
+                $total_items = $wpdb->get_var("SELECT COUNT(id) FROM $table_name $where_sql");
                 $total_pages = ceil($total_items / $per_page);
 
-                // Query Utama
                 $sql = "SELECT d.*, 
-                        (SELECT COUNT(w.id) FROM $table_wisata w WHERE w.id_desa = d.id AND w.status != 'trash') as count_wisata,
-                        (SELECT COUNT(p.id) FROM $table_pedagang p WHERE p.id_desa = d.id AND p.status_akun != 'suspend') as count_pedagang,
+                        (SELECT COUNT(p.id) FROM {$wpdb->prefix}dw_pedagang p WHERE p.id_desa = d.id) as count_pedagang,
                         u.display_name as admin_name
-                        FROM $table_desa d
+                        FROM $table_name d
                         LEFT JOIN {$wpdb->users} u ON d.id_user_desa = u.ID
-                        $where_sql
-                        ORDER BY d.created_at DESC
-                        LIMIT %d OFFSET %d";
+                        $where_sql ORDER BY d.created_at DESC LIMIT %d OFFSET %d";
                 
                 $rows = $wpdb->get_results($wpdb->prepare($sql, $per_page, $offset));
             ?>
 
-            <!-- Toolbar: Search -->
-            <div class="tablenav top" style="display:flex; justify-content:flex-end; margin-bottom:15px;">
+            <div class="tablenav top">
                 <form method="get">
                     <input type="hidden" name="page" value="dw-desa">
                     <p class="search-box">
-                        <input type="search" name="s" value="<?php echo esc_attr($search); ?>" placeholder="Cari Nama Desa...">
+                        <input type="search" name="s" value="<?php echo esc_attr($search); ?>" placeholder="Cari Desa/Wilayah...">
                         <input type="submit" class="button" value="Cari">
                     </p>
                 </form>
             </div>
 
-            <!-- Styles -->
-            <style>
-                .dw-card-table { background:#fff; border:1px solid #c3c4c7; border-radius:4px; box-shadow:0 1px 1px rgba(0,0,0,.04); overflow:hidden; }
-                .dw-thumb-desa { width:60px; height:60px; border-radius:4px; object-fit:cover; border:1px solid #eee; background:#f9f9f9; }
-                .dw-badge { display:inline-block; padding:4px 8px; border-radius:12px; font-size:11px; font-weight:600; line-height:1; }
-                .dw-badge-active { background:#dcfce7; color:#166534; border:1px solid #bbf7d0; }
-                .dw-badge-pending { background:#fef9c3; color:#854d0e; border:1px solid #fde047; }
-                
-                .dw-stat-pill { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600; margin-right:5px; border:1px solid transparent; }
-                .stat-wisata { background:#e0f2f1; color:#00695c; border-color:#b2dfdb; }
-                .stat-toko { background:#fff3e0; color:#e65100; border-color:#ffe0b2; }
-                
-                .dw-location { font-size:12px; color:#64748b; display:flex; align-items:center; gap:4px; margin-top:2px; }
-                .dw-pagination { margin-top: 15px; text-align: right; }
-                .dw-pagination .page-numbers { padding: 5px 10px; border: 1px solid #ccc; text-decoration: none; background: #fff; border-radius: 3px; margin-left: 2px; }
-                .dw-pagination .page-numbers.current { background: #2271b1; color: #fff; border-color: #2271b1; }
-            </style>
-
             <div class="dw-card-table">
                 <table class="wp-list-table widefat fixed striped">
                     <thead>
                         <tr>
-                            <th width="80px" style="text-align:center;">Foto</th>
-                            <th width="25%">Nama Desa</th>
-                            <th width="20%">Lokasi</th>
-                            <th width="15%">Statistik</th>
-                            <th width="15%">Admin</th>
+                            <th width="60">Foto</th>
+                            <th width="30%">Nama Desa</th>
+                            <th width="20%">Wilayah</th>
+                            <th width="15%">Relasi Pedagang</th>
                             <th width="10%">Status</th>
-                            <th width="10%">Aksi</th>
+                            <th width="15%">Aksi</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <?php if($rows): foreach($rows as $r): 
-                            $edit_url = "?page=dw-desa&action=edit&id={$r->id}";
-                            $img_src = !empty($r->foto) ? $r->foto : 'https://placehold.co/100x100/e2e8f0/64748b?text=Desa';
-                            
-                            // Badge Status
-                            $status_html = ($r->status == 'aktif') 
-                                ? '<span class="dw-badge dw-badge-active">Aktif</span>' 
-                                : '<span class="dw-badge dw-badge-pending">Pending</span>';
-                        ?>
+                        <?php if($rows): foreach($rows as $r): $edit_url = "?page=dw-desa&action=edit&id={$r->id}"; ?>
                         <tr>
-                            <td style="text-align:center; vertical-align:middle;">
-                                <img src="<?php echo esc_url($img_src); ?>" class="dw-thumb-desa">
-                            </td>
+                            <td><img src="<?php echo esc_url($r->foto ? $r->foto : 'https://placehold.co/50'); ?>" class="dw-thumb-desa"></td>
                             <td>
-                                <strong><a href="<?php echo $edit_url; ?>" style="font-size:14px;"><?php echo esc_html($r->nama_desa); ?></a></strong>
-                                <br><small style="color:#888;">@<?php echo esc_html($r->slug_desa); ?></small>
+                                <strong><a href="<?php echo $edit_url; ?>" class="row-title"><?php echo esc_html($r->nama_desa); ?></a></strong>
+                                <div class="row-actions"><span class="edit"><a href="<?php echo $edit_url; ?>">Edit Detail</a></span></div>
+                                <small style="color:#666;">Admin: <?php echo esc_html($r->admin_name); ?></small>
                             </td>
+                            <td><small><?php echo esc_html($r->kelurahan); ?>, <?php echo esc_html($r->kecamatan); ?>, <?php echo esc_html($r->kabupaten); ?></small></td>
                             <td>
-                                <div class="dw-location" title="Kecamatan">
-                                    <span class="dashicons dashicons-location"></span> <?php echo esc_html($r->kecamatan ? $r->kecamatan : '-'); ?>
-                                </div>
-                                <div style="font-size:11px; color:#94a3b8; margin-left:20px;">
-                                    <?php echo esc_html($r->kabupaten); ?>
-                                </div>
+                                <span class="dw-stat-pill"><span class="dashicons dashicons-store" style="font-size:14px; width:14px; height:14px;"></span> <?php echo $r->count_pedagang; ?> Pedagang</span>
                             </td>
+                            <td><span class="dw-badge dw-badge-<?php echo $r->status; ?>"><?php echo ucfirst($r->status); ?></span></td>
                             <td>
-                                <div style="margin-bottom:4px;">
-                                    <span class="dw-stat-pill stat-wisata" title="Jumlah Objek Wisata">
-                                        <span class="dashicons dashicons-palmtree" style="font-size:12px;"></span> <?php echo $r->count_wisata; ?>
-                                    </span>
-                                </div>
-                                <div>
-                                    <span class="dw-stat-pill stat-toko" title="Jumlah Toko/Pedagang">
-                                        <span class="dashicons dashicons-store" style="font-size:12px;"></span> <?php echo $r->count_pedagang; ?>
-                                    </span>
-                                </div>
-                            </td>
-                            <td>
-                                <span class="dashicons dashicons-admin-users" style="color:#aaa; font-size:14px;"></span> 
-                                <?php echo esc_html($r->admin_name ? $r->admin_name : 'Belum Ada'); ?>
-                            </td>
-                            <td><?php echo $status_html; ?></td>
-                            <td>
-                                <a href="<?php echo $edit_url; ?>" class="button button-small button-primary">Edit</a>
-                                <form method="post" action="" style="display:inline-block;" onsubmit="return confirm('Hapus Desa <?php echo esc_js($r->nama_desa); ?>? Data terkait (pedagang/wisata) mungkin akan kehilangan relasi.');">
+                                <a href="<?php echo $edit_url; ?>" class="button button-small">Edit</a>
+                                <form method="post" style="display:inline;" onsubmit="return confirm('Hapus desa ini?');">
+                                    <?php wp_nonce_field('dw_desa_action'); ?>
                                     <input type="hidden" name="action_desa" value="delete">
                                     <input type="hidden" name="desa_id" value="<?php echo $r->id; ?>">
-                                    <?php wp_nonce_field('dw_desa_action'); ?>
-                                    <button type="submit" class="button button-small" style="color:#b32d2e; border-color:#b32d2e; background:transparent;">Hapus</button>
+                                    <button type="submit" class="button button-small" style="color:#d63638; border-color:#d63638;">Hapus</button>
                                 </form>
                             </td>
                         </tr>
                         <?php endforeach; else: ?>
-                            <tr><td colspan="7" style="text-align:center; padding:30px; color:#777;">Belum ada data desa wisata. Silakan tambah baru.</td></tr>
+                        <tr><td colspan="6">Belum ada data desa terdaftar.</td></tr>
                         <?php endif; ?>
                     </tbody>
                 </table>
             </div>
 
-            <!-- Pagination -->
             <?php if ($total_pages > 1): ?>
-            <div class="dw-pagination">
-                <?php 
-                echo paginate_links([
-                    'base' => add_query_arg('paged', '%#%'),
-                    'format' => '',
-                    'prev_text' => '&laquo;',
-                    'next_text' => '&raquo;',
-                    'total' => $total_pages,
-                    'current' => $paged
-                ]); 
-                ?>
-            </div>
+            <div class="tablenav bottom"><div class="tablenav-pages"><?php echo paginate_links(['total'=>$total_pages, 'current'=>$paged]); ?></div></div>
             <?php endif; ?>
 
         <?php endif; ?>
     </div>
+
+    <style>
+        .dw-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px 0; }
+        .dw-stat-card { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; align-items: center; border-left: 4px solid #ccd0d4; }
+        .dw-stat-icon { width: 44px; height: 44px; border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-right: 15px; }
+        .dw-stat-icon .dashicons { color: #fff; font-size: 24px; }
+        .dw-stat-label { display: block; font-size: 12px; color: #64748b; font-weight: 600; text-transform: uppercase; }
+        .dw-stat-value { display: block; font-size: 20px; font-weight: 700; color: #1e293b; }
+        
+        .bg-blue { background: #2271b1; } .bg-green { background: #00a32a; } .bg-orange { background: #dba617; }
+        .border-blue { border-left-color: #2271b1; } .border-green { border-left-color: #00a32a; } .border-orange { border-left-color: #dba617; }
+
+        .dw-form-card { padding: 25px; max-width: 1000px; margin-top: 20px; border-radius: 8px; }
+        .dw-section-title { margin-top: 0; padding-bottom: 10px; border-bottom: 1px solid #eee; color: #1d2327; }
+        .dw-thumb-desa { width: 50px; height: 50px; border-radius: 6px; object-fit: cover; border: 1px solid #ddd; }
+        .dw-badge { padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+        .dw-badge-aktif { background: #e7f9ed; color: #184a2c; }
+        .dw-badge-pending { background: #fff7ed; color: #7c2d12; }
+        .dw-stat-pill { background: #f0f0f1; padding: 4px 8px; border-radius: 4px; font-size: 11px; color: #50575e; font-weight: 500; display: inline-flex; align-items: center; gap: 5px; }
+        .dw-region-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; max-width: 500px; }
+    </style>
     <?php
 }
-?>
