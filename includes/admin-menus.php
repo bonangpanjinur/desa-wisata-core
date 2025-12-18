@@ -4,8 +4,9 @@
  * File Folder: includes/
  * Description: Mengatur menu admin dan meload halaman admin.
  * * [FIXED UPDATE]
- * - Menambahkan Menu Manajemen Kategori Wisata & Produk.
- * - [UPDATE] Menggunakan callback function untuk menu Promosi agar tidak crash.
+ * - Sinkronisasi nama fungsi callback untuk halaman Verifikasi Paket.
+ * - Mengembalikan menu Verifikasi Paket yang hilang.
+ * - Menggunakan callback function untuk menu Promosi agar tidak crash.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -72,7 +73,17 @@ function dw_render_wisata() { if (function_exists('dw_wisata_page_render')) dw_w
 function dw_render_pesanan() { if (function_exists('dw_pesanan_pedagang_page_render')) dw_pesanan_pedagang_page_render(); }
 function dw_render_komisi() { if (function_exists('dw_komisi_page_render')) dw_komisi_page_render(); }
 function dw_render_paket() { if (function_exists('dw_paket_transaksi_page_render')) dw_paket_transaksi_page_render(); }
-function dw_render_verifikasi_paket() { if (function_exists('dw_verifikasi_paket_page_render')) dw_verifikasi_paket_page_render(); }
+
+// [FIX] Perbaikan nama fungsi callback sesuai isi file page-verifikasi-paket.php
+function dw_render_verifikasi_paket() { 
+    if (function_exists('dw_render_page_verifikasi_paket')) {
+        dw_render_page_verifikasi_paket(); 
+    } elseif (function_exists('dw_verifikasi_paket_page_render')) {
+        dw_verifikasi_paket_page_render();
+    } else {
+        echo '<div class="notice notice-error"><p>Error: Fungsi render verifikasi paket tidak ditemukan.</p></div>';
+    }
+}
 
 // [UPDATE] Callback Khusus Promosi
 function dw_render_promosi() { 
@@ -123,10 +134,11 @@ function dw_register_admin_menus() {
     add_submenu_page('dw-dashboard', 'Kategori Wisata', 'Kategori Wisata', 'manage_categories', 'edit-tags.php?taxonomy=kategori_wisata&post_type=dw_wisata');
 
     // SUBMENU: Produk
-    if (!current_user_can('admin_desa')) {
+    // Jika admin desa, dia tidak butuh menu produk global, tapi jika admin/super admin butuh
+    if (current_user_can('edit_posts')) {
         add_submenu_page('dw-dashboard', 'Produk', 'Produk', 'edit_posts', 'dw-produk', 'dw_render_produk');
         
-        // SUBMENU: Kategori Produk (Baru - Hanya jika akses produk ada)
+        // SUBMENU: Kategori Produk
         add_submenu_page('dw-dashboard', 'Kategori Produk', 'Kategori Produk', 'manage_categories', 'edit-tags.php?taxonomy=kategori_produk&post_type=dw_produk');
     }
 
@@ -140,33 +152,42 @@ function dw_register_admin_menus() {
     }
 
     // SUBMENU: Keuangan & Paket (Khusus Admin/Super Admin)
-    if (current_user_can('dw_manage_settings')) {
-        add_submenu_page('dw-dashboard', 'Paket Transaksi', 'Paket Transaksi', 'dw_manage_settings', 'dw-paket-transaksi', 'dw_render_paket');
-        add_submenu_page('dw-dashboard', 'Verifikasi Paket', 'Verifikasi Paket', 'dw_manage_settings', 'dw-verifikasi-paket', 'dw_render_verifikasi_paket');
-        add_submenu_page('dw-dashboard', 'Payout Komisi', 'Payout Komisi', 'dw_manage_settings', 'dw-komisi', 'dw_render_komisi');
+    // [FIX] Menggunakan 'manage_options' agar Administrator pasti bisa melihatnya
+    if (current_user_can('manage_options') || current_user_can('dw_manage_settings')) {
+        add_submenu_page('dw-dashboard', 'Paket Transaksi', 'Paket Transaksi', 'manage_options', 'dw-paket-transaksi', 'dw_render_paket');
+        
+        // [FIX] Menu Verifikasi Paket dikembalikan
+        add_submenu_page('dw-dashboard', 'Verifikasi Paket', 'Verifikasi Paket', 'manage_options', 'dw-verifikasi-paket', 'dw_render_verifikasi_paket');
+        
+        add_submenu_page('dw-dashboard', 'Payout Komisi', 'Payout Komisi', 'manage_options', 'dw-komisi', 'dw_render_komisi');
     }
 
     // SUBMENU: Admin Desa
-    if (current_user_can('admin_desa')) {
+    if (current_user_can('admin_desa') || current_user_can('manage_options')) {
           add_submenu_page('dw-dashboard', 'Verifikasi Pedagang', 'Verifikasi Pedagang', 'dw_approve_pedagang', 'dw-desa-verifikasi', 'dw_render_verifikasi_desa');
     }
 
     // SUBMENU: Tools Lain
-    if (current_user_can('dw_manage_promosi')) {
+    // [FIX] Menggunakan 'manage_options' sebagai fallback capability
+    if (current_user_can('manage_options') || current_user_can('dw_manage_promosi')) {
         // [UPDATE] Callback mengarah ke dw_render_promosi yang baru
-        add_submenu_page('dw-dashboard', 'Promosi', 'Promosi', 'dw_manage_promosi', 'dw-promosi', 'dw_render_promosi');
+        add_submenu_page('dw-dashboard', 'Promosi', 'Promosi', 'manage_options', 'dw-promosi', 'dw_render_promosi');
     }
-    if (current_user_can('dw_manage_banners')) {
-        add_submenu_page('dw-dashboard', 'Banner', 'Banner', 'dw_manage_banners', 'dw-banner', 'dw_render_banner');
+    
+    if (current_user_can('manage_options') || current_user_can('dw_manage_banners')) {
+        add_submenu_page('dw-dashboard', 'Banner', 'Banner', 'manage_options', 'dw-banner', 'dw_render_banner');
     }
+    
     if (current_user_can('moderate_comments')) {
         add_submenu_page('dw-dashboard', 'Moderasi Ulasan', 'Ulasan', 'moderate_comments', 'dw-reviews', 'dw_render_reviews');
     }
-    if (current_user_can('dw_view_logs')) {
-        add_submenu_page('dw-dashboard', 'Logs', 'Logs', 'dw_view_logs', 'dw_logs', 'dw_render_logs');
+    
+    if (current_user_can('manage_options') || current_user_can('dw_view_logs')) {
+        add_submenu_page('dw-dashboard', 'Logs', 'Logs', 'manage_options', 'dw-logs', 'dw_render_logs');
     }
-    if (current_user_can('dw_manage_settings')) {
-        add_submenu_page('dw-dashboard', 'Pengaturan', 'Pengaturan', 'dw_manage_settings', 'dw-settings', 'dw_render_settings');
+    
+    if (current_user_can('manage_options') || current_user_can('dw_manage_settings')) {
+        add_submenu_page('dw-dashboard', 'Pengaturan', 'Pengaturan', 'manage_options', 'dw-settings', 'dw_render_settings');
     }
 }
 add_action('admin_menu', 'dw_register_admin_menus');
