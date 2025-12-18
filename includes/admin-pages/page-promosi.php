@@ -5,9 +5,20 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
+// Fix: Define path safely if constant is missing
+$plugin_root = defined('DW_PLUGIN_DIR') ? DW_PLUGIN_DIR : dirname( dirname( dirname( __FILE__ ) ) ) . '/';
+
 // Pastikan class list table sudah dimuat
 if ( ! class_exists( 'DW_Promosi_List_Table' ) ) {
-    require_once DW_PLUGIN_DIR . 'includes/list-tables/class-dw-promosi-list-table.php';
+    // Try to load from relative path if constant fails
+    $list_table_path = $plugin_root . 'includes/list-tables/class-dw-promosi-list-table.php';
+    
+    if ( file_exists( $list_table_path ) ) {
+        require_once $list_table_path;
+    } else {
+        // Fallback relative to this file
+        require_once dirname( dirname( __FILE__ ) ) . '/list-tables/class-dw-promosi-list-table.php';
+    }
 }
 
 $active_tab = isset( $_GET['tab'] ) ? sanitize_text_field( $_GET['tab'] ) : 'list';
@@ -34,10 +45,14 @@ $active_tab = isset( $_GET['tab'] ) ? sanitize_text_field( $_GET['tab'] ) : 'lis
             
             <form method="post">
                 <?php
-                $promosi_table = new DW_Promosi_List_Table();
-                $promosi_table->prepare_items();
-                $promosi_table->search_box( 'Cari Promosi', 'search_id' );
-                $promosi_table->display();
+                if ( class_exists( 'DW_Promosi_List_Table' ) ) {
+                    $promosi_table = new DW_Promosi_List_Table();
+                    $promosi_table->prepare_items();
+                    $promosi_table->search_box( 'Cari Promosi', 'search_id' );
+                    $promosi_table->display();
+                } else {
+                    echo '<div class="notice notice-error"><p>Error: Class Table tidak ditemukan.</p></div>';
+                }
                 ?>
             </form>
 
