@@ -105,7 +105,7 @@ function dw_activate_plugin() {
     dbDelta($sql_pedagang);
 
     // 2B. Tabel Ojek (NEW - Driver)
-    $sql_ojek = "CREATE TABLE {$table_prefix}ojek (
+     $sql_ojek = "CREATE TABLE {$table_prefix}ojek (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_user BIGINT(20) UNSIGNED NOT NULL,
         nama_lengkap VARCHAR(255) NOT NULL,
@@ -114,10 +114,13 @@ function dw_activate_plugin() {
         no_kartu_ojek VARCHAR(50), 
         plat_nomor VARCHAR(20) NOT NULL,
         merk_motor VARCHAR(100) NOT NULL,
+        
+        -- Foto Dokumen
         foto_profil VARCHAR(255),
         foto_ktp VARCHAR(255),
-        foto_kartu_ojek VARCHAR(255),
+        foto_kartu_ojek VARCHAR(255), 
         foto_motor VARCHAR(255),
+        
         status_pendaftaran ENUM('menunggu','disetujui','ditolak') DEFAULT 'menunggu',
         status_kerja ENUM('offline','online','busy') DEFAULT 'offline',
         
@@ -132,6 +135,7 @@ function dw_activate_plugin() {
         total_trip INT DEFAULT 0,
         lokasi_terakhir_lat VARCHAR(50),
         lokasi_terakhir_lng VARCHAR(50),
+        
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         PRIMARY KEY  (id),

@@ -28,6 +28,61 @@ function dw_handle_get_cities() {
 
     wp_send_json_success(json_decode(wp_remote_retrieve_body($response)));
 }
+function dw_ajax_get_wilayah() {
+    // Bisa dipanggil oleh user login maupun non-login (untuk register)
+    // check_ajax_referer('dw_nonce', 'nonce'); // Opsional, sesuaikan kebutuhan keamanan
+
+    $type = isset($_GET['type']) ? sanitize_text_field($_GET['type']) : '';
+    $id   = isset($_GET['id']) ? sanitize_text_field($_GET['id']) : '';
+
+    $api_base = 'https://www.emsifa.com/api-wilayah-indonesia/api/';
+    $url = '';
+
+    switch ($type) {
+        case 'provinsi':
+            $url = $api_base . 'provinces.json';
+            break;
+        case 'kabupaten':
+            $url = $api_base . 'regencies/' . $id . '.json';
+            break;
+        case 'kecamatan':
+            $url = $api_base . 'districts/' . $id . '.json';
+            break;
+        case 'kelurahan':
+            $url = $api_base . 'villages/' . $id . '.json';
+            break;
+        default:
+            wp_send_json_error(['message' => 'Invalid Request']);
+    }
+
+    // Cek Cache Transient WP agar tidak request berulang kali ke API luar
+    $cache_key = 'dw_wilayah_' . $type . '_' . $id;
+    $cached_data = get_transient($cache_key);
+
+    if (false !== $cached_data) {
+        wp_send_json_success($cached_data);
+    }
+
+    // Fetch API
+    $response = wp_remote_get($url);
+
+    if (is_wp_error($response)) {
+        wp_send_json_error(['message' => 'Gagal mengambil data wilayah']);
+    }
+
+    $body = wp_remote_retrieve_body($response);
+    $data = json_decode($body);
+
+    if ($data) {
+        // Simpan cache selama 1 hari (86400 detik)
+        set_transient($cache_key, $data, 86400);
+        wp_send_json_success($data);
+    } else {
+        wp_send_json_error(['message' => 'Data kosong']);
+    }
+}
+add_action('wp_ajax_dw_get_wilayah', 'dw_ajax_get_wilayah');
+add_action('wp_ajax_nopriv_dw_get_wilayah', 'dw_ajax_get_wilayah');
 
 // Load Kecamatan berdasarkan Kota
 add_action('wp_ajax_dw_get_districts', 'dw_handle_get_districts');
