@@ -31,11 +31,7 @@ if ( is_admin() ) {
     // [NEW] HALAMAN MANAJEMEN OJEK (Untuk Admin)
     require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-ojek-management.php';
 
-    // [NEW] HALAMAN PANEL OJEK (Untuk Driver)
-    if (file_exists(DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-ojek.php')) {
-        require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-ojek.php';
-    }
-
+  
     // Fitur Pendukung
     require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-komisi.php';
     require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-banner.php';
