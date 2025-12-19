@@ -4,8 +4,7 @@
  * File Folder: includes/
  * Description: Mengatur menu admin dan meload halaman admin.
  * * UPDATE:
- * - Menambahkan Menu Panel Ojek (Khusus Role Ojek).
- * - Membersihkan dashboard untuk Ojek.
+ * - Menambahkan Menu Manajemen Ojek (Backend Admin List).
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -14,7 +13,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 /**
  * 1. LOAD FILE HALAMAN (EAGER LOADING)
- * Memuat file logic admin segera jika user berada di area admin.
  */
 if ( is_admin() ) {
     // Dashboard & Master Data
@@ -30,8 +28,10 @@ if ( is_admin() ) {
     require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-verifikasi-paket.php';
     require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-desa-verifikasi-pedagang.php';
     
-    // [NEW] HALAMAN OJEK
-    // Pastikan file ini ada (saya buatkan di bawah)
+    // [NEW] HALAMAN MANAJEMEN OJEK (Untuk Admin)
+    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-ojek-management.php';
+
+    // [NEW] HALAMAN PANEL OJEK (Untuk Driver)
     if (file_exists(DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-ojek.php')) {
         require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-ojek.php';
     }
@@ -78,7 +78,6 @@ function dw_render_verifikasi_paket() {
     }
 }
 
-// [UPDATE] Callback Khusus Promosi
 function dw_render_promosi() { 
     if ( defined('DW_CORE_PLUGIN_DIR') ) {
         $file_path = DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-promosi.php';
@@ -86,8 +85,6 @@ function dw_render_promosi() {
             require_once $file_path;
             if ( function_exists( 'dw_promosi_page_render' ) ) {
                 dw_promosi_page_render();
-            } else {
-                echo '<div class="notice notice-error"><p>Fungsi <code>dw_promosi_page_render</code> tidak ditemukan.</p></div>';
             }
         }
     }
@@ -100,12 +97,17 @@ function dw_render_logs() { if (function_exists('dw_logs_page_render')) dw_logs_
 function dw_render_settings() { if (function_exists('dw_admin_settings_page_handler')) dw_admin_settings_page_handler(); }
 function dw_render_verifikasi_desa() { if (function_exists('dw_admin_desa_verifikasi_page_render')) dw_admin_desa_verifikasi_page_render(); }
 
-// [NEW] Callback Render Panel Ojek
+// [NEW] Callback untuk Halaman Manajemen Ojek (Admin View)
+function dw_render_ojek_management() {
+    if (function_exists('dw_ojek_management_page_render')) {
+        dw_ojek_management_page_render();
+    }
+}
+
+// Callback untuk Panel Ojek (Driver View)
 function dw_render_ojek_panel() {
     if (function_exists('dw_ojek_panel_page_render')) {
         dw_ojek_panel_page_render();
-    } else {
-        echo '<div class="wrap"><h1>Panel Driver Ojek</h1><p>Halaman antarmuka driver sedang dimuat...</p></div>';
     }
 }
 
@@ -114,57 +116,44 @@ function dw_render_ojek_panel() {
  */
 function dw_register_admin_menus() {
     
-    // MENU UTAMA: Dashboard
     add_menu_page('Desa Wisata', 'Desa Wisata', 'read', 'dw-dashboard', 'dw_render_dashboard', 'dashicons-location-alt', 20);
-
-    // SUBMENU: Dashboard
     add_submenu_page('dw-dashboard', 'Dashboard', 'Dashboard', 'read', 'dw-dashboard', 'dw_render_dashboard');
-    
-    // SUBMENU: Desa
     add_submenu_page('dw-dashboard', 'Desa', 'Desa', 'dw_manage_desa', 'dw-desa', 'dw_render_desa');
-
-    // SUBMENU: Wisata
     add_submenu_page('dw-dashboard', 'Wisata', 'Wisata', 'edit_posts', 'dw-wisata', 'dw_render_wisata');
-    
-    // SUBMENU: Kategori Wisata
     add_submenu_page('dw-dashboard', 'Kategori Wisata', 'Kategori Wisata', 'manage_categories', 'edit-tags.php?taxonomy=kategori_wisata&post_type=dw_wisata');
 
-    // SUBMENU: Produk (Hanya tampil jika user punya akses)
     if (current_user_can('edit_posts')) {
         add_submenu_page('dw-dashboard', 'Produk', 'Produk', 'edit_posts', 'dw-produk', 'dw_render_produk');
         add_submenu_page('dw-dashboard', 'Kategori Produk', 'Kategori Produk', 'manage_categories', 'edit-tags.php?taxonomy=kategori_produk&post_type=dw_produk');
     }
 
-    // SUBMENU: Toko / Pedagang
     add_submenu_page('dw-dashboard', 'Manajemen Toko', 'Toko', 'dw_manage_pedagang', 'dw-pedagang', 'dw_render_pedagang');
 
-    // SUBMENU: Transaksi (Pedagang)
+    // [NEW] Menu Manajemen Ojek (Admin)
+    // Bisa diakses oleh Admin Kabupaten & Admin Desa (sesuai capability dw_manage_pedagang atau khusus)
+    // Disini saya pakai dw_verify_ojek (yang kita buat di roles-capabilities.php)
+    if (current_user_can('dw_verify_ojek') || current_user_can('manage_options')) {
+        add_submenu_page('dw-dashboard', 'Manajemen Ojek', 'Ojek Desa', 'dw_verify_ojek', 'dw-manajemen-ojek', 'dw_render_ojek_management');
+    }
+
+    // Menu Transaksi Pedagang
     if (current_user_can('pedagang')) {
         add_submenu_page('dw-dashboard', 'Pesanan Saya', 'Pesanan Saya', 'dw_manage_pesanan', 'dw-pesanan-pedagang', 'dw_render_pesanan');
         add_submenu_page('dw-dashboard', 'Inkuiri Produk', 'Inkuiri Produk', 'read', 'dw-chat-inquiry', 'dw_render_chat');
     }
 
-    // [NEW] SUBMENU: OJEK DESA (Khusus Role Ojek / Admin yang mau pantau)
-    // Menggunakan capability 'dw_view_orders' yang dimiliki role 'dw_ojek'
+    // Menu Panel Ojek (Driver)
     if (current_user_can('dw_ojek') || current_user_can('dw_view_orders')) {
-        add_submenu_page(
-            'dw-dashboard', 
-            'Panel Ojek', 
-            'Panel Ojek', 
-            'dw_view_orders', 
-            'dw-ojek-panel', 
-            'dw_render_ojek_panel'
-        );
+        add_submenu_page('dw-dashboard', 'Panel Ojek', 'Panel Ojek', 'dw_view_orders', 'dw-ojek-panel', 'dw_render_ojek_panel');
     }
 
-    // SUBMENU: Keuangan & Paket (Admin)
+    // Admin Tools
     if (current_user_can('manage_options') || current_user_can('dw_manage_settings')) {
         add_submenu_page('dw-dashboard', 'Paket Transaksi', 'Paket Transaksi', 'manage_options', 'dw-paket-transaksi', 'dw_render_paket');
         add_submenu_page('dw-dashboard', 'Verifikasi Paket', 'Verifikasi Paket', 'manage_options', 'dw-verifikasi-paket', 'dw_render_verifikasi_paket');
         add_submenu_page('dw-dashboard', 'Payout Komisi', 'Payout Komisi', 'manage_options', 'dw-komisi', 'dw_render_komisi');
     }
 
-    // SUBMENU: Tools Lain
     if (current_user_can('manage_options') || current_user_can('dw_manage_promosi')) {
         add_submenu_page('dw-dashboard', 'Promosi', 'Promosi', 'manage_options', 'dw-promosi', 'dw_render_promosi');
     }
@@ -188,23 +177,42 @@ function dw_register_admin_menus() {
 add_action('admin_menu', 'dw_register_admin_menus');
 
 /**
- * 4. HIDE MENUS (Cleanup Visual)
- * Membersihkan menu bawaan WP yang tidak relevan.
+ * 4. HIDE MENUS & CLEANUP VISUAL FOR OJEK
  */
-function dw_cleanup_admin_menu() {
+function dw_cleanup_admin_menu_ojek() {
     if (current_user_can('manage_options')) return;
     
-    remove_menu_page('edit.php'); // Posts
-    remove_menu_page('edit-comments.php'); // Comments
+    remove_menu_page('edit.php'); 
+    remove_menu_page('edit-comments.php'); 
     
-    // [NEW] Bersihkan menu untuk Ojek
     if (current_user_can('dw_ojek')) {
-        remove_menu_page('upload.php'); // Media
-        remove_menu_page('tools.php');  // Tools
-        remove_menu_page('themes.php'); // Appearance (biasanya auto hide, tapi just in case)
+        remove_menu_page('index.php');
+        remove_menu_page('upload.php');
+        remove_menu_page('tools.php');
+        remove_menu_page('themes.php');
         remove_menu_page('plugins.php');
         remove_menu_page('users.php');
         remove_menu_page('options-general.php');
+        remove_menu_page('profile.php');
     }
 }
-add_action('admin_menu', 'dw_cleanup_admin_menu', 999);
+add_action('admin_menu', 'dw_cleanup_admin_menu_ojek', 999);
+
+/**
+ * 5. STYLE KHUSUS UNTUK OJEK (APP-LIKE FEEL)
+ */
+function dw_ojek_admin_styles() {
+    if (current_user_can('dw_ojek') && !current_user_can('manage_options')) {
+        echo '<style>
+            #wpadminbar { display: none !important; }
+            html.wp-toolbar { padding-top: 0 !important; }
+            .wrap { margin: 10px !important; }
+            .dw-status-badge { padding: 5px 10px; border-radius: 4px; font-weight: bold; color: #fff; }
+            .dw-status-badge.online { background-color: #46b450; }
+            .dw-status-badge.offline { background-color: #dc3232; }
+            .dw-status-badge.busy { background-color: #ffb900; color: #333; }
+            .button-hero { width: 100%; padding: 15px !important; font-size: 18px !important; margin-bottom: 10px !important; text-align: center; }
+        </style>';
+    }
+}
+add_action('admin_head', 'dw_ojek_admin_styles');
