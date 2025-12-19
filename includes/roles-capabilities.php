@@ -5,7 +5,8 @@
  * File Path:   includes/roles-capabilities.php
  *
  * Mengelola peran pengguna kustom dan hak akses (capabilities).
- * UPDATE: Menambahkan Self-Healing Logic untuk memastikan hak akses selalu update.
+ * * UPDATE: Menambahkan Role Ojek & Capabilities terkait.
+ * * FEATURES: Self-Healing Logic, Duplicate Fixer, CPT Access Control.
  * @package DesaWisataCore
  */
 
@@ -13,26 +14,33 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit; 
 }
 
-// 1. DEFINISI KONSTANTA ROLE ID (Agar konsisten)
+// 1. DEFINISI KONSTANTA ROLE ID
 if ( ! defined( 'DW_ROLE_ADMIN_DESA' ) ) {
     define( 'DW_ROLE_ADMIN_DESA', 'admin_desa' );
 }
 
+/**
+ * Daftar Capabilities Custom Plugin
+ * Ditambahkan: dw_verify_ojek (untuk verifikasi pendaftaran driver)
+ */
 function dw_get_custom_capabilities() {
     return [
         'dw_manage_settings', 'dw_manage_desa', 'dw_manage_wisata', 'dw_manage_pedagang',
         'dw_approve_pedagang', 'dw_manage_produk', 'dw_manage_pesanan', 'dw_manage_promosi',
-        'dw_manage_banners', 'dw_view_logs', 'dw_manage_ongkir', 'dw_moderate_reviews'
+        'dw_manage_banners', 'dw_view_logs', 'dw_manage_ongkir', 'dw_moderate_reviews',
+        // Ojek Caps
+        'dw_verify_ojek', 'dw_view_orders', 'dw_bid_orders'
     ];
 }
 
 function dw_create_roles_and_caps() {
-    // Hapus peran lama untuk refresh bersih
+    // Hapus peran lama untuk refresh bersih (termasuk ojek jika perlu update caps)
     if ( get_role( 'admin_kabupaten' ) ) remove_role('admin_kabupaten');
     if ( get_role( DW_ROLE_ADMIN_DESA ) ) remove_role(DW_ROLE_ADMIN_DESA);
     if ( get_role( 'pedagang' ) ) remove_role('pedagang');
+    if ( get_role( 'dw_ojek' ) ) remove_role('dw_ojek'); 
 
-    // Role: Admin Kabupaten
+    // 1. Role: Admin Kabupaten
     add_role('admin_kabupaten', 'Admin Kabupaten', [ 'read' => true ]);
     $admin_kab_role = get_role('admin_kabupaten');
     if ($admin_kab_role) {
@@ -44,9 +52,10 @@ function dw_create_roles_and_caps() {
         $admin_kab_role->add_cap('dw_moderate_reviews');   
         $admin_kab_role->add_cap('moderate_comments');     
         $admin_kab_role->add_cap('dw_manage_pedagang'); 
+        $admin_kab_role->add_cap('dw_verify_ojek'); // NEW: Verifikasi Ojek
     }
 
-    // Role: Admin Desa (FIXED)
+    // 2. Role: Admin Desa (FIXED)
     add_role(DW_ROLE_ADMIN_DESA, 'Admin Desa', [
         'read' => true,
         'upload_files' => true, 
@@ -58,12 +67,13 @@ function dw_create_roles_and_caps() {
         $admin_desa_role->add_cap('publish_dw_wisatas');      
         $admin_desa_role->add_cap('delete_dw_wisatas');       
         $admin_desa_role->add_cap('read_dw_wisata');          
-        $admin_desa_role->add_cap('dw_manage_pedagang'); // PENTING: Izin Pedagang
-        $admin_desa_role->add_cap('dw_approve_pedagang'); 
+        $admin_desa_role->add_cap('dw_manage_pedagang'); 
+        $admin_desa_role->add_cap('dw_approve_pedagang');
+        $admin_desa_role->add_cap('dw_verify_ojek'); // NEW: Verifikasi Ojek Lokal
     }
 
-    // Role: Pedagang
-    add_role('pedagang', 'Pedagang', [
+    // 3. Role: Pedagang
+    add_role('pedagang', 'Pedagang', [ // Legacy slug 'pedagang' kept for compatibility, or change to 'dw_pedagang' if preferred
         'read' => true,
         'upload_files' => true, 
     ]);
@@ -75,6 +85,17 @@ function dw_create_roles_and_caps() {
         $pedagang_role->add_cap('read_dw_produk');          
         $pedagang_role->add_cap('dw_manage_pesanan');       
         $pedagang_role->add_cap('assign_terms', 'kategori_produk');
+    }
+
+    // 4. Role: Ojek Desa (NEW)
+    add_role('dw_ojek', 'Ojek Desa', [
+        'read' => true,         // Akses Dashboard/Ajax
+        'upload_files' => true, // Upload KTP/SIM/Motor
+    ]);
+    $ojek_role = get_role('dw_ojek');
+    if ($ojek_role) {
+        $ojek_role->add_cap('dw_view_orders'); // Lihat order masuk
+        $ojek_role->add_cap('dw_bid_orders');  // Nego harga
     }
 
     dw_ensure_admin_capabilities();
@@ -111,10 +132,13 @@ function dw_ensure_admin_capabilities() {
 // --- SELF HEALING: Update Role Otomatis ---
 function dw_force_refresh_caps_once() {
     // Cek apakah Admin Desa punya hak 'dw_manage_pedagang'. Jika tidak, refresh.
-    $role = get_role(DW_ROLE_ADMIN_DESA);
-    if ($role && !$role->has_cap('dw_manage_pedagang')) {
+    // Cek juga apakah role Ojek sudah ada
+    $role_desa = get_role(DW_ROLE_ADMIN_DESA);
+    $role_ojek = get_role('dw_ojek');
+
+    if ( ($role_desa && !$role_desa->has_cap('dw_manage_pedagang')) || !$role_ojek ) {
         dw_create_roles_and_caps();
-        // Cek versi jika tersedia, atau biarkan berjalan jika cap hilang
+        
         if (defined('DW_CORE_VERSION')) {
              update_option('dw_caps_version', DW_CORE_VERSION); 
         }
@@ -123,8 +147,7 @@ function dw_force_refresh_caps_once() {
 add_action('init', 'dw_force_refresh_caps_once', 999);
 
 /**
- * AUTO-FIX: Hapus Role Duplikat (Baru Ditambahkan)
- * Berjalan saat admin init untuk membersihkan role ganda.
+ * AUTO-FIX: Hapus Role Duplikat
  */
 function dw_fix_duplicate_roles() {
     global $wp_roles;
@@ -137,7 +160,6 @@ function dw_fix_duplicate_roles() {
     $correct_slug     = DW_ROLE_ADMIN_DESA; // 'admin_desa'
 
     foreach ( $wp_roles->roles as $slug => $details ) {
-        // Logika: Jika Nama role = "Admin Desa" TAPI slug-nya BUKAN 'admin_desa'
         if ( $details['name'] === $target_role_name && $slug !== $correct_slug ) {
             
             // 1. Pindahkan user ke role yang benar
@@ -161,7 +183,7 @@ function dw_fix_duplicate_roles() {
 add_action( 'admin_init', 'dw_fix_duplicate_roles' );
 
 
-// --- FILTER RESTRIKSI AKSES (SAMA SEPERTI KODE ASLI) ---
+// --- FILTER RESTRIKSI AKSES (Access Control List) ---
 function dw_map_meta_cap_filter( $caps, $cap, $user_id, $args ) {
     global $wpdb;
     $post_id = isset($args[0]) ? absint($args[0]) : 0;
@@ -175,6 +197,7 @@ function dw_map_meta_cap_filter( $caps, $cap, $user_id, $args ) {
     $post_type = $post ? $post->post_type : (function_exists('get_current_screen') && get_current_screen() ? get_current_screen()->post_type : null);
     if (!$post_type) return $caps; 
 
+    // Restriction for Admin Desa (Wisata)
     if (in_array(DW_ROLE_ADMIN_DESA, $user->roles) && $post_type === 'dw_wisata') {
         $managed_desa_id = $wpdb->get_var($wpdb->prepare("SELECT id FROM {$wpdb->prefix}dw_desa WHERE id_user_desa = %d", $user_id));
         if ($post_id > 0 && $post) {
@@ -192,6 +215,7 @@ function dw_map_meta_cap_filter( $caps, $cap, $user_id, $args ) {
         return $caps;
     }
 
+    // Restriction for Pedagang (Produk)
     if (in_array('pedagang', $user->roles) && $post_type === 'dw_produk') {
         if ($post_id > 0 && $post) {
             if ((int)$post->post_author === $user_id) {
