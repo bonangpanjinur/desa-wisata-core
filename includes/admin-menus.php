@@ -100,12 +100,12 @@ function dw_render_ojek_management() {
     }
 }
 
-// Callback untuk Panel Ojek (Driver View)
-function dw_render_ojek_panel() {
-    if (function_exists('dw_ojek_panel_page_render')) {
-        dw_ojek_panel_page_render();
-    }
-}
+// // Callback untuk Panel Ojek (Driver View)
+// function dw_render_ojek_panel() {
+//     if (function_exists('dw_ojek_panel_page_render')) {
+//         dw_ojek_panel_page_render();
+//     }
+// }
 
 /**
  * 3. MENDAFTARKAN MENU
@@ -138,10 +138,10 @@ function dw_register_admin_menus() {
         add_submenu_page('dw-dashboard', 'Inkuiri Produk', 'Inkuiri Produk', 'read', 'dw-chat-inquiry', 'dw_render_chat');
     }
 
-    // Menu Panel Ojek (Driver)
-    if (current_user_can('dw_ojek') || current_user_can('dw_view_orders')) {
-        add_submenu_page('dw-dashboard', 'Panel Ojek', 'Panel Ojek', 'dw_view_orders', 'dw-ojek-panel', 'dw_render_ojek_panel');
-    }
+    // // Menu Panel Ojek (Driver)
+    // if (current_user_can('dw_ojek') || current_user_can('dw_view_orders')) {
+    //     add_submenu_page('dw-dashboard', 'Panel Ojek', 'Panel Ojek', 'dw_view_orders', 'dw-ojek-panel', 'dw_render_ojek_panel');
+    // }
 
     // Admin Tools
     if (current_user_can('manage_options') || current_user_can('dw_manage_settings')) {
