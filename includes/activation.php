@@ -4,14 +4,15 @@
  * File Folder: includes/
  * Description: File aktivasi plugin yang berisi seluruh skema database custom.
  * * UPDATE: 
- * - Menambahkan kolom `rating_toko` dan `total_ulasan_toko` pada tabel `dw_pedagang`.
+ * - Penambahan kolom `ojek_data` (JSON) di tabel `dw_transaksi` untuk menyimpan koordinat & history nego.
+ * - Penambahan kolom wilayah (prov/kab/kec) di tabel `dw_ojek` untuk filtering driver.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-function dw_core_activate_plugin() {
+function dw_activate_plugin() {
     global $wpdb;
     $charset_collate = $wpdb->get_charset_collate();
     $table_prefix = $wpdb->prefix . 'dw_';
@@ -54,7 +55,7 @@ function dw_core_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_desa );
 
- // 2. Tabel Pedagang (UMKM) - UPDATE RATING TOKO & FOTO SAMPUL
+    // 2. Tabel Pedagang (UMKM)
     $sql_pedagang = "CREATE TABLE {$table_prefix}pedagang (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_user BIGINT(20) UNSIGNED NOT NULL,
@@ -103,6 +104,42 @@ function dw_core_activate_plugin() {
     ) $charset_collate;";
     dbDelta($sql_pedagang);
 
+    // 2B. Tabel Ojek (NEW - Driver)
+    // UPDATE: Menambahkan kolom ID Wilayah agar mudah di-query "Cari Ojek di Kecamatan X"
+    $sql_ojek = "CREATE TABLE {$table_prefix}ojek (
+        id BIGINT(20) NOT NULL AUTO_INCREMENT,
+        id_user BIGINT(20) UNSIGNED NOT NULL,
+        nama_lengkap VARCHAR(255) NOT NULL,
+        no_hp VARCHAR(20) NOT NULL,
+        nik VARCHAR(50),
+        no_kartu_ojek VARCHAR(50), 
+        plat_nomor VARCHAR(20) NOT NULL,
+        merk_motor VARCHAR(100) NOT NULL,
+        foto_profil VARCHAR(255),
+        foto_ktp VARCHAR(255),
+        foto_kartu_ojek VARCHAR(255),
+        foto_motor VARCHAR(255),
+        status_pendaftaran ENUM('menunggu','disetujui','ditolak') DEFAULT 'menunggu',
+        status_kerja ENUM('offline','online','busy') DEFAULT 'offline',
+        
+        -- Filter Wilayah (Agar query cepat)
+        api_provinsi_id VARCHAR(20),
+        api_kabupaten_id VARCHAR(20),
+        api_kecamatan_id VARCHAR(20),
+        api_kelurahan_id VARCHAR(20),
+        alamat_domisili TEXT,
+
+        rating_avg DECIMAL(3,2) DEFAULT 0,
+        total_trip INT DEFAULT 0,
+        lokasi_terakhir_lat VARCHAR(50),
+        lokasi_terakhir_lng VARCHAR(50),
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY  (id),
+        UNIQUE KEY id_user (id_user),
+        KEY idx_lokasi_ojek (api_kecamatan_id, status_kerja)
+    ) $charset_collate;";
+    dbDelta($sql_ojek);
 
     /* =========================================
        2. KONTEN (INVENTORY & WISATA)
@@ -179,10 +216,11 @@ function dw_core_activate_plugin() {
     dbDelta( $sql_variasi );
 
     /* =========================================
-       3. TRANSAKSI (E-COMMERCE FLOW)
+       3. TRANSAKSI (E-COMMERCE FLOW & OJEK)
        ========================================= */
 
     // 6. Tabel Transaksi Utama
+    // UPDATE: Menambahkan `ojek_data` (JSON) untuk menyimpan: {pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, nego_history: []}
     $sql_transaksi = "CREATE TABLE {$table_prefix}transaksi (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         kode_unik VARCHAR(50) NOT NULL,
@@ -194,13 +232,20 @@ function dw_core_activate_plugin() {
         nama_penerima VARCHAR(255),
         no_hp VARCHAR(20),
         alamat_lengkap TEXT,
+        
+        -- Data Khusus Ojek
+        ojek_data JSON DEFAULT NULL, 
+        
         provinsi VARCHAR(100),
         kabupaten VARCHAR(100),
         kecamatan VARCHAR(100),
         kelurahan VARCHAR(100),
         kode_pos VARCHAR(10),
         metode_pembayaran VARCHAR(50),
-        status_transaksi ENUM('menunggu_pembayaran','pembayaran_dikonfirmasi','pembayaran_gagal','diproses','dikirim','selesai','dibatalkan','refunded') DEFAULT 'menunggu_pembayaran',
+        status_transaksi ENUM(
+            'menunggu_pembayaran','pembayaran_dikonfirmasi','pembayaran_gagal','diproses','dikirim','selesai','dibatalkan','refunded',
+            'menunggu_driver', 'penawaran_driver', 'nego', 'menunggu_penjemputan', 'dalam_perjalanan'
+        ) DEFAULT 'menunggu_pembayaran',
         url_bukti_bayar VARCHAR(255) DEFAULT NULL,
         bukti_pembayaran VARCHAR(255) DEFAULT NULL,
         catatan_pembeli TEXT,
@@ -258,13 +303,14 @@ function dw_core_activate_plugin() {
        4. MODEL 3: PAKET & KOMISI
        ========================================= */
 
-    // 9. Tabel Paket Transaksi
+    // 9. Tabel Paket Transaksi (UPDATED: Added target_role)
     $sql_paket = "CREATE TABLE {$table_prefix}paket_transaksi (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         nama_paket VARCHAR(100) NOT NULL,
         deskripsi TEXT,
         harga DECIMAL(15,2) NOT NULL,
         jumlah_transaksi INT NOT NULL,
+        target_role ENUM('pedagang','ojek') NOT NULL DEFAULT 'pedagang', -- 'pedagang' or 'ojek'
         persentase_komisi_desa DECIMAL(5,2) DEFAULT 0,
         status ENUM('aktif','nonaktif') DEFAULT 'aktif',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -359,19 +405,21 @@ function dw_core_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_promosi );
 
-    // 15. Tabel Ulasan
+    // 15. Tabel Ulasan (UNIVERSAL UPDATE)
     $sql_ulasan = "CREATE TABLE {$table_prefix}ulasan (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
-        tipe ENUM('produk','wisata') NOT NULL,
-        target_id BIGINT(20) NOT NULL,
-        target_type VARCHAR(20) DEFAULT 'produk',
-        user_id BIGINT(20) UNSIGNED NOT NULL,
+        tipe VARCHAR(50) NOT NULL, -- 'produk', 'wisata', 'ojek'
+        target_id BIGINT(20) NOT NULL, -- ID Post atau ID User
+        target_type VARCHAR(20) NOT NULL DEFAULT 'post', -- 'post' atau 'user'
+        user_id BIGINT(20) UNSIGNED NOT NULL, -- Reviewer
+        transaction_id BIGINT(20) DEFAULT NULL, -- Link ke transaksi
         rating INT(1) NOT NULL,
         komentar TEXT,
-        status_moderasi ENUM('pending','disetujui','ditolak') DEFAULT 'pending',
+        status_moderasi VARCHAR(20) DEFAULT 'approved', -- 'pending', 'approved', 'rejected'
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY  (id),
-        KEY target_lookup (target_id)
+        KEY target_index (target_id, target_type),
+        KEY type_index (tipe)
     ) $charset_collate;";
     dbDelta( $sql_ulasan );
 
@@ -460,9 +508,8 @@ function dw_core_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_wa );
 
-        // 22. Tabel Wishlist
-
-       $table_wishlist = $wpdb->prefix . 'dw_wishlist';
+    // 22. Tabel Wishlist
+    $table_wishlist = $wpdb->prefix . 'dw_wishlist';
     $sql_wishlist = "CREATE TABLE $table_wishlist (
         id bigint(20) NOT NULL AUTO_INCREMENT,
         user_id bigint(20) UNSIGNED NOT NULL,
@@ -476,14 +523,61 @@ function dw_core_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_wishlist );
 
+    /* =========================================
+       6. FITUR OJEK & KEUANGAN (NEW)
+       ========================================= */
+
+    // 23. Tabel Log Kuota (Untuk mencatat riwayat penambahan/pengurangan kuota Ojek/Pedagang)
+    $table_quota_logs = $table_prefix . 'quota_logs';
+    $sql_quota_logs = "CREATE TABLE $table_quota_logs (
+        id bigint(20) NOT NULL AUTO_INCREMENT,
+        user_id bigint(20) NOT NULL,
+        quota_change int(11) NOT NULL, -- Positif untuk topup, Negatif untuk pemakaian
+        type varchar(50) NOT NULL, -- 'topup', 'usage_ojek', 'usage_pedagang', 'bonus', 'correction'
+        description text,
+        reference_id bigint(20) DEFAULT 0, -- ID Transaksi / ID Order
+        created_at datetime DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY  (id),
+        KEY user_id (user_id)
+    ) $charset_collate;";
+    dbDelta($sql_quota_logs);
+
     // Update versi DB
-    update_option( 'dw_core_db_version', DW_CORE_VERSION );
+    update_option( 'dw_core_db_version', '1.1.3' ); 
     
-    // Roles
-    add_role( 'pedagang', 'Pedagang Desa', ['read' => true, 'upload_files' => true]);
-    add_role( 'admin_desa', 'Admin Desa', ['read' => true, 'upload_files' => true, 'list_users' => true]);
-    add_role( 'admin_kabupaten', 'Admin Kabupaten', ['read' => true, 'upload_files' => true, 'list_users' => true, 'manage_options' => true]);
+    // Roles Setup
+    dw_setup_roles();
     
     flush_rewrite_rules();
+}
+
+/**
+ * Setup Custom Roles
+ */
+function dw_setup_roles() {
+    // Role Pedagang
+    add_role( 'dw_pedagang', 'Pedagang Desa', [
+        'read' => true, 
+        'upload_files' => true,
+        'edit_posts' => false
+    ]);
+    
+    // Role Ojek
+    add_role('dw_ojek', 'Ojek Desa', [
+        'read' => true,
+        'upload_files' => true,
+        'dw_view_orders' => true
+    ]);
+
+    // Role Admin
+    add_role( 'admin_desa', 'Admin Desa', ['read' => true, 'upload_files' => true, 'list_users' => true]);
+    add_role( 'admin_kabupaten', 'Admin Kabupaten', ['read' => true, 'upload_files' => true, 'list_users' => true, 'manage_options' => true]);
+}
+
+/**
+ * Alias wrapper for legacy support if needed
+ */
+function dw_core_activate_plugin() {
+    dw_activate_plugin();
 }
 ?>

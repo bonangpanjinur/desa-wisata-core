@@ -1,31 +1,86 @@
 <?php
 /**
  * File Path: includes/init.php
- * Description: Mendaftarkan aset dan variabel global untuk JavaScript.
- * * UPDATE (DYNAMIC HOST DETECTION):
- * - Menggunakan $_SERVER['HTTP_HOST'] untuk menyusun URL API secara dinamis.
- * - Ini memperbaiki error ERR_PROXY_CONNECTION_FAILED / ERR_NAME_NOT_RESOLVED
- * karena JS akan dipaksa menggunakan domain/IP yang sedang diakses user,
- * mengabaikan setting 'Site URL' di database yang mungkin berbeda (misal sadesa.site vs localhost).
+ * Description: Mendaftarkan aset, handler, dan variabel global.
+ * * UPDATE (MERGED):
+ * - Mengembalikan logika Dynamic Host Detection & Admin Assets dari versi user.
+ * - Menambahkan require untuk Ojek Handler dan komponen inti lainnya.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
-	exit;
+    exit;
 }
+
+// Konstanta Fallback (Jaga-jaga jika ada perbedaan penamaan di main file)
+if (!defined('DW_PLUGIN_DIR') && defined('DW_CORE_PLUGIN_DIR')) {
+    define('DW_PLUGIN_DIR', DW_CORE_PLUGIN_DIR);
+}
+if (!defined('DW_PLUGIN_URL') && defined('DW_CORE_PLUGIN_URL')) {
+    define('DW_PLUGIN_URL', DW_CORE_PLUGIN_URL);
+}
+
+// ==========================================================================
+// 1. LOAD CORE COMPONENTS (Wajib untuk Fitur Ojek & Lainnya)
+// ==========================================================================
+
+// Helper Functions
+require_once DW_PLUGIN_DIR . 'includes/helpers.php';
+
+// Post Types & Taxonomies
+require_once DW_PLUGIN_DIR . 'includes/post-types.php';
+require_once DW_PLUGIN_DIR . 'includes/taxonomies.php';
+
+// Access Control & Roles
+require_once DW_PLUGIN_DIR . 'includes/roles-capabilities.php';
+require_once DW_PLUGIN_DIR . 'includes/access-control.php';
+
+// Logic Handlers
+require_once DW_PLUGIN_DIR . 'includes/user-profiles.php';
+require_once DW_PLUGIN_DIR . 'includes/cart.php';
+require_once DW_PLUGIN_DIR . 'includes/reviews.php';
+
+// OJEK HANDLER (NEW FEATURE)
+require_once DW_PLUGIN_DIR . 'includes/class-dw-ojek-handler.php';
+
+// REST API
+require_once DW_PLUGIN_DIR . 'includes/rest-api/index.php';
+
+// Admin Menu & Meta Boxes
+if (is_admin()) {
+    require_once DW_PLUGIN_DIR . 'includes/admin-menus.php';
+    // require_once DW_PLUGIN_DIR . 'includes/admin-assets.php'; // Kita gunakan fungsi inline di bawah agar fitur Dynamic Host tetap jalan
+    require_once DW_PLUGIN_DIR . 'includes/meta-boxes.php';
+}
+
+// Initialize Classes
+function dw_init_classes() {
+    // Init Ojek Handler
+    if (class_exists('DW_Ojek_Handler')) {
+        DW_Ojek_Handler::init();
+    }
+}
+add_action('plugins_loaded', 'dw_init_classes');
+
+
+// ==========================================================================
+// 2. LOGIKA INIT SEBELUMNYA (RESTORED)
+// ==========================================================================
 
 // 1. Cek Update DB
 function dw_plugin_update_check() {
     $current_version = get_option( 'dw_core_db_version', '1.0.0' );
-    if ( version_compare( $current_version, DW_CORE_VERSION, '<' ) ) {
+    $plugin_version = defined('DW_CORE_VERSION') ? DW_CORE_VERSION : '1.0.0';
+
+    if ( version_compare( $current_version, $plugin_version, '<' ) ) {
         if ( ! function_exists( 'dw_core_activate_plugin' ) ) {
-            require_once DW_CORE_PLUGIN_DIR . 'includes/activation.php';
+            require_once DW_PLUGIN_DIR . 'includes/activation.php';
         }
         dw_core_activate_plugin();
     }
 }
 add_action( 'plugins_loaded', 'dw_plugin_update_check' );
 
-// 2. Load Assets Admin
+// 2. Load Assets Admin (Dengan Dynamic Host Detection)
 function dw_core_load_admin_assets($hook) {
     // Identifikasi Halaman Plugin
     $is_dw_page = (strpos($hook, 'dw-') !== false);
@@ -34,30 +89,32 @@ function dw_core_load_admin_assets($hook) {
     $screen = get_current_screen();
     $is_dw_cpt = ($screen && in_array($screen->post_type, ['dw_wisata', 'dw_produk']));
 
+    // Gunakan URL Plugin Constant
+    $plugin_url = defined('DW_CORE_PLUGIN_URL') ? DW_CORE_PLUGIN_URL : plugin_dir_url(dirname(__FILE__));
+    $version = defined('DW_CORE_VERSION') ? DW_CORE_VERSION : '1.0.0';
+
     if ( $is_dw_page || $is_dw_cpt ) {
         // Load CSS Utama
-        wp_enqueue_style( 'dw-admin-styles', DW_CORE_PLUGIN_URL . 'assets/css/admin-styles.css', [], DW_CORE_VERSION );
+        wp_enqueue_style( 'dw-admin-styles', $plugin_url . 'assets/css/admin-styles.css', [], $version );
         
-        // Load Library Select2 (Diperlukan untuk dropdown wilayah/alamat di banyak halaman)
+        // Load Library Select2
         wp_enqueue_style('select2', 'https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/css/select2.min.css');
         wp_enqueue_script('select2', 'https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js', ['jquery'], '4.0.13', true);
 
         // Load JS Utama
-        wp_enqueue_script( 'dw-admin-scripts', DW_CORE_PLUGIN_URL . 'assets/js/admin-scripts.js', ['jquery', 'select2'], DW_CORE_VERSION, true );
+        wp_enqueue_script( 'dw-admin-scripts', $plugin_url . 'assets/js/admin-scripts.js', ['jquery', 'select2'], $version, true );
         wp_enqueue_media();
 
         // --- PERBAIKAN URL API (DYNAMIC ABSOLUTE HOST) ---
         // Kita hitung URL secara manual berdasarkan Host yang sedang diakses.
-        // Ini lebih kuat daripada relative URL biasa untuk mengatasi masalah Proxy/DNS local.
         
-        // 1. Tentukan Protokol (HTTP/HTTPS)
+        // 1. Tentukan Protokol
         $protocol = is_ssl() ? 'https://' : 'http://';
         
-        // 2. Ambil Host saat ini (misal: localhost atau 192.168.1.5)
+        // 2. Ambil Host saat ini
         $current_host = $_SERVER['HTTP_HOST']; 
         
-        // 3. Ambil Path Relatif WordPress (misal: / atau /my-site/)
-        // Kita ambil dari admin_url relative lalu buang bagian 'wp-admin/...'
+        // 3. Ambil Path Relatif WordPress
         $ajax_relative_path = admin_url('admin-ajax.php', 'relative'); 
         $site_path_relative = str_replace('wp-admin/admin-ajax.php', '', $ajax_relative_path);
         
@@ -70,9 +127,9 @@ function dw_core_load_admin_assets($hook) {
 
         // Kirim Data ke JS
         wp_localize_script('dw-admin-scripts', 'dw_admin_vars', [
-            'ajax_url'   => $final_ajax_url, // URL Absolute Dinamis (http://localhost/wp-admin/admin-ajax.php)
+            'ajax_url'   => $final_ajax_url, 
             'nonce'      => wp_create_nonce('dw_admin_nonce'),
-            'rest_url'   => $final_rest_url, // URL Absolute Dinamis (http://localhost/wp-json/dw/v1/)
+            'rest_url'   => $final_rest_url, 
             'rest_nonce' => wp_create_nonce('wp_rest')
         ]);
 
@@ -111,4 +168,3 @@ function dw_force_add_thumbnail_support() {
     add_post_type_support( 'dw_wisata', 'thumbnail' );
 }
 add_action( 'init', 'dw_force_add_thumbnail_support', 99 );
-?>
