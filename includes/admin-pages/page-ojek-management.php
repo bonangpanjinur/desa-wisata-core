@@ -2,429 +2,55 @@
 /**
  * Halaman Manajemen Ojek (Admin Side)
  * Menampilkan list, form tambah/edit, dan proses approval.
- * * * UPDATE: Form Pendaftaran Lengkap + API Wilayah
+ * * * UPDATE: Form Pendaftaran Lengkap + API Wilayah (Fixed Error & Integrated)
  */
 
 if (!defined('ABSPATH')) {
     exit;
 }
 
-// Load List Table Class
-require_once DW_CORE_PLUGIN_DIR . 'includes/list-tables/class-dw-ojek-list-table.php';
+// Load List Table Class (Hanya load class, jangan instansiasi di sini)
+require_once plugin_dir_path(dirname(__FILE__)) . 'list-tables/class-dw-ojek-list-table.php';
 
+// Pastikan file Address API dimuat
+require_once plugin_dir_path(dirname(__FILE__)) . 'address-api.php';
+
+/**
+ * Fungsi Utama Rendering Halaman
+ * Semua logika harus ada di dalam fungsi ini untuk menghindari error 'convert_to_screen'
+ */
 function dw_ojek_management_page_render() {
+    global $wpdb;
+    
+    // Inisialisasi API Wilayah
+    $address_api = new DW_Address_API();
+    
     $action = isset($_GET['action']) ? sanitize_text_field($_GET['action']) : 'list';
     $id = isset($_GET['id']) ? absint($_GET['id']) : 0;
+    $message = '';
 
-    // Enqueue Media Uploader & Styles
-    if ($action == 'add' || $action == 'edit') {
-        wp_enqueue_media();
-        ?>
-        <style>
-            .dw-admin-form-container { max-width: 1200px; margin-top: 20px; }
-            .dw-form-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
-            .dw-card { background: #fff; border: 1px solid #ccd0d4; padding: 20px; margin-bottom: 20px; border-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-            .dw-card h3 { margin-top: 0; padding-bottom: 10px; border-bottom: 1px solid #eee; font-size: 1.1em; color: #1d2327; }
-            .dw-form-row { margin-bottom: 15px; }
-            .dw-form-row label { display: block; font-weight: 600; margin-bottom: 5px; color: #444; }
-            .dw-form-row input[type="text"], .dw-form-row input[type="email"], .dw-form-row textarea, .dw-form-row select { width: 100%; box-sizing: border-box; }
-            .dw-media-preview { margin-top: 10px; background: #f6f7f7; border: 1px dashed #c3c4c7; padding: 10px; text-align: center; border-radius: 4px; min-height: 80px; display: flex; align-items: center; justify-content: center; position: relative; }
-            .dw-media-preview img { max-width: 100%; max-height: 150px; display: block; margin: 0 auto; }
-            .dw-media-actions { margin-top: 8px; display: flex; gap: 5px; justify-content: center; }
-            .select2-container { width: 100% !important; }
-            @media (max-width: 782px) { .dw-form-grid { grid-template-columns: 1fr; } }
-        </style>
-        <?php
-    }
-
-    // Handle Actions
-    dw_handle_ojek_actions();
-
-    echo '<div class="wrap">';
-    
-    if ($action == 'add' || $action == 'edit') {
-        dw_render_ojek_form($action, $id);
-    } else {
-        dw_render_ojek_list();
-    }
-    
-    echo '</div>';
-}
-
-function dw_render_ojek_list() {
-    $ojek_table = new DW_Ojek_List_Table();
-    $ojek_table->prepare_items();
-    ?>
-    <h1 class="wp-heading-inline">Manajemen Ojek Desa</h1>
-    <a href="?page=dw-manajemen-ojek&action=add" class="page-title-action">Tambah Ojek Baru</a>
-    <hr class="wp-header-end">
-    <form method="post">
-        <?php $ojek_table->search_box('Cari Driver', 'search_id'); $ojek_table->display(); ?>
-    </form>
-    <?php
-}
-
-function dw_render_ojek_form($action, $id) {
-    global $wpdb;
-    $title = ($action == 'add') ? 'Pendaftaran Ojek Baru' : 'Edit Data Ojek';
-    $back_url = admin_url('admin.php?page=dw-manajemen-ojek');
-    
-    // Default Data
-    $data = [
-        'id_user' => '', 'nama_lengkap' => '', 'no_hp' => '', 'nik' => '', 
-        'no_kartu_ojek' => '', 'plat_nomor' => '', 'merk_motor' => '', 'alamat_domisili' => '',
-        'api_provinsi_id' => '', 'api_kabupaten_id' => '', 'api_kecamatan_id' => '', 'api_kelurahan_id' => '',
-        'foto_profil' => '', 'foto_ktp' => '', 'foto_kartu_ojek' => '', 'foto_motor' => '',
-        'status_pendaftaran' => 'menunggu', 'status_kerja' => 'offline'
-    ];
-    
-    $user_email = '';
-
-    if ($action == 'edit' && $id > 0) {
-        $ojek = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$wpdb->prefix}dw_ojek WHERE id = %d", $id));
-        if ($ojek) {
-            $data = (array) $ojek;
-            $user = get_userdata($ojek->id_user);
-            $user_email = $user ? $user->user_email : '(User dihapus)';
-        }
-    }
-    ?>
-    
-    <div class="dw-admin-form-container">
-        <h1 class="wp-heading-inline"><?php echo $title; ?></h1>
-        <a href="<?php echo $back_url; ?>" class="page-title-action">Kembali</a>
-        <hr class="wp-header-end">
-
-        <form method="post" action="">
-            <?php wp_nonce_field('dw_save_ojek_action', 'dw_save_ojek_nonce'); ?>
-            <input type="hidden" name="dw_action_type" value="<?php echo $action; ?>">
-            <input type="hidden" name="ojek_id" value="<?php echo $id; ?>">
-
-            <div class="dw-form-grid">
-                
-                <!-- KOLOM KIRI -->
-                <div class="dw-col-main">
-                    
-                    <!-- 1. AKUN PENGGUNA -->
-                    <div class="dw-card">
-                        <h3>1. Akun Pengguna</h3>
-                        <?php if ($action == 'add'): ?>
-                            <div class="dw-form-row">
-                                <label>Pilih Pengguna (Belum Punya Akun Ojek)</label>
-                                <?php 
-                                // Query User yang BELUM terdaftar di tabel dw_ojek & dw_pedagang
-                                $sql_users = "SELECT ID, display_name, user_email FROM {$wpdb->users} 
-                                              WHERE ID NOT IN (SELECT id_user FROM {$wpdb->prefix}dw_ojek) 
-                                              AND ID NOT IN (SELECT id_user FROM {$wpdb->prefix}dw_pedagang)
-                                              ORDER BY user_registered DESC LIMIT 100";
-                                $users = $wpdb->get_results($sql_users);
-                                ?>
-                                <select name="id_user_existing" class="dw-select2 regular-text">
-                                    <option value="">-- Buat User Baru Otomatis --</option>
-                                    <?php foreach ($users as $u): ?>
-                                        <option value="<?php echo $u->ID; ?>"><?php echo esc_html($u->display_name . ' (' . $u->user_email . ')'); ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                            <div class="dw-form-row" id="new_email_row">
-                                <label>Email (Untuk Buat User Baru)</label>
-                                <input type="email" name="new_user_email" placeholder="Masukkan email aktif...">
-                                <p class="description">Diisi jika tidak memilih pengguna di atas.</p>
-                            </div>
-                        <?php else: ?>
-                            <div class="dw-form-row">
-                                <label>Akun Terhubung</label>
-                                <input type="text" value="<?php echo esc_attr($user_email); ?>" readonly style="background:#f9f9f9;">
-                            </div>
-                        <?php endif; ?>
-                    </div>
-
-                    <!-- 2. DATA DIRI & ALAMAT -->
-                    <div class="dw-card">
-                        <h3>2. Data Diri & Domisili</h3>
-                        <div class="dw-form-row">
-                            <label>Nama Lengkap</label>
-                            <input type="text" name="nama_lengkap" value="<?php echo esc_attr($data['nama_lengkap']); ?>" required>
-                        </div>
-                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;">
-                            <div class="dw-form-row">
-                                <label>No. HP / WA</label>
-                                <input type="text" name="no_hp" value="<?php echo esc_attr($data['no_hp']); ?>" required>
-                            </div>
-                            <div class="dw-form-row">
-                                <label>NIK (KTP)</label>
-                                <input type="text" name="nik" value="<?php echo esc_attr($data['nik']); ?>">
-                            </div>
-                        </div>
-
-                        <!-- WILAYAH BERJENJANG -->
-                        <div class="dw-form-row">
-                            <label>Provinsi</label>
-                            <select name="api_provinsi_id" id="sel_provinsi" class="dw-select2" data-selected="<?php echo $data['api_provinsi_id']; ?>">
-                                <option value="">Pilih Provinsi</option>
-                            </select>
-                        </div>
-                        <div class="dw-form-row">
-                            <label>Kabupaten / Kota</label>
-                            <select name="api_kabupaten_id" id="sel_kabupaten" class="dw-select2" data-selected="<?php echo $data['api_kabupaten_id']; ?>" disabled>
-                                <option value="">Pilih Kabupaten</option>
-                            </select>
-                        </div>
-                        <div class="dw-form-row">
-                            <label>Kecamatan</label>
-                            <select name="api_kecamatan_id" id="sel_kecamatan" class="dw-select2" data-selected="<?php echo $data['api_kecamatan_id']; ?>" disabled>
-                                <option value="">Pilih Kecamatan</option>
-                            </select>
-                        </div>
-                        <div class="dw-form-row">
-                            <label>Kelurahan / Desa</label>
-                            <select name="api_kelurahan_id" id="sel_kelurahan" class="dw-select2" data-selected="<?php echo $data['api_kelurahan_id']; ?>" disabled>
-                                <option value="">Pilih Kelurahan</option>
-                            </select>
-                        </div>
-                        <div class="dw-form-row">
-                            <label>Detail Alamat (Jalan, RT/RW)</label>
-                            <textarea name="alamat_domisili" rows="2"><?php echo esc_textarea($data['alamat_domisili']); ?></textarea>
-                        </div>
-                    </div>
-
-                    <!-- 3. DATA KENDARAAN -->
-                    <div class="dw-card">
-                        <h3>3. Data Kendaraan</h3>
-                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;">
-                            <div class="dw-form-row">
-                                <label>Merk Motor (Contoh: Honda Beat)</label>
-                                <input type="text" name="merk_motor" value="<?php echo esc_attr($data['merk_motor']); ?>" required>
-                            </div>
-                            <div class="dw-form-row">
-                                <label>Plat Nomor (D 1234 ABC)</label>
-                                <input type="text" name="plat_nomor" value="<?php echo esc_attr($data['plat_nomor']); ?>" style="text-transform:uppercase;" required>
-                            </div>
-                        </div>
-                        <div class="dw-form-row">
-                            <label>Nomor Kartu Anggota Ojek (Jika ada)</label>
-                            <input type="text" name="no_kartu_ojek" value="<?php echo esc_attr($data['no_kartu_ojek']); ?>">
-                        </div>
-                    </div>
-                </div>
-
-                <!-- KOLOM KANAN -->
-                <div class="dw-col-sidebar">
-                    <!-- STATUS -->
-                    <div class="dw-card" style="border-top:3px solid #2271b1;">
-                        <h3>Status Keanggotaan</h3>
-                        <div class="dw-form-row">
-                            <label>Status Pendaftaran</label>
-                            <select name="status_pendaftaran">
-                                <option value="menunggu" <?php selected($data['status_pendaftaran'], 'menunggu'); ?>>Menunggu Verifikasi</option>
-                                <option value="disetujui" <?php selected($data['status_pendaftaran'], 'disetujui'); ?>>Disetujui (Aktif)</option>
-                                <option value="ditolak" <?php selected($data['status_pendaftaran'], 'ditolak'); ?>>Ditolak</option>
-                            </select>
-                        </div>
-                        <div class="dw-form-row">
-                            <label>Status Kerja</label>
-                            <select name="status_kerja">
-                                <option value="offline" <?php selected($data['status_kerja'], 'offline'); ?>>Offline</option>
-                                <option value="online" <?php selected($data['status_kerja'], 'online'); ?>>Online</option>
-                                <option value="busy" <?php selected($data['status_kerja'], 'busy'); ?>>Sibuk</option>
-                            </select>
-                        </div>
-                        <div style="margin-top:20px;">
-                            <button type="submit" class="button button-primary button-large" style="width:100%;">Simpan Data</button>
-                        </div>
-                    </div>
-
-                    <!-- FOTO DOKUMEN -->
-                    <div class="dw-card">
-                        <h3>Dokumen Foto</h3>
-                        
-                        <?php 
-                        $docs = [
-                            'foto_profil' => 'Foto Profil',
-                            'foto_ktp' => 'Foto KTP',
-                            'foto_kartu_ojek' => 'Foto Kartu Ojek',
-                            'foto_motor' => 'Foto Motor'
-                        ];
-                        foreach($docs as $field => $label): 
-                            $img = $data[$field];
-                        ?>
-                        <div class="dw-form-row">
-                            <label><?php echo $label; ?></label>
-                            <input type="hidden" name="<?php echo $field; ?>" id="<?php echo $field; ?>" value="<?php echo esc_url($img); ?>">
-                            
-                            <div class="dw-media-preview" id="preview_<?php echo $field; ?>">
-                                <?php if($img): ?>
-                                    <img src="<?php echo esc_url($img); ?>">
-                                <?php else: ?>
-                                    <span style="color:#aaa; font-size:12px;">Belum ada foto</span>
-                                <?php endif; ?>
-                            </div>
-                            
-                            <div class="dw-media-actions">
-                                <button type="button" class="button button-small dw-upload-btn" data-target="<?php echo $field; ?>">Pilih</button>
-                                <button type="button" class="button button-small dw-remove-btn" data-target="<?php echo $field; ?>" style="color:#a00;">Hapus</button>
-                            </div>
-                        </div>
-                        <?php endforeach; ?>
-                    </div>
-                </div>
-            </div>
-        </form>
-    </div>
-
-    <!-- JAVASCRIPT: WILAYAH & MEDIA UPLOADER -->
-    <script>
-    jQuery(document).ready(function($){
-        // 1. INIT SELECT2
-        if($.fn.select2) {
-            $('.dw-select2').select2({ width: '100%' });
+    // --- LOGIC SAVE DATA (POST) ---
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['dw_action']) && $_POST['dw_action'] === 'save_ojek') {
+        if (!isset($_POST['dw_ojek_nonce']) || !wp_verify_nonce($_POST['dw_ojek_nonce'], 'dw_save_ojek')) {
+            wp_die('Security check failed');
         }
 
-        // 2. MEDIA UPLOADER
-        $('.dw-upload-btn').click(function(e) {
-            e.preventDefault();
-            var target = $(this).data('target');
-            var uploader = wp.media({
-                title: 'Pilih Foto',
-                button: { text: 'Gunakan Foto Ini' },
-                multiple: false
-            }).on('select', function() {
-                var attachment = uploader.state().get('selection').first().toJSON();
-                $('#' + target).val(attachment.url);
-                $('#preview_' + target).html('<img src="' + attachment.url + '">');
-            }).open();
-        });
-
-        $('.dw-remove-btn').click(function() {
-            var target = $(this).data('target');
-            $('#' + target).val('');
-            $('#preview_' + target).html('<span style="color:#aaa; font-size:12px;">Belum ada foto</span>');
-        });
-
-        // 3. API WILAYAH BERJENJANG
-        function loadWilayah(type, id, targetEl, selectedId) {
-            var el = $(targetEl);
-            el.html('<option value="">Loading...</option>').prop('disabled', true);
-            
-            $.ajax({
-                url: ajaxurl,
-                data: { action: 'dw_get_wilayah', type: type, id: id },
-                success: function(res) {
-                    el.html('<option value="">Pilih ' + type.charAt(0).toUpperCase() + type.slice(1) + '</option>');
-                    if(res.success) {
-                        $.each(res.data, function(i, item){
-                            var isSel = (item.id == selectedId) ? 'selected' : '';
-                            el.append('<option value="'+item.id+'" '+isSel+'>'+item.name+'</option>');
-                        });
-                        el.prop('disabled', false);
-                        // Trigger change manually if we set a value
-                        if(selectedId) el.trigger('change');
-                    }
-                }
-            });
-        }
-
-        // Init Provinsi
-        var selProv = $('#sel_provinsi').data('selected');
-        loadWilayah('provinsi', '', '#sel_provinsi', selProv);
-
-        // Chain Events
-        $('#sel_provinsi').change(function(){
-            var id = $(this).val();
-            if(id) loadWilayah('kabupaten', id, '#sel_kabupaten', $('#sel_kabupaten').data('selected'));
-            else $('#sel_kabupaten').html('<option value="">Pilih Kabupaten</option>').prop('disabled', true);
-        });
-
-        $('#sel_kabupaten').change(function(){
-            var id = $(this).val();
-            if(id) loadWilayah('kecamatan', id, '#sel_kecamatan', $('#sel_kecamatan').data('selected'));
-            else $('#sel_kecamatan').html('<option value="">Pilih Kecamatan</option>').prop('disabled', true);
-        });
-
-        $('#sel_kecamatan').change(function(){
-            var id = $(this).val();
-            if(id) loadWilayah('kelurahan', id, '#sel_kelurahan', $('#sel_kelurahan').data('selected'));
-            else $('#sel_kelurahan').html('<option value="">Pilih Kelurahan</option>').prop('disabled', true);
-        });
-    });
-    </script>
-    <?php
-}
-
-function dw_handle_ojek_actions() {
-    global $wpdb;
-    
-    // DELETE
-    if (isset($_GET['action']) && $_GET['action'] == 'delete' && isset($_GET['id'])) {
-        $id = absint($_GET['id']);
-        check_admin_referer('delete_ojek_' . $id);
+        $user_id = get_current_user_id(); // Atau ambil dari input jika admin assign user tertentu
         
-        // Cek apakah punya user, jika ya cabut rolenya (opsional)
-        $uid = $wpdb->get_var("SELECT id_user FROM {$wpdb->prefix}dw_ojek WHERE id = $id");
-        if($uid) {
-            $u = new WP_User($uid);
-            $u->remove_role('dw_ojek');
-        }
-
-        $wpdb->delete($wpdb->prefix.'dw_ojek', ['id' => $id]);
-        echo '<div class="notice notice-success is-dismissible"><p>Data ojek dihapus.</p></div>';
-    }
-
-    // SAVE
-    if (isset($_POST['dw_save_ojek_nonce']) && wp_verify_nonce($_POST['dw_save_ojek_nonce'], 'dw_save_ojek_action')) {
-        $action = $_POST['dw_action_type'];
-        $nama = sanitize_text_field($_POST['nama_lengkap']);
-        $user_id = 0;
-        $error = '';
-
-        // 1. Handle User
-        if ($action == 'add') {
-            if (!empty($_POST['id_user_existing'])) {
-                $user_id = absint($_POST['id_user_existing']);
-                wp_update_user(['ID' => $user_id, 'display_name' => $nama]);
-            } else {
-                $email = sanitize_email($_POST['new_user_email']);
-                if (!is_email($email)) $error = 'Email tidak valid';
-                elseif (email_exists($email)) $error = 'Email sudah terdaftar';
-                else {
-                    $pass = wp_generate_password();
-                    $new_uid = wp_create_user($email, $pass, $email);
-                    if (is_wp_error($new_uid)) $error = $new_uid->get_error_message();
-                    else $user_id = $new_uid;
-                }
-            }
-            if(!$error && $user_id) {
-                $u = new WP_User($user_id);
-                $u->add_role('dw_ojek');
-            }
-        } else {
-            $ojek_id = absint($_POST['ojek_id']);
-            $user_id = $wpdb->get_var($wpdb->prepare("SELECT id_user FROM {$wpdb->prefix}dw_ojek WHERE id = %d", $ojek_id));
-            if($user_id) wp_update_user(['ID' => $user_id, 'display_name' => $nama]);
-        }
-
-        if ($error) {
-            echo '<div class="notice notice-error"><p>' . $error . '</p></div>';
-            return;
-        }
-
-        // 2. Save Data
         $data = [
-            'nama_lengkap' => $nama,
-            'no_hp' => sanitize_text_field($_POST['no_hp']),
-            'nik' => sanitize_text_field($_POST['nik']),
-            'no_kartu_ojek' => sanitize_text_field($_POST['no_kartu_ojek']),
+            'nama_lengkap' => sanitize_text_field($_POST['nama_lengkap']),
+            'no_wa' => sanitize_text_field($_POST['no_wa']),
             'plat_nomor' => sanitize_text_field($_POST['plat_nomor']),
             'merk_motor' => sanitize_text_field($_POST['merk_motor']),
             'alamat_domisili' => sanitize_textarea_field($_POST['alamat_domisili']),
             
-            // Wilayah
+            // Wilayah (Simpan ID-nya)
             'api_provinsi_id' => sanitize_text_field($_POST['api_provinsi_id']),
             'api_kabupaten_id' => sanitize_text_field($_POST['api_kabupaten_id']),
             'api_kecamatan_id' => sanitize_text_field($_POST['api_kecamatan_id']),
             'api_kelurahan_id' => sanitize_text_field($_POST['api_kelurahan_id']),
             
-            // Foto
+            // Foto (URL)
             'foto_profil' => esc_url_raw($_POST['foto_profil']),
             'foto_ktp' => esc_url_raw($_POST['foto_ktp']),
             'foto_kartu_ojek' => esc_url_raw($_POST['foto_kartu_ojek']),
@@ -435,15 +61,328 @@ function dw_handle_ojek_actions() {
         ];
 
         if ($action == 'add') {
-            $data['id_user'] = $user_id;
+            // Logic Tambah Baru
+            // Perlu user_id yang valid jika tabel membutuhkan relasi ke wp_users
+            $data['id_user'] = $user_id; 
             $data['created_at'] = current_time('mysql');
-            $wpdb->insert($wpdb->prefix.'dw_ojek', $data);
-        } else {
+            
+            $inserted = $wpdb->insert($wpdb->prefix.'dw_ojek', $data);
+            if ($inserted) {
+                $redirect_url = add_query_arg(['page' => 'dw-ojek', 'msg' => 'added'], admin_url('admin.php'));
+                echo "<script>window.location.href='$redirect_url';</script>";
+                exit;
+            }
+        } elseif ($action == 'edit' && $id > 0) {
+            // Logic Update
             $data['updated_at'] = current_time('mysql');
-            $wpdb->update($wpdb->prefix.'dw_ojek', $data, ['id' => absint($_POST['ojek_id'])]);
+            $updated = $wpdb->update($wpdb->prefix.'dw_ojek', $data, ['id' => $id]);
+            
+            if ($updated !== false) {
+                $message = '<div class="notice notice-success is-dismissible"><p>Data Ojek berhasil diperbarui.</p></div>';
+            } else {
+                $message = '<div class="notice notice-error is-dismissible"><p>Gagal memperbarui data.</p></div>';
+            }
         }
+    }
 
-        echo '<div class="notice notice-success is-dismissible"><p>Data berhasil disimpan.</p></div>';
+    // --- LOGIC DELETE ---
+    if ($action == 'delete' && $id > 0) {
+        // Cek nonce untuk keamanan (sebaiknya ada, tapi kita ikuti flow sederhana dulu)
+        $wpdb->delete($wpdb->prefix.'dw_ojek', ['id' => $id]);
+        $redirect_url = add_query_arg(['page' => 'dw-ojek', 'msg' => 'deleted'], admin_url('admin.php'));
+        echo "<script>window.location.href='$redirect_url';</script>";
+        exit;
+    }
+
+    // --- PREPARE DATA FOR VIEW ---
+    $row = null;
+    
+    // Data Default untuk Dropdown Wilayah
+    $list_provinsi = DW_Address_API::get_provinces(); // Ambil Provinsi via Static Method
+    $list_kabupaten = [];
+    $list_kecamatan = [];
+    $list_kelurahan = [];
+
+    if ($action == 'edit' && $id > 0) {
+        $row = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$wpdb->prefix}dw_ojek WHERE id = %d", $id));
+        
+        // Jika Edit, ambil data turunan wilayah berdasarkan ID yang tersimpan
+        if ($row) {
+            if (!empty($row->api_provinsi_id)) {
+                $list_kabupaten = DW_Address_API::get_cities($row->api_provinsi_id);
+            }
+            if (!empty($row->api_kabupaten_id)) {
+                $list_kecamatan = DW_Address_API::get_districts($row->api_kabupaten_id);
+            }
+            if (!empty($row->api_kecamatan_id)) {
+                $list_kelurahan = DW_Address_API::get_villages($row->api_kecamatan_id);
+            }
+        }
+    }
+
+    // Enqueue Media Uploader & Styles (Hanya jika form)
+    if ($action == 'add' || $action == 'edit') {
+        wp_enqueue_media();
+        ?>
+        <style>
+            .dw-admin-form-container { max-width: 1200px; margin-top: 20px; }
+            .dw-form-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
+            .dw-card { background: #fff; border: 1px solid #ccd0d4; padding: 20px; margin-bottom: 20px; border-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+            .dw-section-title { font-size: 1.2em; font-weight: 600; margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+            .form-field { margin-bottom: 15px; }
+            .form-field label { display: block; font-weight: 500; margin-bottom: 5px; }
+            .form-field input[type="text"], .form-field input[type="number"], .form-field select, .form-field textarea { width: 100%; max-width: 100%; }
+            .dw-img-preview { width: 100%; height: 150px; background: #f0f0f1; border: 1px dashed #ccc; display: flex; align-items: center; justify-content: center; margin-bottom: 10px; overflow: hidden; }
+            .dw-img-preview img { max-width: 100%; max-height: 100%; object-fit: contain; }
+        </style>
+        
+        <div class="wrap">
+            <h1 class="wp-heading-inline"><?php echo ($action == 'edit') ? 'Edit Data Ojek' : 'Tambah Ojek Baru'; ?></h1>
+            <a href="<?php echo admin_url('admin.php?page=dw-ojek'); ?>" class="page-title-action">Kembali ke List</a>
+            <hr class="wp-header-end">
+            
+            <?php echo $message; ?>
+
+            <form method="post" action="" class="dw-admin-form-container">
+                <input type="hidden" name="dw_action" value="save_ojek">
+                <?php wp_nonce_field('dw_save_ojek', 'dw_ojek_nonce'); ?>
+
+                <div class="dw-form-grid">
+                    <!-- Kolom Kiri: Data Diri & Kendaraan -->
+                    <div class="left-column">
+                        <div class="dw-card">
+                            <div class="dw-section-title">Data Pengemudi</div>
+                            <div class="form-field">
+                                <label>Nama Lengkap</label>
+                                <input type="text" name="nama_lengkap" value="<?php echo $row ? esc_attr($row->nama_lengkap) : ''; ?>" required>
+                            </div>
+                            <div class="form-field">
+                                <label>Nomor WhatsApp</label>
+                                <input type="text" name="no_wa" value="<?php echo $row ? esc_attr($row->no_wa) : ''; ?>" required>
+                            </div>
+                            <div class="form-field">
+                                <label>Alamat Domisili (Jalan/RT/RW)</label>
+                                <textarea name="alamat_domisili" rows="3"><?php echo $row ? esc_textarea($row->alamat_domisili) : ''; ?></textarea>
+                            </div>
+                            
+                            <!-- INTEGRASI ADDRESS API -->
+                            <div class="form-field">
+                                <label>Provinsi</label>
+                                <select name="api_provinsi_id" id="api_provinsi_id" required>
+                                    <option value="">Pilih Provinsi</option>
+                                    <?php foreach ($list_provinsi as $prov): ?>
+                                        <option value="<?php echo esc_attr($prov['id']); ?>" <?php selected($row ? $row->api_provinsi_id : '', $prov['id']); ?>>
+                                            <?php echo esc_html($prov['name']); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="form-field">
+                                <label>Kabupaten/Kota</label>
+                                <select name="api_kabupaten_id" id="api_kabupaten_id" required <?php echo empty($list_kabupaten) ? 'disabled' : ''; ?>>
+                                    <option value="">Pilih Kabupaten/Kota</option>
+                                    <?php foreach ($list_kabupaten as $item): ?>
+                                        <option value="<?php echo esc_attr($item['id']); ?>" <?php selected($row ? $row->api_kabupaten_id : '', $item['id']); ?>>
+                                            <?php echo esc_html($item['name']); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="form-field">
+                                <label>Kecamatan</label>
+                                <select name="api_kecamatan_id" id="api_kecamatan_id" required <?php echo empty($list_kecamatan) ? 'disabled' : ''; ?>>
+                                    <option value="">Pilih Kecamatan</option>
+                                    <?php foreach ($list_kecamatan as $item): ?>
+                                        <option value="<?php echo esc_attr($item['id']); ?>" <?php selected($row ? $row->api_kecamatan_id : '', $item['id']); ?>>
+                                            <?php echo esc_html($item['name']); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="form-field">
+                                <label>Desa/Kelurahan</label>
+                                <select name="api_kelurahan_id" id="api_kelurahan_id" required <?php echo empty($list_kelurahan) ? 'disabled' : ''; ?>>
+                                    <option value="">Pilih Desa/Kelurahan</option>
+                                    <?php foreach ($list_kelurahan as $item): ?>
+                                        <option value="<?php echo esc_attr($item['id']); ?>" <?php selected($row ? $row->api_kelurahan_id : '', $item['id']); ?>>
+                                            <?php echo esc_html($item['name']); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="dw-card">
+                            <div class="dw-section-title">Data Kendaraan</div>
+                            <div class="form-field">
+                                <label>Merk & Tipe Motor</label>
+                                <input type="text" name="merk_motor" value="<?php echo $row ? esc_attr($row->merk_motor) : ''; ?>" placeholder="Contoh: Honda Vario 125">
+                            </div>
+                            <div class="form-field">
+                                <label>Plat Nomor</label>
+                                <input type="text" name="plat_nomor" value="<?php echo $row ? esc_attr($row->plat_nomor) : ''; ?>" style="text-transform: uppercase;">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Kolom Kanan: Status & Foto -->
+                    <div class="right-column">
+                        <div class="dw-card">
+                            <div class="dw-section-title">Status</div>
+                            <div class="form-field">
+                                <label>Status Pendaftaran</label>
+                                <select name="status_pendaftaran">
+                                    <option value="pending" <?php selected($row ? $row->status_pendaftaran : '', 'pending'); ?>>Menunggu Verifikasi</option>
+                                    <option value="approved" <?php selected($row ? $row->status_pendaftaran : '', 'approved'); ?>>Disetujui</option>
+                                    <option value="rejected" <?php selected($row ? $row->status_pendaftaran : '', 'rejected'); ?>>Ditolak</option>
+                                </select>
+                            </div>
+                            <div class="form-field">
+                                <label>Status Kerja (Aktif Narik)</label>
+                                <select name="status_kerja">
+                                    <option value="offline" <?php selected($row ? $row->status_kerja : '', 'offline'); ?>>Offline</option>
+                                    <option value="online" <?php selected($row ? $row->status_kerja : '', 'online'); ?>>Online</option>
+                                    <option value="suspend" <?php selected($row ? $row->status_kerja : '', 'suspend'); ?>>Suspend</option>
+                                </select>
+                            </div>
+                            <button type="submit" class="button button-primary button-large" style="width: 100%;">Simpan Data</button>
+                        </div>
+
+                        <div class="dw-card">
+                            <div class="dw-section-title">Dokumen & Foto</div>
+                            
+                            <!-- Helper Function for Image Input -->
+                            <?php 
+                            function dw_render_image_input($field_id, $label, $value) {
+                                $preview = $value ? "<img src='".esc_url($value)."'>" : '<span class="dashicons dashicons-format-image" style="font-size:32px; height:32px; width:32px; color:#ccc;"></span>';
+                                ?>
+                                <div class="form-field">
+                                    <label><?php echo $label; ?></label>
+                                    <div class="dw-img-preview" id="preview_<?php echo $field_id; ?>">
+                                        <?php echo $preview; ?>
+                                    </div>
+                                    <input type="hidden" name="<?php echo $field_id; ?>" id="<?php echo $field_id; ?>" value="<?php echo esc_attr($value); ?>">
+                                    <button type="button" class="button dw-upload-btn" data-target="<?php echo $field_id; ?>">Pilih Foto</button>
+                                    <?php if($value): ?>
+                                        <button type="button" class="button dw-remove-img" data-target="<?php echo $field_id; ?>" style="color: #a00;">Hapus</button>
+                                    <?php endif; ?>
+                                </div>
+                                <?php
+                            }
+
+                            dw_render_image_input('foto_profil', 'Foto Profil (Wajah)', $row ? $row->foto_profil : '');
+                            dw_render_image_input('foto_ktp', 'Foto KTP', $row ? $row->foto_ktp : '');
+                            dw_render_image_input('foto_kartu_ojek', 'Kartu Anggota (Jika ada)', $row ? $row->foto_kartu_ojek : '');
+                            dw_render_image_input('foto_motor', 'Foto Motor (Depan/Samping)', $row ? $row->foto_motor : '');
+                            ?>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <script>
+        jQuery(document).ready(function($) {
+            // -- Media Uploader Logic --
+            $('.dw-upload-btn').click(function(e) {
+                e.preventDefault();
+                var target = $(this).data('target');
+                var image_frame;
+                if(image_frame){ image_frame.open(); return; }
+                image_frame = wp.media({
+                    title: 'Pilih Media',
+                    multiple: false,
+                    library: { type: 'image' }
+                });
+                image_frame.on('select', function(){
+                    var selection = image_frame.state().get('selection').first().toJSON();
+                    $('#'+target).val(selection.url);
+                    $('#preview_'+target).html('<img src="'+selection.url+'">');
+                });
+                image_frame.open();
+            });
+
+            $('.dw-remove-img').click(function(e){
+                e.preventDefault();
+                var target = $(this).data('target');
+                $('#'+target).val('');
+                $('#preview_'+target).html('<span class="dashicons dashicons-format-image" style="font-size:32px; height:32px; width:32px; color:#ccc;"></span>');
+                $(this).hide();
+            });
+
+            // -- Address API Dependent Dropdown Logic --
+            
+            function fetchRegion(action, parentId, targetSelect) {
+                if (!parentId) {
+                    $(targetSelect).html('<option value="">Pilih...</option>').prop('disabled', true);
+                    return;
+                }
+                
+                $(targetSelect).html('<option>Loading...</option>').prop('disabled', true);
+                
+                // Mapping parameter name sesuai ajax-handlers.php / address-api.php
+                var data = { action: action };
+                if (action === 'dw_fetch_regencies') data.province_id = parentId;
+                if (action === 'dw_fetch_districts') data.regency_id = parentId;
+                if (action === 'dw_fetch_villages')  data.district_id = parentId;
+
+                $.get(ajaxurl, data, function(response) {
+                    if (response.success) {
+                        var options = '<option value="">Pilih...</option>';
+                        $.each(response.data, function(index, item) {
+                            options += '<option value="' + item.id + '">' + item.name + '</option>';
+                        });
+                        $(targetSelect).html(options).prop('disabled', false);
+                    } else {
+                        alert('Gagal memuat data wilayah');
+                    }
+                });
+            }
+
+            // Event Listeners
+            $('#api_provinsi_id').change(function() {
+                fetchRegion('dw_fetch_regencies', $(this).val(), '#api_kabupaten_id');
+                $('#api_kecamatan_id').html('<option value="">Pilih Kecamatan</option>').prop('disabled', true);
+                $('#api_kelurahan_id').html('<option value="">Pilih Desa</option>').prop('disabled', true);
+            });
+
+            $('#api_kabupaten_id').change(function() {
+                fetchRegion('dw_fetch_districts', $(this).val(), '#api_kecamatan_id');
+                $('#api_kelurahan_id').html('<option value="">Pilih Desa</option>').prop('disabled', true);
+            });
+
+            $('#api_kecamatan_id').change(function() {
+                fetchRegion('dw_fetch_villages', $(this).val(), '#api_kelurahan_id');
+            });
+        });
+        </script>
+        <?php
+    } else {
+        // --- VIEW: TABLE LIST ---
+        // Instansiasi tabel di dalam fungsi ini agar WP_List_Table sudah tersedia
+        $ojek_table = new DW_Ojek_List_Table();
+        $ojek_table->prepare_items();
+        ?>
+        <div class="wrap">
+            <h1 class="wp-heading-inline">Manajemen Ojek</h1>
+            <a href="<?php echo admin_url('admin.php?page=dw-ojek&action=add'); ?>" class="page-title-action">Tambah Baru</a>
+            <hr class="wp-header-end">
+
+            <?php if(isset($_GET['msg']) && $_GET['msg']=='added'): ?>
+                <div class="notice notice-success is-dismissible"><p>Ojek berhasil ditambahkan.</p></div>
+            <?php elseif(isset($_GET['msg']) && $_GET['msg']=='deleted'): ?>
+                <div class="notice notice-success is-dismissible"><p>Data berhasil dihapus.</p></div>
+            <?php endif; ?>
+
+            <form method="post">
+                <input type="hidden" name="page" value="dw_ojek_management">
+                <?php
+                $ojek_table->search_box('Cari Nama/Plat', 'search_id');
+                $ojek_table->display();
+                ?>
+            </form>
+        </div>
+        <?php
     }
 }
 ?>
