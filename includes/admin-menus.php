@@ -1,10 +1,9 @@
 <?php
 /**
- * File Name:   admin-menus.php
- * File Folder: includes/
+ * File Name:   includes/admin-menus.php
  * Description: Mengatur menu admin dan meload halaman admin.
  * * UPDATE:
- * - Menambahkan Menu Manajemen Ojek (Backend Admin List).
+ * - Menambahkan Menu Verifikasi Akses Desa (B2B Feature).
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -28,9 +27,10 @@ if ( is_admin() ) {
     require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-verifikasi-paket.php';
     require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-desa-verifikasi-pedagang.php';
     
+    // [NEW] Halaman Verifikasi Akses Desa (Pastikan file ini ada di includes/admin-pages/)
+    require_once dirname(__FILE__) . '/admin-pages/page-verifikasi-akses-desa.php'; 
     
     require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-ojek-management.php';
-    require_once dirname(__FILE__) . '/admin-pages/page-verifikasi-akses-desa.php'; 
 
   
     // Fitur Pendukung
@@ -75,6 +75,15 @@ function dw_render_verifikasi_paket() {
     }
 }
 
+// [NEW] Callback Render Verifikasi Akses Desa
+function dw_render_verifikasi_akses_desa() {
+    if (function_exists('dw_verifikasi_akses_desa_page_render')) {
+        dw_verifikasi_akses_desa_page_render();
+    } else {
+         echo '<div class="notice notice-error"><p>Error: Fungsi render verifikasi akses desa tidak ditemukan.</p></div>';
+    }
+}
+
 function dw_render_promosi() { 
     if ( defined('DW_CORE_PLUGIN_DIR') ) {
         $file_path = DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-promosi.php';
@@ -94,19 +103,12 @@ function dw_render_logs() { if (function_exists('dw_logs_page_render')) dw_logs_
 function dw_render_settings() { if (function_exists('dw_admin_settings_page_handler')) dw_admin_settings_page_handler(); }
 function dw_render_verifikasi_desa() { if (function_exists('dw_admin_desa_verifikasi_page_render')) dw_admin_desa_verifikasi_page_render(); }
 
-// [NEW] Callback untuk Halaman Manajemen Ojek (Admin View)
+// Callback untuk Halaman Manajemen Ojek (Admin View)
 function dw_render_ojek_management() {
     if (function_exists('dw_ojek_management_page_render')) {
         dw_ojek_management_page_render();
     }
 }
-
-// // Callback untuk Panel Ojek (Driver View)
-// function dw_render_ojek_panel() {
-//     if (function_exists('dw_ojek_panel_page_render')) {
-//         dw_ojek_panel_page_render();
-//     }
-// }
 
 /**
  * 3. MENDAFTARKAN MENU
@@ -126,9 +128,7 @@ function dw_register_admin_menus() {
 
     add_submenu_page('dw-dashboard', 'Manajemen Toko', 'Toko', 'dw_manage_pedagang', 'dw-pedagang', 'dw_render_pedagang');
 
-    // [NEW] Menu Manajemen Ojek (Admin)
-    // Bisa diakses oleh Admin Kabupaten & Admin Desa (sesuai capability dw_manage_pedagang atau khusus)
-    // Disini saya pakai dw_verify_ojek (yang kita buat di roles-capabilities.php)
+    // Menu Manajemen Ojek (Admin)
     if (current_user_can('dw_verify_ojek') || current_user_can('manage_options')) {
         add_submenu_page('dw-dashboard', 'Manajemen Ojek', 'Ojek Desa', 'dw_verify_ojek', 'dw-manajemen-ojek', 'dw_render_ojek_management');
     }
@@ -139,15 +139,14 @@ function dw_register_admin_menus() {
         add_submenu_page('dw-dashboard', 'Inkuiri Produk', 'Inkuiri Produk', 'read', 'dw-chat-inquiry', 'dw_render_chat');
     }
 
-    // // Menu Panel Ojek (Driver)
-    // if (current_user_can('dw_ojek') || current_user_can('dw_view_orders')) {
-    //     add_submenu_page('dw-dashboard', 'Panel Ojek', 'Panel Ojek', 'dw_view_orders', 'dw-ojek-panel', 'dw_render_ojek_panel');
-    // }
-
     // Admin Tools
     if (current_user_can('manage_options') || current_user_can('dw_manage_settings')) {
         add_submenu_page('dw-dashboard', 'Paket Transaksi', 'Paket Transaksi', 'manage_options', 'dw-paket-transaksi', 'dw_render_paket');
         add_submenu_page('dw-dashboard', 'Verifikasi Paket', 'Verifikasi Paket', 'manage_options', 'dw-verifikasi-paket', 'dw_render_verifikasi_paket');
+        
+        // [NEW] Menu Verifikasi Akses Desa (B2B)
+        add_submenu_page('dw-dashboard', 'Verifikasi Akses Desa', 'Akses Desa', 'manage_options', 'dw-verifikasi-akses-desa', 'dw_render_verifikasi_akses_desa');
+
         add_submenu_page('dw-dashboard', 'Payout Komisi', 'Payout Komisi', 'manage_options', 'dw-komisi', 'dw_render_komisi');
     }
 
