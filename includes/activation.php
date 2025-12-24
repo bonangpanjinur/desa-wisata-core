@@ -4,8 +4,7 @@
  * File Folder: includes/
  * Description: File aktivasi plugin yang berisi seluruh skema database custom.
  * * UPDATE: 
- * - Menghapus fungsi dw_setup_roles() internal untuk mencegah duplikasi.
- * - Delegasi pembuatan role ke includes/roles-capabilities.php.
+ * - Menambahkan kolom alasan_penolakan pada tabel dw_desa
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -19,9 +18,9 @@ function dw_activate_plugin() {
 
     require_once( ABSPATH . 'wp-admin/includes/upgrade.php' );
 
-       /* =========================================
-       1. ENTITAS UTAMA (MASTER DATA)
-       ========================================= */
+        /* =========================================
+        1. ENTITAS UTAMA (MASTER DATA)
+        ========================================= */
 
     $sql_desa = "CREATE TABLE {$table_prefix}desa (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
@@ -53,6 +52,7 @@ function dw_activate_plugin() {
         -- [BARU] Field Akses Fitur Verifikasi Pedagang
         status_akses_verifikasi ENUM('locked', 'pending', 'active') DEFAULT 'locked',
         bukti_bayar_akses VARCHAR(255) DEFAULT NULL,
+        alasan_penolakan TEXT DEFAULT NULL, -- Kolom baru untuk alasan reject
 
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -554,7 +554,7 @@ function dw_activate_plugin() {
     dbDelta($sql_quota_logs);
 
     // Update versi DB
-    update_option( 'dw_core_db_version', '1.1.3' ); 
+    update_option( 'dw_core_db_version', '1.1.4' ); // Bump version to force update
     
     // Roles Setup (Delegasi ke roles-capabilities.php agar tidak duplikat)
     // Pastikan file roles-capabilities sudah di-load jika belum (tergantung context)
