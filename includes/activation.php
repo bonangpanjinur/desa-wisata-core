@@ -19,7 +19,7 @@ function dw_activate_plugin() {
 
     require_once( ABSPATH . 'wp-admin/includes/upgrade.php' );
 
-    /* =========================================
+       /* =========================================
        1. ENTITAS UTAMA (MASTER DATA)
        ========================================= */
 
@@ -31,15 +31,15 @@ function dw_activate_plugin() {
         deskripsi TEXT,
         foto VARCHAR(255) DEFAULT NULL,
         
-        -- Field Baru: Penampung Akumulasi Pendapatan Desa
+        -- Field Keuangan
         total_pendapatan DECIMAL(15,2) DEFAULT 0,
-        
         no_rekening_desa VARCHAR(50) DEFAULT NULL,
         nama_bank_desa VARCHAR(100) DEFAULT NULL,
         atas_nama_rekening_desa VARCHAR(100) DEFAULT NULL,
         qris_image_url_desa VARCHAR(255) DEFAULT NULL,
+        
+        -- Field Status & Lokasi
         status ENUM('aktif','pending') DEFAULT 'pending',
-        -- ... field lokasi lainnya ...
         provinsi VARCHAR(100),
         kabupaten VARCHAR(100),
         kecamatan VARCHAR(100),
@@ -49,6 +49,11 @@ function dw_activate_plugin() {
         api_kecamatan_id VARCHAR(20),
         api_kelurahan_id VARCHAR(20),
         alamat_lengkap TEXT,
+
+        -- [BARU] Field Akses Fitur Verifikasi Pedagang
+        status_akses_verifikasi ENUM('locked', 'pending', 'active') DEFAULT 'locked',
+        bukti_bayar_akses VARCHAR(255) DEFAULT NULL,
+
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         PRIMARY KEY  (id),
@@ -57,6 +62,7 @@ function dw_activate_plugin() {
         KEY idx_lokasi (api_kabupaten_id)
     ) $charset_collate;";
     dbDelta( $sql_desa );
+
 
     // 2. Tabel Pedagang (UMKM)
     $sql_pedagang = "CREATE TABLE {$table_prefix}pedagang (

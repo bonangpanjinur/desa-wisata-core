@@ -28,8 +28,9 @@ if ( is_admin() ) {
     require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-verifikasi-paket.php';
     require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-desa-verifikasi-pedagang.php';
     
-    // [NEW] HALAMAN MANAJEMEN OJEK (Untuk Admin)
+    
     require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-ojek-management.php';
+    require_once dirname(__FILE__) . '/admin-pages/page-verifikasi-akses-desa.php'; 
 
   
     // Fitur Pendukung
