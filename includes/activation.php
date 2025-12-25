@@ -20,7 +20,8 @@ function dw_activate_plugin() {
        1. ENTITAS UTAMA (MASTER DATA)
        ========================================= */
 
-    // 1. Tabel Desa (SUDAH DIPERBAIKI: ADA FOTO SAMPUL)
+ 
+    // 1. Tabel Desa (SUDAH DIPERBAIKI: HAPUS KOMENTAR DALAM SQL AGAR dbDelta JALAN)
     $sql_desa = "CREATE TABLE {$table_prefix}desa (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_user_desa BIGINT(20) UNSIGNED NOT NULL,
@@ -28,7 +29,7 @@ function dw_activate_plugin() {
         slug_desa VARCHAR(255) NOT NULL,
         deskripsi TEXT,
         foto VARCHAR(255) DEFAULT NULL,
-        foto_sampul VARCHAR(255) DEFAULT NULL,  /* <--- KOLOM BARU */
+        foto_sampul VARCHAR(255) DEFAULT NULL,
         total_pendapatan DECIMAL(15,2) DEFAULT 0,
         no_rekening_desa VARCHAR(50) DEFAULT NULL,
         nama_bank_desa VARCHAR(100) DEFAULT NULL,
@@ -56,7 +57,6 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     
     dbDelta( $sql_desa );
-
 
     // 2. Tabel Pedagang (UMKM)
     $sql_pedagang = "CREATE TABLE {$table_prefix}pedagang (
