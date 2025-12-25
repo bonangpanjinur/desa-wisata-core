@@ -20,7 +20,7 @@ function dw_activate_plugin() {
        1. ENTITAS UTAMA (MASTER DATA)
        ========================================= */
 
-    // 1. Tabel Desa
+    // 1. Tabel Desa (SUDAH DIPERBAIKI: ADA FOTO SAMPUL)
     $sql_desa = "CREATE TABLE {$table_prefix}desa (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_user_desa BIGINT(20) UNSIGNED NOT NULL,
@@ -28,6 +28,7 @@ function dw_activate_plugin() {
         slug_desa VARCHAR(255) NOT NULL,
         deskripsi TEXT,
         foto VARCHAR(255) DEFAULT NULL,
+        foto_sampul VARCHAR(255) DEFAULT NULL,  /* <--- KOLOM BARU */
         total_pendapatan DECIMAL(15,2) DEFAULT 0,
         no_rekening_desa VARCHAR(50) DEFAULT NULL,
         nama_bank_desa VARCHAR(100) DEFAULT NULL,
@@ -53,6 +54,7 @@ function dw_activate_plugin() {
         KEY slug_desa (slug_desa),
         KEY idx_lokasi (api_kabupaten_id)
     ) $charset_collate;";
+    
     dbDelta( $sql_desa );
 
 

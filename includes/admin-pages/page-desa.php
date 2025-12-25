@@ -1,8 +1,8 @@
 <?php
 /**
  * File Name:   includes/admin-pages/page-desa.php
- * Description: CRUD Desa Wisata dengan Statistik Real-time & UI/UX Form Modern.
- * Terintegrasi dengan Manajemen Membership (Premium/Free) & Verifikasi.
+ * Description: CRUD Desa Wisata, Verifikasi Premium & Pengaturan.
+ * Sesuai skema tabel dw_desa (Single Table Architecture).
  */
 
 if (!defined('ABSPATH')) exit;
@@ -35,13 +35,12 @@ function dw_desa_page_render() {
         if (isset($_POST['action_save_settings']) && check_admin_referer('dw_desa_settings_save')) {
             $settings = get_option('dw_settings', []);
             $settings['harga_premium_desa'] = absint($_POST['harga_premium_desa']);
-            // Info rekening tidak disimpan di sini karena dikelola di page-settings.php
             update_option('dw_settings', $settings);
             $message = 'Pengaturan harga berhasil disimpan.';
             $message_type = 'success';
         }
 
-        // B. VERIFIKASI PEMBAYARAN
+        // B. VERIFIKASI PEMBAYARAN (Tab Verifikasi)
         if (isset($_POST['action_verify_desa']) && check_admin_referer('dw_verify_desa')) {
             $desa_id = absint($_POST['desa_id']);
             $decision = sanitize_key($_POST['decision']); 
@@ -52,7 +51,7 @@ function dw_desa_page_render() {
             } else {
                 $reason = sanitize_textarea_field($_POST['alasan_penolakan']);
                 $wpdb->update($table_desa, ['status_akses_verifikasi' => 'locked', 'alasan_penolakan' => $reason], ['id' => $desa_id]);
-                $message = 'Pengajuan Premium ditolak. Status dikembalikan ke Free.';
+                $message = 'Pengajuan Premium ditolak. Status dikembalikan ke Free (Locked).';
             }
             $message_type = ($decision === 'approve') ? 'success' : 'warning';
         }
@@ -64,12 +63,15 @@ function dw_desa_page_render() {
             // DELETE
             if ($action === 'delete' && !empty($_POST['desa_id'])) {
                 $desa_id_to_delete = intval($_POST['desa_id']);
-                // Update pedagang: Set id_desa menjadi NULL
+                
+                // Update pedagang: Set id_desa menjadi NULL (Safe Delete untuk anak data)
                 $wpdb->update($table_pedagang, ['id_desa' => null], ['id_desa' => $desa_id_to_delete]); 
-                // Hapus wisata
+                
+                // Hapus wisata (Opsional: bisa di set null atau delete cascade)
                 if($wpdb->get_var("SHOW TABLES LIKE '$table_wisata'") == $table_wisata) {
                     $wpdb->delete($table_wisata, ['id_desa' => $desa_id_to_delete]);
                 }
+                
                 // Hapus Desa
                 $deleted = $wpdb->delete($table_desa, ['id' => $desa_id_to_delete]);
 
@@ -88,8 +90,9 @@ function dw_desa_page_render() {
                 $status       = sanitize_text_field($_POST['status']);
                 $slug_desa    = sanitize_title($nama_desa);
                 
-                // Membership Status (Manual Override)
+                // Membership Status & Bukti Bayar (Manual Admin Override)
                 $status_akses = sanitize_text_field($_POST['status_akses_verifikasi']);
+                $bukti_bayar  = esc_url_raw($_POST['bukti_bayar_akses']); 
 
                 // Data Lokasi
                 $api_provinsi_id  = sanitize_text_field($_POST['api_provinsi_id']);
@@ -108,7 +111,8 @@ function dw_desa_page_render() {
                 $no_rekening_desa          = sanitize_text_field($_POST['no_rekening']);
                 $atas_nama_rekening_desa   = sanitize_text_field($_POST['atas_nama']);
                 $qris_image_url_desa       = esc_url_raw($_POST['qris_image']);
-                $foto_desa                 = esc_url_raw($_POST['foto_desa']);
+                $foto_desa                 = esc_url_raw($_POST['foto_desa']); // Logo
+                $foto_sampul               = esc_url_raw($_POST['foto_sampul']); // Cover (Baru)
 
                 // Validasi
                 $allow_save = true;
@@ -139,8 +143,12 @@ function dw_desa_page_render() {
                         'slug_desa'               => $slug_desa,
                         'deskripsi'               => $deskripsi,
                         'foto'                    => $foto_desa,
+                        'foto_sampul'             => $foto_sampul, // Simpan Cover
                         'status'                  => $status,
-                        'status_akses_verifikasi' => $status_akses, // Simpan status membership
+                        // Membership fields
+                        'status_akses_verifikasi' => $status_akses, 
+                        'bukti_bayar_akses'       => $bukti_bayar,
+                        
                         'alamat_lengkap'          => $alamat_lengkap,
                         'provinsi'                => $provinsi_name,
                         'kabupaten'               => $kabupaten_name,
@@ -246,8 +254,11 @@ function dw_desa_page_render() {
                     $v_desc     = $is_edit ? $edit_data->deskripsi : '';
                     $v_status   = $is_edit ? $edit_data->status : 'aktif';
                     $v_akses    = $is_edit ? $edit_data->status_akses_verifikasi : 'locked';
+                    $v_bukti    = $is_edit ? $edit_data->bukti_bayar_akses : '';
                     $v_user     = $is_edit ? $edit_data->id_user_desa : '';
-                    $v_foto     = $is_edit ? $edit_data->foto : '';
+                    $v_foto     = $is_edit ? $edit_data->foto : ''; // Logo
+                    $v_foto_sampul = $is_edit ? ($edit_data->foto_sampul ?? '') : ''; // Cover
+                    
                     // Location
                     $v_api_prov = $is_edit ? $edit_data->api_provinsi_id : '';
                     $v_api_kab  = $is_edit ? $edit_data->api_kabupaten_id : '';
@@ -277,7 +288,7 @@ function dw_desa_page_render() {
                                     <div class="dw-tabs-header">
                                         <button type="button" class="dw-tab-item active" data-tab="tab-general">Informasi Umum</button>
                                         <button type="button" class="dw-tab-item" data-tab="tab-location">Lokasi & Wilayah</button>
-                                        <button type="button" class="dw-tab-item" data-tab="tab-finance">Keuangan & QRIS</button>
+                                        <button type="button" class="dw-tab-item" data-tab="tab-finance">Keuangan & Bukti Bayar</button>
                                     </div>
                                     <div class="dw-card-body">
                                         <!-- TAB: UMUM -->
@@ -292,7 +303,7 @@ function dw_desa_page_render() {
                                             </div>
                                         </div>
 
-                                        <!-- TAB: LOKASI (Copy from previous code) -->
+                                        <!-- TAB: LOKASI -->
                                         <div id="tab-location" class="dw-tab-content" style="display:none;">
                                             <div class="dw-alert dw-alert-info">
                                                 <span class="dashicons dashicons-info"></span> Data wilayah diambil otomatis.
@@ -319,25 +330,50 @@ function dw_desa_page_render() {
                                             </div>
                                         </div>
 
-                                        <!-- TAB: KEUANGAN -->
+                                        <!-- TAB: KEUANGAN & BUKTI BAYAR -->
                                         <div id="tab-finance" class="dw-tab-content" style="display:none;">
-                                            <h3 class="dw-section-title">Rekening Bank</h3>
+                                            <h3 class="dw-section-title">Rekening Bank (Untuk Menerima Pembayaran Wisata)</h3>
                                             <div class="dw-grid-3">
                                                 <div class="dw-form-group"><label class="dw-label">Nama Bank</label><input type="text" name="nama_bank" class="dw-form-control" value="<?php echo esc_attr($v_bank); ?>"></div>
                                                 <div class="dw-form-group"><label class="dw-label">No Rekening</label><input type="text" name="no_rekening" class="dw-form-control" value="<?php echo esc_attr($v_rek); ?>"></div>
                                                 <div class="dw-form-group"><label class="dw-label">Atas Nama</label><input type="text" name="atas_nama" class="dw-form-control" value="<?php echo esc_attr($v_an); ?>"></div>
                                             </div>
+                                            
                                             <div class="dw-separator"></div>
-                                            <h3 class="dw-section-title">QRIS</h3>
-                                            <div class="dw-form-group">
-                                                <div class="dw-media-box">
-                                                    <div class="dw-media-preview <?php echo $v_qris ? 'active' : ''; ?>">
-                                                        <img src="<?php echo esc_url($v_qris); ?>" id="preview_qris">
+                                            
+                                            <div class="dw-grid-2">
+                                                <!-- QRIS DESA -->
+                                                <div>
+                                                    <h3 class="dw-section-title">QRIS Desa</h3>
+                                                    <div class="dw-form-group">
+                                                        <div class="dw-media-box">
+                                                            <div class="dw-media-preview <?php echo $v_qris ? 'active' : ''; ?>">
+                                                                <img src="<?php echo esc_url($v_qris); ?>" id="preview_qris">
+                                                            </div>
+                                                            <div class="dw-media-controls">
+                                                                <input type="hidden" name="qris_image" id="input_qris" value="<?php echo esc_url($v_qris); ?>">
+                                                                <button type="button" class="button btn_upload_media" data-target="#input_qris" data-preview="#preview_qris">Upload QRIS</button>
+                                                                <button type="button" class="button dw-btn-danger btn_remove_media" data-target="#input_qris" data-preview="#preview_qris" style="<?php echo $v_qris ? '' : 'display:none;'; ?>">Hapus</button>
+                                                            </div>
+                                                        </div>
                                                     </div>
-                                                    <div class="dw-media-controls">
-                                                        <input type="hidden" name="qris_image" id="input_qris" value="<?php echo esc_url($v_qris); ?>">
-                                                        <button type="button" class="button btn_upload_media" data-target="#input_qris" data-preview="#preview_qris">Pilih Gambar</button>
-                                                        <button type="button" class="button dw-btn-danger btn_remove_media" data-target="#input_qris" data-preview="#preview_qris" style="<?php echo $v_qris ? '' : 'display:none;'; ?>">Hapus</button>
+                                                </div>
+
+                                                <!-- BUKTI BAYAR PREMIUM -->
+                                                <div>
+                                                    <h3 class="dw-section-title">Bukti Transfer Premium</h3>
+                                                    <div class="dw-alert dw-alert-info" style="margin-bottom:10px; font-size:12px;">Admin bisa upload manual jika perlu.</div>
+                                                    <div class="dw-form-group">
+                                                        <div class="dw-media-box" style="border-color:#b8e6f5; background:#f0f6fc;">
+                                                            <div class="dw-media-preview <?php echo $v_bukti ? 'active' : ''; ?>">
+                                                                <img src="<?php echo esc_url($v_bukti); ?>" id="preview_bukti">
+                                                            </div>
+                                                            <div class="dw-media-controls">
+                                                                <input type="hidden" name="bukti_bayar_akses" id="input_bukti" value="<?php echo esc_url($v_bukti); ?>">
+                                                                <button type="button" class="button btn_upload_media" data-target="#input_bukti" data-preview="#preview_bukti">Upload Bukti</button>
+                                                                <button type="button" class="button dw-btn-danger btn_remove_media" data-target="#input_bukti" data-preview="#preview_bukti" style="<?php echo $v_bukti ? '' : 'display:none;'; ?>">Hapus</button>
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -359,7 +395,7 @@ function dw_desa_page_render() {
                                                 <option value="pending" <?php selected($v_status, 'pending'); ?>>Pending</option>
                                             </select>
                                         </div>
-                                        <!-- FITUR BARU: Membership Status di Sidebar -->
+                                        <!-- Membership Status di Sidebar -->
                                         <div class="dw-form-group" style="background:#f0f6fc; padding:10px; border-radius:4px; border:1px solid #cce5ff;">
                                             <label class="dw-label">Membership Status</label>
                                             <select name="status_akses_verifikasi" class="dw-form-control">
@@ -384,22 +420,51 @@ function dw_desa_page_render() {
                                         <div class="dw-form-group">
                                             <label class="dw-label">Admin Desa</label>
                                             <?php
-                                            $users = get_users(['role__in' => ['subscriber', 'editor', 'administrator']]);
+                                            // --- PERBAIKAN LOGIKA PENGELOLA ---
+                                            $exclude_query = "SELECT DISTINCT id_user_desa FROM $table_desa";
+                                            if ($is_edit && isset($edit_data->id)) {
+                                                $exclude_query .= $wpdb->prepare(" WHERE id != %d", $edit_data->id);
+                                            }
+                                            $assigned_user_ids = $wpdb->get_col($exclude_query);
+
+                                            // Hanya menampilkan role 'admin_desa'
+                                            $user_args = [
+                                                'role'     => 'admin_desa', 
+                                                'exclude'  => $assigned_user_ids,
+                                                'orderby'  => 'display_name',
+                                                'order'    => 'ASC'
+                                            ];
+                                            $users = get_users($user_args);
+
                                             echo '<select name="user_id" class="dw-form-control">';
                                             echo '<option value="">-- Pilih User --</option>';
+                                            
+                                            $current_user_found = false;
+                                            
                                             foreach ($users as $user) {
                                                 $selected = ($v_user == $user->ID) ? 'selected' : '';
-                                                echo '<option value="' . $user->ID . '" ' . $selected . '>' . esc_html($user->display_name) . '</option>';
+                                                if ($selected) $current_user_found = true;
+                                                echo '<option value="' . $user->ID . '" ' . $selected . '>' . esc_html($user->display_name) . ' (' . implode(', ', $user->roles) . ')</option>';
                                             }
+
+                                            // Fallback untuk user saat ini
+                                            if ($v_user && !$current_user_found) {
+                                                $u = get_user_by('id', $v_user);
+                                                if ($u) {
+                                                    echo '<option value="' . $u->ID . '" selected>' . esc_html($u->display_name) . ' (Saat Ini)</option>';
+                                                }
+                                            }
+
                                             echo '</select>';
                                             ?>
+                                            <p class="description" style="font-size:11px; margin-top:5px;">Hanya menampilkan user dengan role 'Admin Desa' yang belum memiliki desa wisata.</p>
                                         </div>
                                     </div>
                                 </div>
 
-                                <!-- Foto Utama Box -->
+                                <!-- Foto Utama Box (LOGO) -->
                                 <div class="dw-card dw-sidebar-card">
-                                    <div class="dw-card-header"><h3>Foto Desa</h3></div>
+                                    <div class="dw-card-header"><h3>Logo Desa</h3></div>
                                     <div class="dw-card-body">
                                         <div class="dw-media-box">
                                             <div class="dw-media-preview thumbnail <?php echo $v_foto ? 'active' : ''; ?>">
@@ -407,12 +472,30 @@ function dw_desa_page_render() {
                                             </div>
                                             <div class="dw-media-controls-sm">
                                                 <input type="hidden" name="foto_desa" id="input_foto_desa" value="<?php echo esc_url($v_foto); ?>">
-                                                <button type="button" class="button btn_upload_media" data-target="#input_foto_desa" data-preview="#preview_foto_desa">Pilih Foto</button>
+                                                <button type="button" class="button btn_upload_media" data-target="#input_foto_desa" data-preview="#preview_foto_desa">Pilih Logo</button>
                                                 <button type="button" class="button-link dw-text-danger btn_remove_media" data-target="#input_foto_desa" data-preview="#preview_foto_desa" style="<?php echo $v_foto ? '' : 'display:none;'; ?>">Hapus</button>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
+
+                                <!-- Foto Sampul Box (BARU) -->
+                                <div class="dw-card dw-sidebar-card">
+                                    <div class="dw-card-header"><h3>Foto Sampul</h3></div>
+                                    <div class="dw-card-body">
+                                        <div class="dw-media-box">
+                                            <div class="dw-media-preview thumbnail <?php echo $v_foto_sampul ? 'active' : ''; ?>">
+                                                <img src="<?php echo esc_url($v_foto_sampul); ?>" id="preview_foto_sampul">
+                                            </div>
+                                            <div class="dw-media-controls-sm">
+                                                <input type="hidden" name="foto_sampul" id="input_foto_sampul" value="<?php echo esc_url($v_foto_sampul); ?>">
+                                                <button type="button" class="button btn_upload_media" data-target="#input_foto_sampul" data-preview="#preview_foto_sampul">Pilih Sampul</button>
+                                                <button type="button" class="button-link dw-text-danger btn_remove_media" data-target="#input_foto_sampul" data-preview="#preview_foto_sampul" style="<?php echo $v_foto_sampul ? '' : 'display:none;'; ?>">Hapus</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
                             </div>
                         </div>
                     </form>
@@ -461,10 +544,11 @@ function dw_desa_page_render() {
                             <table class="wp-list-table widefat fixed striped table-view-list">
                                 <thead>
                                     <tr>
-                                        <th width="60">ID</th>
+                                        <th width="50">ID</th>
+                                        <th width="70">Logo</th> <!-- Kolom Logo Baru -->
                                         <th class="col-info">Informasi Desa</th>
                                         <th class="col-loc">Lokasi</th>
-                                        <th width="120">Membership</th> <!-- New Column -->
+                                        <th width="120">Membership</th>
                                         <th class="col-stats" width="150">Statistik</th>
                                         <th width="120">Pendapatan</th>
                                         <th width="120" style="text-align:right;">Aksi</th>
@@ -480,6 +564,14 @@ function dw_desa_page_render() {
                                     ?>
                                     <tr>
                                         <td style="color:#888;">#<?php echo $row->id; ?></td>
+                                        <!-- Tampilkan Logo di Tabel -->
+                                        <td>
+                                            <?php if($row->foto): ?>
+                                                <img src="<?php echo esc_url($row->foto); ?>" class="dw-admin-thumb" style="width:40px; height:40px; border-radius:4px; object-fit:cover; border:1px solid #ddd;">
+                                            <?php else: ?>
+                                                <div style="width:40px; height:40px; background:#f0f0f1; border-radius:4px;"></div>
+                                            <?php endif; ?>
+                                        </td>
                                         <td>
                                             <div class="dw-item-title"><a href="<?php echo admin_url('admin.php?page=dw-desa&tab=data_desa&view=edit&id='.$row->id); ?>"><?php echo esc_html($row->nama_desa); ?></a></div>
                                             <div class="dw-item-meta"><span class="dashicons dashicons-admin-users"></span> <?php echo $row->admin_name ? esc_html($row->admin_name) : 'No Admin'; ?></div>
@@ -509,7 +601,7 @@ function dw_desa_page_render() {
                                         </td>
                                     </tr>
                                     <?php endforeach; else: ?>
-                                    <tr><td colspan="7" style="text-align:center; padding:30px;">Belum ada desa.</td></tr>
+                                    <tr><td colspan="8" style="text-align:center; padding:30px;">Belum ada desa.</td></tr>
                                     <?php endif; ?>
                                 </tbody>
                             </table>
@@ -517,7 +609,7 @@ function dw_desa_page_render() {
                     </div>
                 <?php endif; // End View (List/Edit) ?>
 
-            <!-- 2. TAB VERIFIKASI (INTEGRASI FITUR BARU DENGAN DESIGN CARD LAMA) -->
+            <!-- 2. TAB VERIFIKASI (Membaca langsung dari Tabel Desa) -->
             <?php elseif($active_tab == 'verifikasi'): 
                 $pending_desas = $wpdb->get_results("SELECT * FROM $table_desa WHERE status_akses_verifikasi = 'pending' ORDER BY updated_at ASC");
             ?>
@@ -538,8 +630,8 @@ function dw_desa_page_render() {
                                         <div>
                                             <strong>Bukti Bayar:</strong><br>
                                             <?php if($d->bukti_bayar_akses): ?>
-                                                <a href="<?php echo esc_url($d->bukti_bayar_akses); ?>" target="_blank"><img src="<?php echo esc_url($d->bukti_bayar_akses); ?>" style="height:80px; border:1px solid #ddd; padding:2px;"></a>
-                                            <?php else: echo '<span style="color:red;">Tidak ada file.</span>'; endif; ?>
+                                                <a href="<?php echo esc_url($d->bukti_bayar_akses); ?>" target="_blank"><img src="<?php echo esc_url($d->bukti_bayar_akses); ?>" style="height:120px; border:1px solid #ddd; padding:4px; background:#fff;"></a>
+                                            <?php else: echo '<span style="color:red;">Tidak ada file bukti bayar yang tersimpan.</span>'; endif; ?>
                                         </div>
                                     </div>
                                     <div style="margin-top:10px; display:flex; gap:10px;">
@@ -568,12 +660,12 @@ function dw_desa_page_render() {
                     </div>
                 </div>
 
-            <!-- 3. TAB PENGATURAN (UPDATE: HANYA HARGA & READ ONLY PAYMENT INFO) -->
+            <!-- 3. TAB PENGATURAN -->
             <?php elseif($active_tab == 'pengaturan'): 
                 $settings = get_option('dw_settings', []);
                 $harga = isset($settings['harga_premium_desa']) ? $settings['harga_premium_desa'] : 0;
                 
-                // Ambil Data Pembayaran dari Option Global (sesuai page-settings.php)
+                // Ambil Data Pembayaran dari Option Global
                 $bank_name    = get_option('dw_bank_name', '-');
                 $bank_account = get_option('dw_bank_account', '-');
                 $bank_holder  = get_option('dw_bank_holder', '-');
@@ -623,7 +715,7 @@ function dw_desa_page_render() {
         </div>
     </div>
 
-    <!-- MODERN CSS (DIAMBIL DARI VERSI LAMA ANDA + STYLE UNTUK BADGE PREMIUM) -->
+    <!-- MODERN CSS -->
     <style>
         :root { --dw-primary: #2271b1; --dw-primary-hover: #135e96; --dw-bg: #f0f0f1; --dw-border: #dcdcde; --dw-text: #3c434a; --dw-text-light: #646970; --dw-radius: 4px; --dw-shadow: 0 1px 2px rgba(0,0,0,0.05); }
         .dw-wrapper { margin: 20px 20px 0 0; }
@@ -717,7 +809,7 @@ function dw_desa_page_render() {
             btn.hide();
         });
 
-        // Address API logic (Sama seperti sebelumnya)
+        // Address API logic
         var locData = $('#dw-location-data');
         if(locData.length) {
             var initVals = { prov: locData.data('prov'), kab: locData.data('kab'), kec: locData.data('kec'), kel: locData.data('kel') };
