@@ -3,8 +3,10 @@
  * File Name:   activation.php
  * File Folder: includes/
  * Description: File aktivasi plugin yang berisi seluruh skema database custom.
- * * UPDATE: 
- * - Menambahkan kolom alasan_penolakan pada tabel dw_desa
+ * * PERBAIKAN:
+ * - Menghapus komentar SQL (--) di dalam string karena menyebabkan error dbDelta.
+ * - Merapikan format ENUM.
+ * - Mengubah nama index 'token_hash' menjadi 'idx_token_hash' untuk menghindari error Duplicate Key.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -18,10 +20,11 @@ function dw_activate_plugin() {
 
     require_once( ABSPATH . 'wp-admin/includes/upgrade.php' );
 
-        /* =========================================
-        1. ENTITAS UTAMA (MASTER DATA)
-        ========================================= */
+    /* =========================================
+       1. ENTITAS UTAMA (MASTER DATA)
+       ========================================= */
 
+    // 1. Tabel Desa
     $sql_desa = "CREATE TABLE {$table_prefix}desa (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_user_desa BIGINT(20) UNSIGNED NOT NULL,
@@ -29,15 +32,11 @@ function dw_activate_plugin() {
         slug_desa VARCHAR(255) NOT NULL,
         deskripsi TEXT,
         foto VARCHAR(255) DEFAULT NULL,
-        
-        -- Field Keuangan
         total_pendapatan DECIMAL(15,2) DEFAULT 0,
         no_rekening_desa VARCHAR(50) DEFAULT NULL,
         nama_bank_desa VARCHAR(100) DEFAULT NULL,
         atas_nama_rekening_desa VARCHAR(100) DEFAULT NULL,
         qris_image_url_desa VARCHAR(255) DEFAULT NULL,
-        
-        -- Field Status & Lokasi
         status ENUM('aktif','pending') DEFAULT 'pending',
         provinsi VARCHAR(100),
         kabupaten VARCHAR(100),
@@ -48,12 +47,9 @@ function dw_activate_plugin() {
         api_kecamatan_id VARCHAR(20),
         api_kelurahan_id VARCHAR(20),
         alamat_lengkap TEXT,
-
-        -- [BARU] Field Akses Fitur Verifikasi Pedagang
         status_akses_verifikasi ENUM('locked', 'pending', 'active') DEFAULT 'locked',
         bukti_bayar_akses VARCHAR(255) DEFAULT NULL,
-        alasan_penolakan TEXT DEFAULT NULL, -- Kolom baru untuk alasan reject
-
+        alasan_penolakan TEXT DEFAULT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         PRIMARY KEY  (id),
@@ -123,28 +119,21 @@ function dw_activate_plugin() {
         no_kartu_ojek VARCHAR(50), 
         plat_nomor VARCHAR(20) NOT NULL,
         merk_motor VARCHAR(100) NOT NULL,
-        
-        -- Foto Dokumen
         foto_profil VARCHAR(255),
         foto_ktp VARCHAR(255),
         foto_kartu_ojek VARCHAR(255), 
         foto_motor VARCHAR(255),
-        
         status_pendaftaran ENUM('menunggu','disetujui','ditolak') DEFAULT 'menunggu',
         status_kerja ENUM('offline','online','busy') DEFAULT 'offline',
-        
-        -- Filter Wilayah
         api_provinsi_id VARCHAR(20),
         api_kabupaten_id VARCHAR(20),
         api_kecamatan_id VARCHAR(20),
         api_kelurahan_id VARCHAR(20),
         alamat_domisili TEXT,
-
         rating_avg DECIMAL(3,2) DEFAULT 0,
         total_trip INT DEFAULT 0,
         lokasi_terakhir_lat VARCHAR(50),
         lokasi_terakhir_lng VARCHAR(50),
-        
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         PRIMARY KEY  (id),
@@ -232,6 +221,7 @@ function dw_activate_plugin() {
        ========================================= */
 
     // 6. Tabel Transaksi Utama
+    // PENTING: Definisi ENUM harus satu baris untuk dbDelta
     $sql_transaksi = "CREATE TABLE {$table_prefix}transaksi (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         kode_unik VARCHAR(50) NOT NULL,
@@ -243,20 +233,14 @@ function dw_activate_plugin() {
         nama_penerima VARCHAR(255),
         no_hp VARCHAR(20),
         alamat_lengkap TEXT,
-        
-        -- Data Khusus Ojek
-        ojek_data JSON DEFAULT NULL, 
-        
+        ojek_data JSON DEFAULT NULL,
         provinsi VARCHAR(100),
         kabupaten VARCHAR(100),
         kecamatan VARCHAR(100),
         kelurahan VARCHAR(100),
         kode_pos VARCHAR(10),
         metode_pembayaran VARCHAR(50),
-        status_transaksi ENUM(
-            'menunggu_pembayaran','pembayaran_dikonfirmasi','pembayaran_gagal','diproses','dikirim','selesai','dibatalkan','refunded',
-            'menunggu_driver', 'penawaran_driver', 'nego', 'menunggu_penjemputan', 'dalam_perjalanan'
-        ) DEFAULT 'menunggu_pembayaran',
+        status_transaksi ENUM('menunggu_pembayaran','pembayaran_dikonfirmasi','pembayaran_gagal','diproses','dikirim','selesai','dibatalkan','refunded','menunggu_driver','penawaran_driver','nego','menunggu_penjemputan','dalam_perjalanan') DEFAULT 'menunggu_pembayaran',
         url_bukti_bayar VARCHAR(255) DEFAULT NULL,
         bukti_pembayaran VARCHAR(255) DEFAULT NULL,
         catatan_pembeli TEXT,
@@ -489,7 +473,7 @@ function dw_activate_plugin() {
         revoked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         expires_at DATETIME NOT NULL,
         PRIMARY KEY  (id),
-        KEY token_hash (token_hash)
+        KEY idx_token_hash (token_hash)
     ) $charset_collate;";
     dbDelta( $sql_revoked );
 
@@ -522,11 +506,11 @@ function dw_activate_plugin() {
     // 22. Tabel Wishlist
     $table_wishlist = $wpdb->prefix . 'dw_wishlist';
     $sql_wishlist = "CREATE TABLE $table_wishlist (
-        id bigint(20) NOT NULL AUTO_INCREMENT,
-        user_id bigint(20) UNSIGNED NOT NULL,
-        item_id bigint(20) UNSIGNED NOT NULL,
-        item_type varchar(20) NOT NULL DEFAULT 'wisata', -- 'wisata' atau 'produk'
-        created_at datetime DEFAULT CURRENT_TIMESTAMP,
+        id BIGINT(20) NOT NULL AUTO_INCREMENT,
+        user_id BIGINT(20) UNSIGNED NOT NULL,
+        item_id BIGINT(20) UNSIGNED NOT NULL,
+        item_type VARCHAR(20) NOT NULL DEFAULT 'wisata', 
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY  (id),
         KEY user_id (user_id),
         KEY item_lookup (item_id, item_type),
@@ -541,13 +525,13 @@ function dw_activate_plugin() {
     // 23. Tabel Log Kuota
     $table_quota_logs = $table_prefix . 'quota_logs';
     $sql_quota_logs = "CREATE TABLE $table_quota_logs (
-        id bigint(20) NOT NULL AUTO_INCREMENT,
-        user_id bigint(20) NOT NULL,
-        quota_change int(11) NOT NULL,
-        type varchar(50) NOT NULL,
-        description text,
-        reference_id bigint(20) DEFAULT 0,
-        created_at datetime DEFAULT CURRENT_TIMESTAMP,
+        id BIGINT(20) NOT NULL AUTO_INCREMENT,
+        user_id BIGINT(20) NOT NULL,
+        quota_change INT(11) NOT NULL,
+        type VARCHAR(50) NOT NULL,
+        description TEXT,
+        reference_id BIGINT(20) DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY  (id),
         KEY user_id (user_id)
     ) $charset_collate;";
@@ -559,7 +543,10 @@ function dw_activate_plugin() {
     // Roles Setup (Delegasi ke roles-capabilities.php agar tidak duplikat)
     // Pastikan file roles-capabilities sudah di-load jika belum (tergantung context)
     if ( ! function_exists( 'dw_create_roles_and_caps' ) ) {
-        require_once dirname( __FILE__ ) . '/roles-capabilities.php';
+        $roles_file = dirname( __FILE__ ) . '/roles-capabilities.php';
+        if ( file_exists( $roles_file ) ) {
+            require_once $roles_file;
+        }
     }
 
     if ( function_exists( 'dw_create_roles_and_caps' ) ) {
