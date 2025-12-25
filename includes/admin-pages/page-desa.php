@@ -35,7 +35,7 @@ function dw_desa_page_render() {
         if (isset($_POST['action_save_settings']) && check_admin_referer('dw_desa_settings_save')) {
             $settings = get_option('dw_settings', []);
             $settings['harga_premium_desa'] = absint($_POST['harga_premium_desa']);
-            // Info rekening dihapus dari sini karena mengambil dari pengaturan plugin utama
+            // Info rekening tidak disimpan di sini karena dikelola di page-settings.php
             update_option('dw_settings', $settings);
             $message = 'Pengaturan harga berhasil disimpan.';
             $message_type = 'success';
@@ -568,10 +568,16 @@ function dw_desa_page_render() {
                     </div>
                 </div>
 
-            <!-- 3. TAB PENGATURAN (UPDATE: HANYA HARGA) -->
+            <!-- 3. TAB PENGATURAN (UPDATE: HANYA HARGA & READ ONLY PAYMENT INFO) -->
             <?php elseif($active_tab == 'pengaturan'): 
                 $settings = get_option('dw_settings', []);
                 $harga = isset($settings['harga_premium_desa']) ? $settings['harga_premium_desa'] : 0;
+                
+                // Ambil Data Pembayaran dari Option Global (sesuai page-settings.php)
+                $bank_name    = get_option('dw_bank_name', '-');
+                $bank_account = get_option('dw_bank_account', '-');
+                $bank_holder  = get_option('dw_bank_holder', '-');
+                $qris_url     = get_option('dw_qris_image_url', ''); 
             ?>
                 <div class="dw-card" style="max-width:600px;">
                     <div class="dw-card-header"><h3>Pengaturan Membership</h3></div>
@@ -584,12 +590,31 @@ function dw_desa_page_render() {
                                 <input type="number" name="harga_premium_desa" class="dw-form-control" value="<?php echo esc_attr($harga); ?>">
                                 <p class="description">Biaya pendaftaran untuk upgrade ke status Premium.</p>
                             </div>
+                            
                             <div class="dw-form-group">
-                                <label class="dw-label">Info Pembayaran</label>
+                                <label class="dw-label">Info Pembayaran (Preview Data)</label>
                                 <div class="dw-alert dw-alert-info">
-                                    <span class="dashicons dashicons-info"></span> Info rekening dan metode pembayaran diambil dari <strong>Pengaturan Pembayaran Plugin Utama</strong>.
+                                    <span class="dashicons dashicons-info"></span> Data di bawah diambil dari <strong>Pengaturan Pembayaran Plugin Utama</strong>.
+                                </div>
+                                <div style="background:#fff; border:1px solid #ddd; padding:15px; border-radius:4px;">
+                                    <p><strong>Rekening Bank:</strong></p>
+                                    <div style="background:#f9f9f9; padding:10px; border-radius:4px; margin-bottom:10px;">
+                                        <ul style="margin:0; padding-left:20px;">
+                                            <li><strong>Bank:</strong> <?php echo esc_html($bank_name); ?></li>
+                                            <li><strong>No. Rek:</strong> <?php echo esc_html($bank_account); ?></li>
+                                            <li><strong>A.N:</strong> <?php echo esc_html($bank_holder); ?></li>
+                                        </ul>
+                                    </div>
+                                    
+                                    <p><strong>QRIS Code:</strong></p>
+                                    <?php if($qris_url): ?>
+                                        <img src="<?php echo esc_url($qris_url); ?>" style="width:150px; height:auto; border:1px solid #ccc; padding:5px; border-radius:4px;">
+                                    <?php else: ?>
+                                        <em style="color:#999;">Belum ada gambar QRIS.</em>
+                                    <?php endif; ?>
                                 </div>
                             </div>
+                            
                             <button type="submit" class="dw-btn dw-btn-primary">Simpan Pengaturan</button>
                         </form>
                     </div>
