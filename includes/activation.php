@@ -2,11 +2,7 @@
 /**
  * File Name:   activation.php
  * File Folder: includes/
- * Description: File aktivasi plugin yang berisi seluruh skema database custom.
- * * PERBAIKAN:
- * - Menghapus komentar SQL (--) di dalam string karena menyebabkan error dbDelta.
- * - Merapikan format ENUM.
- * - Mengubah nama index 'token_hash' menjadi 'idx_token_hash' untuk menghindari error Duplicate Key.
+ * Description: File aktivasi plugin dengan perbaikan nama index untuk mencegah Duplicate Key Error.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -109,7 +105,7 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta($sql_pedagang);
 
-    // 2B. Tabel Ojek (NEW - Driver)
+    // 2B. Tabel Ojek
      $sql_ojek = "CREATE TABLE {$table_prefix}ojek (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_user BIGINT(20) UNSIGNED NOT NULL,
@@ -221,7 +217,6 @@ function dw_activate_plugin() {
        ========================================= */
 
     // 6. Tabel Transaksi Utama
-    // PENTING: Definisi ENUM harus satu baris untuk dbDelta
     $sql_transaksi = "CREATE TABLE {$table_prefix}transaksi (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         kode_unik VARCHAR(50) NOT NULL,
@@ -466,6 +461,7 @@ function dw_activate_plugin() {
     dbDelta( $sql_alamat );
 
     // 19. Tabel Revoked Tokens
+    // PERBAIKAN: Rename key 'token_hash' jadi 'idx_token_hash' untuk menghindari Duplicate Key Error
     $sql_revoked = "CREATE TABLE {$table_prefix}revoked_tokens (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         token_hash VARCHAR(64) NOT NULL,
