@@ -17,6 +17,8 @@
  * --- PERBAIKAN (MODEL 3 - KUOTA GRATIS) ---
  * - Saat menyetujui kelayakan, sekarang mengambil 'default_kuota_transaksi_gratis'
  * dari 'dw_settings' dan menambahkannya ke 'sisa_transaksi' pedagang.
+ * * --- UPDATE (MEMBERSHIP) ---
+ * - Fitur ini dikunci jika status_akses_verifikasi desa != 'active' (Premium).
  *
  * @package DesaWisataCore
  */
@@ -49,6 +51,17 @@ function dw_desa_pedagang_verification_handler() {
     $id_user_pedagang = $pedagang_data->id_user;
     $desa_id = $pedagang_data->id_desa;
     $pedagang_name = $pedagang_data->nama_toko;
+
+    // --- [LOGIKA BARU] CEK STATUS MEMBERSHIP DESA (SECURITY CHECK) ---
+    // Mencegah bypass via inspect element/request langsung
+    $desa_status = $wpdb->get_var($wpdb->prepare("SELECT status_akses_verifikasi FROM {$wpdb->prefix}dw_desa WHERE id = %d", $desa_id));
+    if ($desa_status !== 'active') {
+        add_settings_error('dw_desa_notices', 'feature_locked', 'GAGAL: Fitur Verifikasi Pedagang terkunci. Desa Anda harus status PREMIUM.', 'error');
+        set_transient('settings_errors', get_settings_errors(), 30);
+        wp_redirect($redirect_url);
+        exit;
+    }
+    // --- [AKHIR LOGIKA BARU] ---
 
     $log_prefix = '';
     $notification_subject = '';
@@ -139,7 +152,8 @@ function dw_admin_desa_verifikasi_page_render() {
     global $wpdb;
     $current_user_id = get_current_user_id();
 
-    $desa = $wpdb->get_row($wpdb->prepare("SELECT id, nama_desa FROM {$wpdb->prefix}dw_desa WHERE id_user_desa = %d", $current_user_id));
+    // UPDATE QUERY: Ambil juga status_akses_verifikasi
+    $desa = $wpdb->get_row($wpdb->prepare("SELECT id, nama_desa, status_akses_verifikasi FROM {$wpdb->prefix}dw_desa WHERE id_user_desa = %d", $current_user_id));
     if (!$desa) {
         echo '<div class="wrap"><div class="notice notice-error"><p>Anda tidak terhubung dengan Desa manapun. Hubungi Super Admin.</p></div></div>';
         return;
@@ -163,48 +177,71 @@ function dw_admin_desa_verifikasi_page_render() {
         if($errors) { settings_errors('dw_desa_notices'); delete_transient('settings_errors'); }
         ?>
 
-        <h2>Verifikasi Kelayakan Lokal (<?php echo count($pedagang_kelayakan); ?>)</h2>
-        <p>Pedagang di tahap ini baru mendaftar. Lakukan verifikasi kelayakan (cek domisili/lokasi usaha). Jika disetujui, akun pedagang akan langsung aktif dan mendapatkan kuota transaksi gratis.</p>
-        <table class="wp-list-table widefat fixed striped">
-            <thead>
-                <tr>
-                    <th style="width: 30%;">Nama Toko</th>
-                    <th style="width: 20%;">Pengguna</th>
-                    <th style="width: 30%;">Tanggal Daftar</th>
-                    <th style="width: 20%;">Aksi</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php if (empty($pedagang_kelayakan)): ?>
-                    <tr><td colspan="4">Tidak ada pedagang menunggu verifikasi kelayakan.</td></tr>
-                <?php else: foreach ($pedagang_kelayakan as $item): ?>
-                    <tr>
-                        <td><strong><?php echo esc_html($item['nama_toko']); ?></strong></td>
-                        <td><?php echo esc_html(get_user_by('id', $item['id_user'])->display_name ?? 'N/A'); ?></td>
-                        <td><?php echo date('d M Y H:i', strtotime($item['created_at'])); ?></td>
-                        <td>
-                             <form method="post" action="<?php echo admin_url('admin.php?page=dw-desa-verifikasi'); ?>" style="display:inline-block;">
-                                <input type="hidden" name="pedagang_id" value="<?php echo esc_attr($item['id']); ?>">
-                                <input type="hidden" name="action_type" value="approve_kelayakan">
-                                <input type="hidden" name="dw_desa_verification_action" value="1">
-                                <?php wp_nonce_field('dw_desa_pedagang_nonce'); ?>
-                                <button type="submit" class="button button-primary button-small" onclick="return confirm('Setujui kelayakan dan aktifkan akun pedagang ini? (Akan mendapat kuota gratis)');">Setujui & Aktifkan</button>
-                            </form>
+        <!-- --- [LOGIKA BARU] UI BLOKIR JIKA TIDAK PREMIUM --- -->
+        <?php if ($desa->status_akses_verifikasi !== 'active'): ?>
+            
+            <div style="background: #fff; border-left: 4px solid #d63638; box-shadow: 0 1px 2px rgba(0,0,0,0.1); padding: 30px; margin-top: 20px; text-align: center;">
+                <span class="dashicons dashicons-lock" style="font-size: 60px; height: 60px; width: 60px; color: #d63638; margin-bottom: 20px;"></span>
+                <h2 style="margin-top: 0; color: #333;">Fitur Terkunci (Premium Only)</h2>
+                <p style="font-size: 16px; color: #666; max-width: 600px; margin: 0 auto 20px auto;">
+                    Maaf, fitur verifikasi UMKM/Pedagang hanya tersedia untuk <strong>Desa Premium</strong>. 
+                    Saat ini status desa Anda adalah <strong>FREE / LOCKED</strong>.
+                </p>
+                <p>
+                    Silakan lakukan pembayaran dan upgrade membership desa Anda melalui menu Manajemen Desa untuk membuka fitur ini dan membangun ekosistem ekonomi desa.
+                </p>
+                <a href="<?php echo admin_url('admin.php?page=dw-desa'); ?>" class="button button-primary button-hero">Upgrade ke Premium Sekarang</a>
+            </div>
 
-                             <form method="post" action="<?php echo admin_url('admin.php?page=dw-desa-verifikasi'); ?>" style="display:inline-block;">
-                                <input type="hidden" name="pedagang_id" value="<?php echo esc_attr($item['id']); ?>">
-                                <input type="hidden" name="action_type" value="reject_kelayakan">
-                                <input type="hidden" name="dw_desa_verification_action" value="1">
-                                <?php wp_nonce_field('dw_desa_pedagang_nonce'); ?>
-                                <input type="text" name="rejection_reason" placeholder="Alasan Tolak" style="width: 80px; margin-right: 5px;">
-                                <button type="submit" class="button button-secondary button-small" onclick="return confirm('Yakin menolak kelayakan?');">Tolak</button>
-                            </form>
-                        </td>
+        <?php else: ?>
+            <!-- --- TAMPILAN NORMAL (TABEL PEDAGANG) --- -->
+
+            <h2>Verifikasi Kelayakan Lokal (<?php echo count($pedagang_kelayakan); ?>)</h2>
+            <p>Pedagang di tahap ini baru mendaftar. Lakukan verifikasi kelayakan (cek domisili/lokasi usaha). Jika disetujui, akun pedagang akan langsung aktif dan mendapatkan kuota transaksi gratis.</p>
+            <table class="wp-list-table widefat fixed striped">
+                <thead>
+                    <tr>
+                        <th style="width: 30%;">Nama Toko</th>
+                        <th style="width: 20%;">Pengguna</th>
+                        <th style="width: 30%;">Tanggal Daftar</th>
+                        <th style="width: 20%;">Aksi</th>
                     </tr>
-                <?php endforeach; endif; ?>
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                    <?php if (empty($pedagang_kelayakan)): ?>
+                        <tr><td colspan="4">Tidak ada pedagang menunggu verifikasi kelayakan.</td></tr>
+                    <?php else: foreach ($pedagang_kelayakan as $item): ?>
+                        <tr>
+                            <td><strong><?php echo esc_html($item['nama_toko']); ?></strong></td>
+                            <td><?php echo esc_html(get_user_by('id', $item['id_user'])->display_name ?? 'N/A'); ?></td>
+                            <td><?php echo date('d M Y H:i', strtotime($item['created_at'])); ?></td>
+                            <td>
+                                 <form method="post" action="<?php echo admin_url('admin.php?page=dw-desa-verifikasi'); ?>" style="display:inline-block;">
+                                    <input type="hidden" name="pedagang_id" value="<?php echo esc_attr($item['id']); ?>">
+                                    <input type="hidden" name="action_type" value="approve_kelayakan">
+                                    <input type="hidden" name="dw_desa_verification_action" value="1">
+                                    <?php wp_nonce_field('dw_desa_pedagang_nonce'); ?>
+                                    <button type="submit" class="button button-primary button-small" onclick="return confirm('Setujui kelayakan dan aktifkan akun pedagang ini? (Akan mendapat kuota gratis)');">Setujui & Aktifkan</button>
+                                </form>
+
+                                 <form method="post" action="<?php echo admin_url('admin.php?page=dw-desa-verifikasi'); ?>" style="display:inline-block;">
+                                    <input type="hidden" name="pedagang_id" value="<?php echo esc_attr($item['id']); ?>">
+                                    <input type="hidden" name="action_type" value="reject_kelayakan">
+                                    <input type="hidden" name="dw_desa_verification_action" value="1">
+                                    <?php wp_nonce_field('dw_desa_pedagang_nonce'); ?>
+                                    <input type="text" name="rejection_reason" placeholder="Alasan Tolak" style="width: 80px; margin-right: 5px;">
+                                    <button type="submit" class="button button-secondary button-small" onclick="return confirm('Yakin menolak kelayakan?');">Tolak</button>
+                                </form>
+                            </td>
+                        </tr>
+                    <?php endforeach; endif; ?>
+                </tbody>
+            </table>
+
+        <?php endif; // END IF STATUS ACTIVE ?>
+        
     </div>
     <?php
 }
+
 ?>

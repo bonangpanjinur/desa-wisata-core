@@ -3,7 +3,6 @@
  * File Name:   includes/admin-menus.php
  * Description: Mengatur menu admin dan meload halaman admin.
  * * UPDATE:
- * - Menambahkan Menu Verifikasi Akses Desa (B2B Feature).
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -27,9 +26,7 @@ if ( is_admin() ) {
     require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-verifikasi-paket.php';
     require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-desa-verifikasi-pedagang.php';
     
-    // [NEW] Halaman Verifikasi Akses Desa (Pastikan file ini ada di includes/admin-pages/)
-    require_once dirname(__FILE__) . '/admin-pages/page-verifikasi-akses-desa.php'; 
-    
+
     require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-ojek-management.php';
 
   
@@ -75,14 +72,7 @@ function dw_render_verifikasi_paket() {
     }
 }
 
-// [NEW] Callback Render Verifikasi Akses Desa
-function dw_render_verifikasi_akses_desa() {
-    if (function_exists('dw_verifikasi_akses_desa_page_render')) {
-        dw_verifikasi_akses_desa_page_render();
-    } else {
-         echo '<div class="notice notice-error"><p>Error: Fungsi render verifikasi akses desa tidak ditemukan.</p></div>';
-    }
-}
+
 
 function dw_render_promosi() { 
     if ( defined('DW_CORE_PLUGIN_DIR') ) {
@@ -144,9 +134,7 @@ function dw_register_admin_menus() {
         add_submenu_page('dw-dashboard', 'Paket Transaksi', 'Paket Transaksi', 'manage_options', 'dw-paket-transaksi', 'dw_render_paket');
         add_submenu_page('dw-dashboard', 'Verifikasi Paket', 'Verifikasi Paket', 'manage_options', 'dw-verifikasi-paket', 'dw_render_verifikasi_paket');
         
-        // [NEW] Menu Verifikasi Akses Desa (B2B)
-        add_submenu_page('dw-dashboard', 'Verifikasi Akses Desa', 'Akses Desa', 'manage_options', 'dw-verifikasi-akses-desa', 'dw_render_verifikasi_akses_desa');
-
+   
         add_submenu_page('dw-dashboard', 'Payout Komisi', 'Payout Komisi', 'manage_options', 'dw-komisi', 'dw_render_komisi');
     }
 

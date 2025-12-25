@@ -2,18 +2,16 @@
 /**
  * File Name:   page-wisata.php
  * Description: CRUD Wisata dengan Tampilan Modern (Premium UI).
- * * UPDATE UI:
- * - Menambahkan input Kategori Wisata (Select Dropdown) pada Form.
- * - Menambahkan kolom Kategori pada List Table.
- * - Menangani penyimpanan kolom kategori ke database.
- * - Integrasi Galeri Foto (JSON).
+ * * UPDATE FIX (UI/UX):
+ * - Memperbaiki handling error "Quota Penuh" agar tidak blank page.
+ * - Form tetap muncul setelah error, dan data input tidak hilang (preservasi data).
+ * - Penambahan tombol "Kembali".
  */
 
 if (!defined('ABSPATH')) exit;
 
 function dw_wisata_page_render() {
     // --- INTEGRASI FITUR PREMIUM: MEDIA UPLOADER ---
-    // Pastikan library media WordPress dimuat untuk fitur Galeri & Foto Utama
     if ( ! did_action( 'wp_enqueue_media' ) ) {
         wp_enqueue_media();
     }
@@ -25,8 +23,8 @@ function dw_wisata_page_render() {
     $current_user_id = get_current_user_id();
     $is_super_admin  = current_user_can('administrator') || current_user_can('admin_kabupaten');
     
-    // Cari Desa yang dikelola user ini (untuk validasi akses)
-    $my_desa_data = $wpdb->get_row($wpdb->prepare("SELECT id, nama_desa FROM $table_desa WHERE id_user_desa = %d", $current_user_id));
+    // Cari Desa yang dikelola user ini
+    $my_desa_data = $wpdb->get_row($wpdb->prepare("SELECT id, nama_desa, status_akses_verifikasi FROM $table_desa WHERE id_user_desa = %d", $current_user_id));
 
     $message = ''; $msg_type = '';
 
@@ -38,7 +36,7 @@ function dw_wisata_page_render() {
             echo '<div class="notice notice-error"><p>Security Check Failed.</p></div>'; return;
         }
 
-        // Tentukan ID Desa
+        // Tentukan ID Desa (Target Desa)
         $id_desa_input = 0;
         if ($is_super_admin) {
             $id_desa_input = isset($_POST['id_desa']) ? intval($_POST['id_desa']) : 0;
@@ -66,59 +64,94 @@ function dw_wisata_page_render() {
         } elseif ($_POST['action_wisata'] === 'save') {
             
             if ($id_desa_input === 0) {
-                echo '<div class="notice notice-error"><p>Error: Akun Anda tidak terhubung dengan Desa manapun.</p></div>'; return;
-            }
-
-            // Proses Galeri JSON (Fitur Premium)
-            $galeri_json = '[]';
-            if (!empty($_POST['galeri_urls'])) {
-                $galeri_array = array_filter(explode(',', $_POST['galeri_urls']));
-                $galeri_json = json_encode(array_values($galeri_array));
-            }
-
-            $nama = sanitize_text_field($_POST['nama_wisata']);
-            
-            // Logic Slug
-            $slug = sanitize_title($_POST['slug']);
-            if (empty($slug)) {
-                $slug = sanitize_title($nama);
-            }
-
-            $data = [
-                'id_desa'      => $id_desa_input,
-                'nama_wisata'  => $nama,
-                'slug'         => $slug,
-                'kategori'     => sanitize_text_field($_POST['kategori']), // SAVE KATEGORI
-                'deskripsi'    => wp_kses_post($_POST['deskripsi']),
-                'harga_tiket'  => floatval($_POST['harga_tiket']),
-                'jam_buka'     => sanitize_text_field($_POST['jam_buka']),
-                'fasilitas'    => isset($_POST['fasilitas']) ? sanitize_textarea_field($_POST['fasilitas']) : '',
-                'kontak_pengelola' => isset($_POST['kontak_pengelola']) ? sanitize_text_field($_POST['kontak_pengelola']) : '',
-                'lokasi_maps'  => isset($_POST['lokasi_maps']) ? esc_url_raw($_POST['lokasi_maps']) : '',
-                'foto_utama'   => esc_url_raw($_POST['foto_utama']),
-                'galeri'       => $galeri_json,
-                'status'       => sanitize_text_field($_POST['status']),
-                'updated_at'   => current_time('mysql')
-            ];
-
-            if (!empty($_POST['wisata_id'])) {
-                // Update
-                $wid = intval($_POST['wisata_id']);
-                
-                if (!$is_super_admin) {
-                    $check = $wpdb->get_var($wpdb->prepare("SELECT id FROM $table_wisata WHERE id=%d AND id_desa=%d", $wid, $id_desa_input));
-                    if(!$check) { echo '<div class="notice notice-error"><p>Akses Ditolak.</p></div>'; return; }
-                }
-
-                $wpdb->update($table_wisata, $data, ['id' => $wid]);
-                $message = 'Data Wisata berhasil diperbarui.'; 
+                $message = 'Error: Akun Anda tidak terhubung dengan Desa manapun.'; $msg_type = 'error';
             } else {
-                // Insert
-                $data['created_at'] = current_time('mysql');
-                $wpdb->insert($table_wisata, $data);
-                $message = 'Objek Wisata baru berhasil ditambahkan.';
+                // Flag untuk menandakan apakah proses simpan boleh lanjut
+                $should_save = true;
+
+                // ============================================================
+                // LOGIKA VALIDASI STRICT (INSERT & EDIT)
+                // ============================================================
+                
+                // 1. Ambil status desa tujuan dari DB
+                $desa_status_check = $wpdb->get_row($wpdb->prepare("SELECT status_akses_verifikasi FROM $table_desa WHERE id = %d", $id_desa_input));
+                
+                // 2. Jika status desa tujuan BUKAN active (artinya Free/Locked/Pending)
+                if ($desa_status_check && $desa_status_check->status_akses_verifikasi !== 'active') {
+                    
+                    // ID Wisata yang sedang diproses (0 jika Insert Baru, ID jika Edit)
+                    $current_process_id = !empty($_POST['wisata_id']) ? intval($_POST['wisata_id']) : 0;
+
+                    // 3. Hitung jumlah wisata LAIN di desa tujuan
+                    $count_existing = $wpdb->get_var($wpdb->prepare(
+                        "SELECT COUNT(id) FROM $table_wisata WHERE id_desa = %d AND id != %d", 
+                        $id_desa_input, 
+                        $current_process_id
+                    ));
+                    
+                    // 4. Cek Kuota (Maksimal 2)
+                    if ($count_existing >= 2) {
+                        $message = '<strong>GAGAL MENYIMPAN: Kuota Penuh!</strong><br>Desa tujuan berstatus FREE/LOCKED dan sudah memiliki 2 Objek Wisata. Anda tidak bisa menambah atau memindahkan wisata ke desa ini. Silakan Upgrade ke PREMIUM.';
+                        $msg_type = 'error';
+                        $should_save = false; // Batalkan penyimpanan DB
+                    }
+                }
+                // ============================================================
+
+                if ($should_save) {
+                    // Proses Galeri JSON
+                    $galeri_json = '[]';
+                    if (!empty($_POST['galeri_urls'])) {
+                        $galeri_array = array_filter(explode(',', $_POST['galeri_urls']));
+                        $galeri_json = json_encode(array_values($galeri_array));
+                    }
+
+                    $nama = sanitize_text_field($_POST['nama_wisata']);
+                    $slug = sanitize_title($_POST['slug']);
+                    if (empty($slug)) { $slug = sanitize_title($nama); }
+
+                    $data = [
+                        'id_desa'      => $id_desa_input,
+                        'nama_wisata'  => $nama,
+                        'slug'         => $slug,
+                        'kategori'     => sanitize_text_field($_POST['kategori']),
+                        'deskripsi'    => wp_kses_post($_POST['deskripsi']),
+                        'harga_tiket'  => floatval($_POST['harga_tiket']),
+                        'jam_buka'     => sanitize_text_field($_POST['jam_buka']),
+                        'fasilitas'    => isset($_POST['fasilitas']) ? sanitize_textarea_field($_POST['fasilitas']) : '',
+                        'kontak_pengelola' => isset($_POST['kontak_pengelola']) ? sanitize_text_field($_POST['kontak_pengelola']) : '',
+                        'lokasi_maps'  => isset($_POST['lokasi_maps']) ? esc_url_raw($_POST['lokasi_maps']) : '',
+                        'foto_utama'   => esc_url_raw($_POST['foto_utama']),
+                        'galeri'       => $galeri_json,
+                        'status'       => sanitize_text_field($_POST['status']),
+                        'updated_at'   => current_time('mysql')
+                    ];
+
+                    if (!empty($_POST['wisata_id'])) {
+                        // Update
+                        $wid = intval($_POST['wisata_id']);
+                        
+                        $check_own = true;
+                        if (!$is_super_admin) {
+                            $check_own = $wpdb->get_var($wpdb->prepare("SELECT id FROM $table_wisata WHERE id=%d AND id_desa=%d", $wid, $id_desa_input));
+                        }
+
+                        if($check_own) { 
+                            $wpdb->update($table_wisata, $data, ['id' => $wid]);
+                            $message = 'Data Wisata berhasil diperbarui.'; 
+                            $msg_type = 'success';
+                        } else {
+                            $message = 'Akses Ditolak: Data tidak valid.'; $msg_type = 'error';
+                        }
+                    } else {
+                        // Insert
+                        $data['created_at'] = current_time('mysql');
+                        $wpdb->insert($table_wisata, $data);
+                        $message = 'Objek Wisata baru berhasil ditambahkan.';
+                        $msg_type = 'success';
+                    }
+                }
             }
-            $msg_type = 'success';
         }
     }
 
@@ -135,7 +168,7 @@ function dw_wisata_page_render() {
         }
         $edit_data = $wpdb->get_row($wpdb->prepare($sql_edit, intval($_GET['id'])));
         if (!$edit_data) {
-            echo '<div class="notice notice-error"><p>Data tidak ditemukan atau Anda tidak memiliki akses.</p></div>'; 
+            $message = 'Data tidak ditemukan atau Anda tidak memiliki akses.'; $msg_type = 'error';
             $is_edit = false; // Fallback ke list
         }
     }
@@ -152,14 +185,38 @@ function dw_wisata_page_render() {
         <?php if(!$is_edit): ?><a href="?page=dw-wisata&action=new" class="page-title-action">Tambah Baru</a><?php endif; ?>
         <hr class="wp-header-end">
 
-        <?php if($message): ?><div class="notice notice-<?php echo $msg_type; ?> is-dismissible"><p><?php echo $message; ?></p></div><?php endif; ?>
+        <?php if($message): ?>
+            <div class="notice notice-<?php echo $msg_type; ?> is-dismissible" style="margin-left:0; margin-bottom:20px;">
+                <p><?php echo $message; ?></p>
+            </div>
+        <?php endif; ?>
 
         <?php if($is_edit): ?>
             <!-- === FORM VIEW (EDIT/ADD) === -->
+            <?php
+            // Logic Preservasi Data (Agar input tidak hilang saat error)
+            $use_post = ($msg_type === 'error');
+            
+            $val_id       = ($edit_data) ? $edit_data->id : '';
+            $val_nama     = $use_post ? stripslashes($_POST['nama_wisata']) : ($edit_data->nama_wisata ?? '');
+            $val_slug     = $use_post ? stripslashes($_POST['slug']) : ($edit_data->slug ?? '');
+            $val_desc     = $use_post ? stripslashes($_POST['deskripsi']) : ($edit_data->deskripsi ?? '');
+            $val_fasilitas= $use_post ? stripslashes($_POST['fasilitas']) : ($edit_data->fasilitas ?? '');
+            $val_kategori = $use_post ? $_POST['kategori'] : ($edit_data->kategori ?? '');
+            $val_foto     = $use_post ? $_POST['foto_utama'] : ($edit_data->foto_utama ?? '');
+            $val_harga    = $use_post ? $_POST['harga_tiket'] : ($edit_data->harga_tiket ?? 0);
+            $val_jam      = $use_post ? $_POST['jam_buka'] : ($edit_data->jam_buka ?? '');
+            $val_kontak   = $use_post ? $_POST['kontak_pengelola'] : ($edit_data->kontak_pengelola ?? '');
+            $val_maps     = $use_post ? $_POST['lokasi_maps'] : ($edit_data->lokasi_maps ?? '');
+            $val_status   = $use_post ? $_POST['status'] : ($edit_data->status ?? 'aktif');
+            $val_galeri   = $use_post ? $_POST['galeri_urls'] : ($edit_data->galeri ?? '');
+            $val_iddesa   = $use_post ? $_POST['id_desa'] : ($edit_data->id_desa ?? '');
+            ?>
+
             <form method="post" action="">
                 <?php wp_nonce_field('dw_wisata_save'); ?>
                 <input type="hidden" name="action_wisata" value="save">
-                <?php if($edit_data): ?><input type="hidden" name="wisata_id" value="<?php echo $edit_data->id; ?>"><?php endif; ?>
+                <?php if($val_id): ?><input type="hidden" name="wisata_id" value="<?php echo esc_attr($val_id); ?>"><?php endif; ?>
 
                 <div id="poststuff">
                     <div id="post-body" class="metabox-holder columns-2">
@@ -168,12 +225,12 @@ function dw_wisata_page_render() {
                         <div id="post-body-content">
                             <!-- Title -->
                             <div class="dw-input-group" style="margin-bottom: 20px;">
-                                <input type="text" name="nama_wisata" size="30" value="<?php echo esc_attr($edit_data->nama_wisata ?? ''); ?>" id="title" placeholder="Nama objek wisata (misal: Air Terjun Bidadari)" required style="width:100%; padding:10px; font-size:20px; border:1px solid #ddd;">
+                                <input type="text" name="nama_wisata" size="30" value="<?php echo esc_attr($val_nama); ?>" id="title" placeholder="Nama objek wisata (misal: Air Terjun Bidadari)" required style="width:100%; padding:10px; font-size:20px; border:1px solid #ddd;">
                                 
                                 <!-- Slug Edit -->
                                 <?php if($edit_data): ?>
                                 <div style="margin-top:5px; font-size:13px; color:#666;">
-                                    Permalink: <input type="text" name="slug" value="<?php echo esc_attr($edit_data->slug); ?>" style="font-size:12px; padding:2px 5px; width:300px; border:none; background:#f9f9f9; border-bottom:1px dashed #ccc;">
+                                    Permalink: <input type="text" name="slug" value="<?php echo esc_attr($val_slug); ?>" style="font-size:12px; padding:2px 5px; width:300px; border:none; background:#f9f9f9; border-bottom:1px dashed #ccc;">
                                 </div>
                                 <?php endif; ?>
                             </div>
@@ -182,7 +239,7 @@ function dw_wisata_page_render() {
                             <div class="postbox">
                                 <div class="postbox-header"><h2 class="hndle">Deskripsi Lengkap</h2></div>
                                 <div class="inside">
-                                    <?php wp_editor($edit_data->deskripsi ?? '', 'deskripsi', ['textarea_rows'=>10, 'media_buttons'=>true]); ?>
+                                    <?php wp_editor($val_desc, 'deskripsi', ['textarea_rows'=>10, 'media_buttons'=>true]); ?>
                                 </div>
                             </div>
 
@@ -191,22 +248,20 @@ function dw_wisata_page_render() {
                                 <div class="postbox-header"><h2 class="hndle">Fasilitas & Wahana</h2></div>
                                 <div class="inside">
                                     <p class="description">Sebutkan fasilitas (Parkir, Toilet, Mushola, WiFi, dll).</p>
-                                    <textarea name="fasilitas" class="large-text" rows="4"><?php echo esc_textarea($edit_data->fasilitas ?? ''); ?></textarea>
+                                    <textarea name="fasilitas" class="large-text" rows="4"><?php echo esc_textarea($val_fasilitas); ?></textarea>
                                 </div>
                             </div>
 
-                            <!-- Galeri Foto (Premium Feature) -->
+                            <!-- Galeri Foto -->
                             <div class="postbox">
                                 <div class="postbox-header"><h2 class="hndle">Galeri Foto</h2></div>
                                 <div class="inside">
                                     <div id="galeri-preview-container" style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:15px;">
                                         <?php 
-                                        $galeri_urls = [];
-                                        if (!empty($edit_data->galeri)) {
-                                            $galeri_decoded = json_decode($edit_data->galeri, true);
+                                        if (!empty($val_galeri)) {
+                                            $galeri_decoded = json_decode(stripslashes($val_galeri), true);
                                             if (is_array($galeri_decoded)) {
                                                 foreach($galeri_decoded as $url) {
-                                                    $galeri_urls[] = $url;
                                                     echo '<div class="galeri-item" style="position:relative;width:100px;height:100px;">
                                                             <img src="'.esc_url($url).'" style="width:100%;height:100%;object-fit:cover;border-radius:4px;border:1px solid #ddd;">
                                                             <span class="remove-galeri" data-url="'.esc_attr($url).'" style="position:absolute;top:-5px;right:-5px;background:#d63638;color:white;border-radius:50%;width:20px;height:20px;text-align:center;line-height:20px;cursor:pointer;font-size:14px;">&times;</span>
@@ -216,7 +271,7 @@ function dw_wisata_page_render() {
                                         }
                                         ?>
                                     </div>
-                                    <input type="hidden" name="galeri_urls" id="galeri_urls" value="<?php echo esc_attr(implode(',', $galeri_urls)); ?>">
+                                    <input type="hidden" name="galeri_urls" id="galeri_urls" value="<?php echo esc_attr(stripslashes($val_galeri)); ?>">
                                     <button type="button" class="button" id="btn_upload_galeri"><span class="dashicons dashicons-images-alt2"></span> Tambah Foto Galeri</button>
                                 </div>
                             </div>
@@ -232,8 +287,8 @@ function dw_wisata_page_render() {
                                     <p>
                                         <label><strong>Status:</strong></label>
                                         <select name="status" class="widefat" style="margin-top:5px;">
-                                            <option value="aktif" <?php selected($edit_data ? $edit_data->status : '', 'aktif'); ?>>Aktif (Tampil)</option>
-                                            <option value="nonaktif" <?php selected($edit_data ? $edit_data->status : '', 'nonaktif'); ?>>Nonaktif (Sembunyi)</option>
+                                            <option value="aktif" <?php selected($val_status, 'aktif'); ?>>Aktif (Tampil)</option>
+                                            <option value="nonaktif" <?php selected($val_status, 'nonaktif'); ?>>Nonaktif (Sembunyi)</option>
                                         </select>
                                     </p>
                                     <!-- Statistik Read Only -->
@@ -246,7 +301,7 @@ function dw_wisata_page_render() {
 
                                     <div id="major-publishing-actions" style="display:flex; gap:10px; margin-top:10px;">
                                         <input type="submit" class="button button-primary button-large" style="flex:1;" value="Simpan">
-                                        <a href="?page=dw-wisata" class="button button-large">Batal</a>
+                                        <a href="?page=dw-wisata" class="button button-large">Kembali</a>
                                     </div>
                                 </div>
                             </div>
@@ -260,7 +315,7 @@ function dw_wisata_page_render() {
                                         <option value="">-- Pilih Kategori --</option>
                                         <?php if (!empty($kategori_terms) && !is_wp_error($kategori_terms)) : ?>
                                             <?php foreach ($kategori_terms as $term) : ?>
-                                                <option value="<?php echo esc_attr($term->name); ?>" <?php selected(($edit_data && isset($edit_data->kategori)) ? $edit_data->kategori : '', $term->name); ?>>
+                                                <option value="<?php echo esc_attr($term->name); ?>" <?php selected($val_kategori, $term->name); ?>>
                                                     <?php echo esc_html($term->name); ?>
                                                 </option>
                                             <?php endforeach; ?>
@@ -281,7 +336,7 @@ function dw_wisata_page_render() {
                                         <select name="id_desa" class="widefat" required>
                                             <option value="">-- Pilih Desa --</option>
                                             <?php $ds = $wpdb->get_results("SELECT id, nama_desa FROM $table_desa WHERE status='aktif'"); 
-                                            foreach($ds as $d) echo "<option value='{$d->id}' ".selected($edit_data ? $edit_data->id_desa : '', $d->id, false).">{$d->nama_desa}</option>"; ?>
+                                            foreach($ds as $d) echo "<option value='{$d->id}' ".selected($val_iddesa, $d->id, false).">{$d->nama_desa}</option>"; ?>
                                         </select>
                                     <?php else: ?>
                                         <label>Desa:</label>
@@ -295,9 +350,9 @@ function dw_wisata_page_render() {
                                 <div class="postbox-header"><h2 class="hndle">Foto Utama</h2></div>
                                 <div class="inside">
                                     <div style="text-align:center; background:#f0f0f1; padding:10px; margin-bottom:10px; border-radius:4px;">
-                                        <img id="preview_foto_utama" src="<?php echo !empty($edit_data->foto_utama) ? esc_url($edit_data->foto_utama) : 'https://placehold.co/300x200?text=No+Image'; ?>" style="max-width:100%; height:auto;">
+                                        <img id="preview_foto_utama" src="<?php echo !empty($val_foto) ? esc_url($val_foto) : 'https://placehold.co/300x200?text=No+Image'; ?>" style="max-width:100%; height:auto;">
                                     </div>
-                                    <input type="text" name="foto_utama" id="foto_utama" value="<?php echo esc_attr($edit_data->foto_utama ?? ''); ?>" class="widefat" placeholder="URL Gambar">
+                                    <input type="text" name="foto_utama" id="foto_utama" value="<?php echo esc_attr($val_foto); ?>" class="widefat" placeholder="URL Gambar">
                                     <button type="button" class="button" id="btn_upload_utama" style="width:100%; margin-top:5px;">Pilih Gambar Utama</button>
                                 </div>
                             </div>
@@ -308,21 +363,21 @@ function dw_wisata_page_render() {
                                 <div class="inside">
                                     <p>
                                         <label>Harga Tiket (Rp):</label>
-                                        <input name="harga_tiket" type="number" value="<?php echo esc_attr($edit_data->harga_tiket ?? 0); ?>" class="widefat">
+                                        <input name="harga_tiket" type="number" value="<?php echo esc_attr($val_harga); ?>" class="widefat">
                                     </p>
                                     <p>
                                         <label>Jam Buka:</label>
-                                        <input name="jam_buka" type="text" value="<?php echo esc_attr($edit_data->jam_buka ?? '08:00 - 17:00'); ?>" class="widefat">
+                                        <input name="jam_buka" type="text" value="<?php echo esc_attr($val_jam); ?>" class="widefat">
                                     </p>
                                     <p>
                                         <label>Kontak (WA):</label>
-                                        <input name="kontak_pengelola" type="text" value="<?php echo esc_attr($edit_data->kontak_pengelola ?? ''); ?>" class="widefat" placeholder="0812...">
+                                        <input name="kontak_pengelola" type="text" value="<?php echo esc_attr($val_kontak); ?>" class="widefat" placeholder="0812...">
                                     </p>
                                     <p>
                                         <label>Link Google Maps:</label>
-                                        <input name="lokasi_maps" type="url" value="<?php echo esc_url($edit_data->lokasi_maps ?? ''); ?>" class="widefat" placeholder="https://maps.google.com/...">
-                                        <?php if(!empty($edit_data->lokasi_maps)): ?>
-                                            <a href="<?php echo esc_url($edit_data->lokasi_maps); ?>" target="_blank" style="font-size:12px; text-decoration:none;">&nearr; Buka Peta</a>
+                                        <input name="lokasi_maps" type="url" value="<?php echo esc_url($val_maps); ?>" class="widefat" placeholder="https://maps.google.com/...">
+                                        <?php if(!empty($val_maps)): ?>
+                                            <a href="<?php echo esc_url($val_maps); ?>" target="_blank" style="font-size:12px; text-decoration:none;">&nearr; Buka Peta</a>
                                         <?php endif; ?>
                                     </p>
                                 </div>
