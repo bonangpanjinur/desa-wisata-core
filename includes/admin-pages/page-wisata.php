@@ -6,11 +6,18 @@
  * - Menambahkan input Kategori Wisata (Select Dropdown) pada Form.
  * - Menambahkan kolom Kategori pada List Table.
  * - Menangani penyimpanan kolom kategori ke database.
+ * - Integrasi Galeri Foto (JSON).
  */
 
 if (!defined('ABSPATH')) exit;
 
 function dw_wisata_page_render() {
+    // --- INTEGRASI FITUR PREMIUM: MEDIA UPLOADER ---
+    // Pastikan library media WordPress dimuat untuk fitur Galeri & Foto Utama
+    if ( ! did_action( 'wp_enqueue_media' ) ) {
+        wp_enqueue_media();
+    }
+
     global $wpdb;
     $table_wisata = $wpdb->prefix . 'dw_wisata';
     $table_desa   = $wpdb->prefix . 'dw_desa';
@@ -62,7 +69,7 @@ function dw_wisata_page_render() {
                 echo '<div class="notice notice-error"><p>Error: Akun Anda tidak terhubung dengan Desa manapun.</p></div>'; return;
             }
 
-            // Proses Galeri JSON
+            // Proses Galeri JSON (Fitur Premium)
             $galeri_json = '[]';
             if (!empty($_POST['galeri_urls'])) {
                 $galeri_array = array_filter(explode(',', $_POST['galeri_urls']));
@@ -188,7 +195,7 @@ function dw_wisata_page_render() {
                                 </div>
                             </div>
 
-                            <!-- Galeri Foto -->
+                            <!-- Galeri Foto (Premium Feature) -->
                             <div class="postbox">
                                 <div class="postbox-header"><h2 class="hndle">Galeri Foto</h2></div>
                                 <div class="inside">
@@ -340,7 +347,7 @@ function dw_wisata_page_render() {
 
         <?php else: ?>
             
-            <!-- === LIST TABLE VIEW MODERN (CARD STYLE) === -->
+            <!-- === LIST TABLE VIEW MODERN (CARD STYLE - PREMIUM UI) === -->
             <?php
             // 1. Setup Pagination & Search
             $paged   = isset($_GET['paged']) ? absint($_GET['paged']) : 1;
