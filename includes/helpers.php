@@ -10,6 +10,7 @@
  * 1. Added: Relasi otomatis Pedagang - Desa berdasarkan Kelurahan.
  * 2. Added: Logika komisi berjenjang (Admin vs Desa).
  * 3. Integrated: Semua fungsi original JWT & Stock v3.3 tetap utuh.
+ * 4. Added: Logika Monetisasi Desa (Freemium).
  *
  * @package DesaWisataCore
  */
@@ -520,4 +521,79 @@ function dw_is_wishlisted($item_id, $item_type = 'wisata', $user_id = null) {
     if (!$user_id) return false;
     global $wpdb;
     return (bool) $wpdb->get_var($wpdb->prepare("SELECT id FROM {$wpdb->prefix}dw_wishlist WHERE user_id = %d AND item_id = %d AND item_type = %s", $user_id, $item_id, $item_type));
+}
+
+// =============================================================================
+// MONETISASI DESA (FREEMIUM)
+// =============================================================================
+
+/**
+ * Check if Desa is Premium (Verified/Paid)
+ * * @param int $user_id Optional. User ID to check. Defaults to current user.
+ * @return boolean
+ */
+function dw_is_desa_premium($user_id = null) {
+    if (!$user_id) {
+        $user_id = get_current_user_id();
+    }
+
+    // Admin selalu premium
+    if (user_can($user_id, 'manage_options')) {
+        return true;
+    }
+
+    // Cek status paket dari user meta
+    // Nilai 'active' diset ketika pembayaran paket terverifikasi
+    $status = get_user_meta($user_id, 'dw_paket_status', true);
+    
+    // Cek juga tanggal kadaluarsa jika ada
+    $expiry = get_user_meta($user_id, 'dw_paket_expiry', true);
+    
+    if ($status === 'active') {
+        if (!empty($expiry)) {
+            $today = date('Y-m-d');
+            if ($today > $expiry) {
+                return false; // Paket sudah expired
+            }
+        }
+        return true;
+    }
+
+    return false;
+}
+
+/**
+ * Check if Desa can upload more Wisata
+ * Limit: 2 for Free, Unlimited for Premium
+ * * @param int $user_id
+ * @return boolean
+ */
+function dw_can_add_wisata($user_id = null) {
+    if (!$user_id) {
+        $user_id = get_current_user_id();
+    }
+
+    // Jika premium, bebas upload
+    if (dw_is_desa_premium($user_id)) {
+        return true;
+    }
+
+    // Hitung jumlah post type 'wisata' milik user ini
+    $args = array(
+        'author'    => $user_id,
+        'post_type' => 'wisata',
+        'post_status' => array('publish', 'pending', 'draft', 'future', 'private'),
+        'fields'    => 'ids',
+        'posts_per_page' => -1
+    );
+    
+    $query = new WP_Query($args);
+    $count = $query->found_posts;
+
+    // Batas untuk akun gratis adalah 2
+    if ($count >= 2) {
+        return false;
+    }
+
+    return true;
 }

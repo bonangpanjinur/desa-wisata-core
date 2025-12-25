@@ -24,12 +24,6 @@
 if ( ! defined( 'ABSPATH' ) ) exit;
 
 /**
- * MENGHAPUS FUNGSI dw_is_admin_desa_blocked()
- */
-// if (!function_exists('dw_is_admin_desa_blocked')) { ... }
-
-
-/**
  * Handler untuk Aksi Admin Desa: Verifikasi Kelayakan, Tolak.
  * (Aksi Pembayaran Dihapus)
  */
@@ -159,9 +153,6 @@ function dw_admin_desa_verifikasi_page_render() {
         $desa_id, 'menunggu_desa'
     ), ARRAY_A);
 
-    // --- QUERY PEMBAYARAN DIHAPUS ---
-    // $pedagang_pembayaran = ...
-
     ?>
     <div class="wrap dw-wrap">
         <div class="dw-header">
@@ -170,8 +161,6 @@ function dw_admin_desa_verifikasi_page_render() {
         <?php
         $errors = get_transient('settings_errors');
         if($errors) { settings_errors('dw_desa_notices'); delete_transient('settings_errors'); }
-        // --- NOTIFIKASI BLOKIR DIHAPUS ---
-        // if ($is_blocked) : ...
         ?>
 
         <h2>Verifikasi Kelayakan Lokal (<?php echo count($pedagang_kelayakan); ?>)</h2>
@@ -215,12 +204,7 @@ function dw_admin_desa_verifikasi_page_render() {
                 <?php endforeach; endif; ?>
             </tbody>
         </table>
-
-        <!-- --- BAGIAN TAHAP 2 VERIFIKASI PEMBAYARAN DIHAPUS --- -->
-        <!-- <h2 style="margin-top: 40px;">Tahap 2: Verifikasi Pembayaran ... -->
-        
     </div>
     <?php
 }
-
 ?>

@@ -505,3 +505,4 @@ function dw_wisata_page_render() {
     </div>
     <?php
 }
+?>

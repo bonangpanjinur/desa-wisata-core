@@ -2,10 +2,11 @@
 /**
  * File Name:   access-control.php
  * File Folder: includes/
- * Description: Menangani pembatasan akses dashboard WP.
+ * Description: Menangani pembatasan akses dashboard WP dan Proteksi Limit Monetisasi.
  * * UPDATE: 
  * - Memastikan halaman depan (Frontend) TIDAK PERNAH di-redirect.
  * - Redirect hanya berlaku untuk URL /wp-admin.
+ * - Added: Proteksi backend untuk limit kuota Wisata (Freemium).
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -132,3 +133,54 @@ function dw_redirect_wp_login_php() {
     }
 }
 add_action( 'init', 'dw_redirect_wp_login_php' );
+
+/**
+ * 6. (BARU) Proteksi Limit Wisata untuk Akun Gratis (Freemium)
+ * Batasi Pembuatan Wisata via Hook WordPress (Backend Protection).
+ * Mencegah user mengakali via direct URL atau script jika kuota sudah habis.
+ */
+function dw_prevent_wisata_limit_exceeded($data, $postarr) {
+    // Cek apakah post type adalah wisata
+    if ($data['post_type'] !== 'wisata') {
+        return $data;
+    }
+
+    // Jika user adalah admin pusat, biarkan
+    if (current_user_can('administrator')) {
+        return $data;
+    }
+
+    // Cek apakah ini post baru (ID belum ada atau 0) atau update
+    // Kita hanya membatasi pembuatan BARU, bukan update yang sudah ada
+    $is_new = false;
+    if (empty($postarr['ID']) || $postarr['post_status'] == 'auto-draft') {
+        $is_new = true;
+    } else {
+        $post = get_post($postarr['ID']);
+        if ($post && $post->post_status == 'auto-draft') {
+            $is_new = true;
+        }
+    }
+
+    // Jika update post yang sudah ada (bukan baru), izinkan
+    if (!$is_new && isset($postarr['ID']) && $postarr['ID'] > 0) {
+        return $data;
+    }
+
+    // Cek kapabilitas menggunakan helper function dw_can_add_wisata()
+    // Helper ini ada di includes/helpers.php
+    if (function_exists('dw_can_add_wisata') && !dw_can_add_wisata(get_current_user_id())) {
+        // Batalkan penyimpanan.
+        // wp_die akan menghentikan proses dan menampilkan pesan error XML/HTML ke user
+        wp_die(
+            '<h1>Batas Kuota Tercapai</h1>' .
+            '<p>Maaf, Anda telah mencapai batas maksimal upload Wisata (2 Item) untuk akun Gratis.</p>' .
+            '<p>Silakan <a href="' . admin_url('admin.php?page=dw-paket-transaksi') . '">Upgrade ke Premium</a> untuk upload tanpa batas dan fitur verifikasi UMKM.</p>', 
+            'Limit Tercapai', 
+            array('response' => 403, 'back_link' => true)
+        );
+    }
+
+    return $data;
+}
+add_filter('wp_insert_post_data', 'dw_prevent_wisata_limit_exceeded', 10, 2);
