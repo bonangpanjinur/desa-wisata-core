@@ -2,7 +2,7 @@
 /**
  * File Name:   activation.php
  * File Folder: includes/
- * Description: File aktivasi plugin dengan perbaikan nama index untuk mencegah Duplicate Key Error.
+ * Description: File aktivasi plugin. Menambahkan kolom kode_pos pada tabel desa & pedagang.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -21,7 +21,8 @@ function dw_activate_plugin() {
        ========================================= */
 
  
-    // 1. Tabel Desa (SUDAH DIPERBAIKI: HAPUS KOMENTAR DALAM SQL AGAR dbDelta JALAN)
+    // 1. Tabel Desa
+    // Update: Menambahkan kolom 'kode_pos'
     $sql_desa = "CREATE TABLE {$table_prefix}desa (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_user_desa BIGINT(20) UNSIGNED NOT NULL,
@@ -45,6 +46,7 @@ function dw_activate_plugin() {
         api_kecamatan_id VARCHAR(20),
         api_kelurahan_id VARCHAR(20),
         alamat_lengkap TEXT,
+        kode_pos VARCHAR(10) DEFAULT NULL,
         status_akses_verifikasi ENUM('locked', 'pending', 'active') DEFAULT 'locked',
         bukti_bayar_akses VARCHAR(255) DEFAULT NULL,
         alasan_penolakan TEXT DEFAULT NULL,
@@ -59,6 +61,7 @@ function dw_activate_plugin() {
     dbDelta( $sql_desa );
 
     // 2. Tabel Pedagang (UMKM)
+    // Update: Menambahkan kolom 'kode_pos'
     $sql_pedagang = "CREATE TABLE {$table_prefix}pedagang (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_user BIGINT(20) UNSIGNED NOT NULL,
@@ -98,6 +101,7 @@ function dw_activate_plugin() {
         kabupaten_nama VARCHAR(100),
         kecamatan_nama VARCHAR(100),
         kelurahan_nama VARCHAR(100),
+        kode_pos VARCHAR(10) DEFAULT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         PRIMARY KEY  (id),
@@ -108,7 +112,7 @@ function dw_activate_plugin() {
     dbDelta($sql_pedagang);
 
     // 2B. Tabel Ojek
-     $sql_ojek = "CREATE TABLE {$table_prefix}ojek (
+    $sql_ojek = "CREATE TABLE {$table_prefix}ojek (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_user BIGINT(20) UNSIGNED NOT NULL,
         nama_lengkap VARCHAR(255) NOT NULL,
@@ -439,7 +443,7 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_banner );
     
-    // 18. Tabel User Alamat
+    // 18. Tabel User Alamat (PEMBELI: SUDAH ADA KODE POS)
     $sql_alamat = "CREATE TABLE {$table_prefix}user_alamat (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         user_id BIGINT(20) UNSIGNED NOT NULL,
@@ -450,7 +454,7 @@ function dw_activate_plugin() {
         kabupaten VARCHAR(100),
         kecamatan VARCHAR(100),
         kelurahan VARCHAR(100),
-        kode_pos VARCHAR(10),
+        kode_pos VARCHAR(10), 
         api_provinsi_id VARCHAR(20),
         api_kabupaten_id VARCHAR(20),
         api_kecamatan_id VARCHAR(20),
@@ -536,7 +540,7 @@ function dw_activate_plugin() {
     dbDelta($sql_quota_logs);
 
     // Update versi DB
-    update_option( 'dw_core_db_version', '1.1.4' ); // Bump version to force update
+    update_option( 'dw_core_db_version', '1.1.5' ); // Update versi DB
     
     // Roles Setup (Delegasi ke roles-capabilities.php agar tidak duplikat)
     // Pastikan file roles-capabilities sudah di-load jika belum (tergantung context)
