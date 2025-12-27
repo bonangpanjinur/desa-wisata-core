@@ -4,6 +4,7 @@
  * File Folder: includes/
  * Description: File aktivasi plugin utuh terintegrasi v3.6. 
  * Menangani pembuatan 25 tabel Desa Wisata Core secara mendetail.
+ * UPDATE: Integrasi Sistem Referral Terpadu (Desa, Verifikator, & Pedagang Reward).
  * @package DesaWisataCore
  */
 
@@ -31,6 +32,7 @@ function dw_activate_plugin() {
         id_user_desa BIGINT(20) UNSIGNED NOT NULL,
         nama_desa VARCHAR(255) NOT NULL,
         slug_desa VARCHAR(255) NOT NULL,
+        kode_referral VARCHAR(50) DEFAULT NULL,
         deskripsi TEXT,
         foto VARCHAR(255) DEFAULT NULL,
         foto_sampul VARCHAR(255) DEFAULT NULL,
@@ -56,13 +58,14 @@ function dw_activate_plugin() {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         PRIMARY KEY  (id),
+        UNIQUE KEY kode_referral (kode_referral),
         KEY id_user_desa (id_user_desa),
         KEY slug_desa (slug_desa),
         KEY idx_lokasi (api_kabupaten_id)
     ) $charset_collate;";
     dbDelta( $sql_desa );
 
-    // 2. Tabel Pedagang (UMKM)
+    // 2. Tabel Pedagang (Update: Added Referral System Support)
     $sql_pedagang = "CREATE TABLE {$table_prefix}pedagang (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_user BIGINT(20) UNSIGNED NOT NULL,
@@ -70,6 +73,8 @@ function dw_activate_plugin() {
         id_verifikator BIGINT(20) DEFAULT 0,
         nama_toko VARCHAR(255) NOT NULL,
         slug_toko VARCHAR(255) NOT NULL,
+        kode_referral_saya VARCHAR(50) DEFAULT NULL,
+        terdaftar_melalui_kode VARCHAR(50) DEFAULT NULL,
         nama_pemilik VARCHAR(255) NOT NULL,
         nomor_wa VARCHAR(20) NOT NULL,
         alamat_lengkap TEXT,
@@ -91,6 +96,7 @@ function dw_activate_plugin() {
         is_independent TINYINT(1) DEFAULT 1,
         approved_by VARCHAR(20) DEFAULT NULL,
         sisa_transaksi INT DEFAULT 0,
+        total_referral_pembeli INT DEFAULT 0,
         shipping_ojek_lokal_aktif TINYINT(1) DEFAULT 0,
         shipping_ojek_lokal_zona JSON DEFAULT NULL,
         shipping_nasional_aktif TINYINT(1) DEFAULT 0,
@@ -110,6 +116,7 @@ function dw_activate_plugin() {
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         PRIMARY KEY  (id),
         UNIQUE KEY id_user (id_user),
+        UNIQUE KEY kode_referral_saya (kode_referral_saya),
         KEY id_desa (id_desa),
         KEY id_verifikator (id_verifikator),
         KEY slug_toko (slug_toko)
@@ -149,12 +156,13 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta($sql_ojek);
 
-    // 2C. Tabel Verifikator UMKM (Baru v3.6)
+    // 2C. Tabel Verifikator UMKM
     $sql_verifikator = "CREATE TABLE {$table_prefix}verifikator (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_user BIGINT(20) UNSIGNED NOT NULL,
         nama_lengkap VARCHAR(255) NOT NULL,
         nik VARCHAR(50) NOT NULL,
+        kode_referral VARCHAR(50),
         nomor_wa VARCHAR(20) NOT NULL,
         alamat_lengkap TEXT,
         provinsi VARCHAR(100),
@@ -173,6 +181,7 @@ function dw_activate_plugin() {
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         PRIMARY KEY (id),
         UNIQUE KEY id_user (id_user),
+        UNIQUE KEY kode_referral (kode_referral),
         KEY idx_lokasi_v (api_kabupaten_id)
     ) $charset_collate;";
     dbDelta($sql_verifikator);
@@ -288,7 +297,7 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_transaksi );
 
-    // 7. Tabel Sub Transaksi (Per Pedagang)
+    // 7. Tabel Sub Transaksi
     $sql_sub = "CREATE TABLE {$table_prefix}transaksi_sub (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_transaksi BIGINT(20) NOT NULL,
@@ -557,6 +566,21 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta($sql_quota_logs);
 
+    // 24. Tabel Reward Referral (Lacak Hubungan Pedagang & Pembeli Baru)
+    $sql_referral_reward = "CREATE TABLE {$table_prefix}referral_reward (
+        id BIGINT(20) NOT NULL AUTO_INCREMENT,
+        id_pedagang BIGINT(20) NOT NULL,
+        id_user_baru BIGINT(20) UNSIGNED NOT NULL,
+        kode_referral_used VARCHAR(50) NOT NULL,
+        bonus_quota_diberikan INT DEFAULT 0,
+        status ENUM('pending', 'verified', 'fraud') DEFAULT 'pending',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY id_pedagang (id_pedagang),
+        KEY id_user_baru (id_user_baru)
+    ) $charset_collate;";
+    dbDelta($sql_referral_reward);
+
     /* =========================================
        5. FINALISASI
        ========================================= */
@@ -577,7 +601,6 @@ function dw_activate_plugin() {
 
 /**
  * FIX FATAL ERROR: Wrapper untuk aktivasi
- * Fungsi ini dipanggil oleh file utama plugin desa-wisata-core.php
  */
 function dw_core_activate_plugin() {
     dw_activate_plugin();

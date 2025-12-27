@@ -1,11 +1,15 @@
 <?php
 /**
  * File Name:   page-settings.php
- * Description: Halaman Pengaturan Plugin dengan UI Modern & Upload QRIS.
+ * Description: Halaman Pengaturan Plugin Terintegrasi v3.6.
+ * Fitur: Identitas, Pembayaran (QRIS), WhatsApp, dan Sistem Referral & Reward.
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
+/**
+ * Handler Simpan Pengaturan
+ */
 function dw_settings_save_handler() {
     if ( ! isset( $_POST['dw_settings_submit'] ) ) return;
     if ( ! wp_verify_nonce( $_POST['dw_save_settings_nonce_field'], 'dw_save_settings_action' ) ) return;
@@ -25,6 +29,10 @@ function dw_settings_save_handler() {
         update_option( 'dw_wa_api_url', esc_url_raw( $_POST['dw_wa_api_url'] ) );
         update_option( 'dw_wa_api_key', sanitize_text_field( $_POST['dw_wa_api_key'] ) );
         update_option( 'dw_wa_sender', sanitize_text_field( $_POST['dw_wa_sender'] ) );
+    } elseif ( $tab === 'referral' ) {
+        update_option( 'dw_bonus_quota_referral', intval( $_POST['dw_bonus_quota_referral'] ) );
+        update_option( 'dw_prefix_referral_pedagang', strtoupper( sanitize_text_field( $_POST['dw_prefix_referral_pedagang'] ) ) );
+        update_option( 'dw_ref_auto_verify', sanitize_text_field( $_POST['dw_ref_auto_verify'] ) );
     }
 
     add_settings_error( 'dw_settings_notices', 'saved', 'Pengaturan berhasil disimpan.', 'success' );
@@ -33,33 +41,40 @@ function dw_settings_save_handler() {
 }
 add_action( 'admin_init', 'dw_settings_save_handler' );
 
+/**
+ * Render Halaman Pengaturan
+ */
 function dw_admin_settings_page_handler() {
     $active_tab = $_GET['tab'] ?? 'general';
     $errors = get_transient('settings_errors'); 
     if($errors) { settings_errors('dw_settings_notices'); delete_transient('settings_errors'); }
     ?>
     <div class="wrap dw-wrap">
-        <h1 class="wp-heading-inline">Pengaturan Sistem</h1>
+        <h1 class="wp-heading-inline" style="font-weight: 800;">Pengaturan Sistem Desa Wisata</h1>
         <hr class="wp-header-end">
 
         <style>
-            .dw-settings-container { display: flex; gap: 20px; margin-top: 20px; }
-            .dw-sidebar-nav { width: 200px; flex-shrink: 0; background: #fff; border: 1px solid #c3c4c7; border-radius: 4px; overflow: hidden; }
-            .dw-nav-item { display: flex; align-items: center; padding: 12px 15px; color: #3c434a; text-decoration: none; border-bottom: 1px solid #f0f0f1; transition: 0.2s; }
+            .dw-settings-container { display: flex; gap: 20px; margin-top: 20px; font-family: 'Inter', -apple-system, sans-serif; }
+            .dw-sidebar-nav { width: 220px; flex-shrink: 0; background: #fff; border: 1px solid #c3c4c7; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+            .dw-nav-item { display: flex; align-items: center; padding: 14px 18px; color: #3c434a; text-decoration: none; border-bottom: 1px solid #f0f0f1; transition: 0.2s; font-weight: 500; }
             .dw-nav-item:hover { background: #f6f7f7; color: #2271b1; }
             .dw-nav-item.active { background: #2271b1; color: #fff; border-color: #2271b1; }
-            .dw-nav-item .dashicons { margin-right: 10px; }
+            .dw-nav-item .dashicons { margin-right: 12px; }
             
-            .dw-settings-content { flex-grow: 1; background: #fff; padding: 30px; border: 1px solid #c3c4c7; border-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-            .dw-form-section h3 { margin-top: 0; border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 20px; font-size: 18px; font-weight: 600; color: #1e293b; }
-            .dw-input-group { margin-bottom: 20px; }
-            .dw-input-group label { display: block; font-weight: 600; margin-bottom: 8px; color: #333; }
-            .dw-input-group input[type="text"], .dw-input-group input[type="password"], .dw-input-group textarea { width: 100%; max-width: 600px; padding: 8px 12px; border: 1px solid #dcdcde; border-radius: 4px; }
-            .dw-help-text { font-size: 12px; color: #64748b; margin-top: 5px; }
+            .dw-settings-content { flex-grow: 1; background: #fff; padding: 35px; border: 1px solid #c3c4c7; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.02); }
+            .dw-form-section h3 { margin-top: 0; border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 25px; font-size: 20px; font-weight: 800; color: #1e293b; display: flex; align-items: center; gap: 10px; }
+            .dw-input-group { margin-bottom: 25px; }
+            .dw-input-group label { display: block; font-weight: 600; margin-bottom: 8px; color: #334155; font-size: 14px; }
+            .dw-input-group input[type="text"], 
+            .dw-input-group input[type="number"], 
+            .dw-input-group input[type="password"], 
+            .dw-input-group select,
+            .dw-input-group textarea { width: 100%; max-width: 600px; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; }
+            .dw-help-text { font-size: 12px; color: #64748b; margin-top: 8px; line-height: 1.5; max-width: 600px; }
             
-            .dw-qris-preview { margin-top: 15px; border: 1px dashed #ccc; padding: 10px; display: inline-block; border-radius: 4px; background: #f9f9f9; }
-            .dw-btn-save { background: #2271b1; color: #fff; border: none; padding: 10px 25px; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 600; margin-top: 20px; }
-            .dw-btn-save:hover { background: #135e96; }
+            .dw-qris-preview { margin-top: 15px; border: 1px dashed #cbd5e1; padding: 15px; display: inline-block; border-radius: 12px; background: #f8fafc; }
+            .dw-btn-save { background: #2271b1; color: #fff; border: none; padding: 12px 35px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 700; margin-top: 10px; transition: 0.2s; }
+            .dw-btn-save:hover { background: #135e96; transform: translateY(-1px); }
         </style>
 
         <div class="dw-settings-container">
@@ -71,6 +86,9 @@ function dw_admin_settings_page_handler() {
                 <a href="?page=dw-settings&tab=payment" class="dw-nav-item <?php echo $active_tab == 'payment' ? 'active' : ''; ?>">
                     <span class="dashicons dashicons-money-alt"></span> Pembayaran
                 </a>
+                <a href="?page=dw-settings&tab=referral" class="dw-nav-item <?php echo $active_tab == 'referral' ? 'active' : ''; ?>">
+                    <span class="dashicons dashicons-share-alt"></span> Referral & Reward
+                </a>
                 <a href="?page=dw-settings&tab=whatsapp" class="dw-nav-item <?php echo $active_tab == 'whatsapp' ? 'active' : ''; ?>">
                     <span class="dashicons dashicons-whatsapp"></span> Notifikasi WA
                 </a>
@@ -79,59 +97,51 @@ function dw_admin_settings_page_handler() {
             <!-- Content Area -->
             <div class="dw-settings-content">
                 <form method="post">
-                    <?php 
-                    if ($active_tab == 'general') {
-                        echo '<input type="hidden" name="active_tab" value="general">';
-                        wp_nonce_field( 'dw_save_settings_action', 'dw_save_settings_nonce_field' );
-                        ?>
+                    <input type="hidden" name="active_tab" value="<?php echo esc_attr($active_tab); ?>">
+                    <?php wp_nonce_field( 'dw_save_settings_action', 'dw_save_settings_nonce_field' ); ?>
+
+                    <?php if ($active_tab == 'general'): ?>
                         <div class="dw-form-section">
-                            <h3>Identitas Aplikasi</h3>
+                            <h3><span class="dashicons dashicons-admin-site"></span> Identitas Aplikasi</h3>
                             <div class="dw-input-group">
                                 <label>Nama Aplikasi / Platform</label>
-                                <input type="text" name="dw_app_name" value="<?php echo esc_attr(get_option('dw_app_name', 'Desa Wisata')); ?>" placeholder="Contoh: Wisata Desa Nusantara">
+                                <input type="text" name="dw_app_name" value="<?php echo esc_attr(get_option('dw_app_name', 'Desa Wisata')); ?>">
                             </div>
                             <div class="dw-input-group">
                                 <label>Nomor WhatsApp Admin Utama</label>
-                                <input type="text" name="dw_admin_phone" value="<?php echo esc_attr(get_option('dw_admin_phone')); ?>" placeholder="0812xxxx">
-                                <p class="dw-help-text">Nomor ini akan menerima notifikasi pendaftaran toko baru.</p>
+                                <input type="text" name="dw_admin_phone" value="<?php echo esc_attr(get_option('dw_admin_phone')); ?>" placeholder="62812xxxx">
+                                <p class="dw-help-text">Gunakan format kode negara (62). Nomor ini akan menerima notifikasi pendaftaran sistem.</p>
                             </div>
                             <div class="dw-input-group">
                                 <label>Alamat Kantor / Sekretariat</label>
                                 <textarea name="dw_company_address" rows="3"><?php echo esc_textarea(get_option('dw_company_address')); ?></textarea>
                             </div>
                         </div>
-                        <?php
-                    } elseif ($active_tab == 'payment') {
-                        echo '<input type="hidden" name="active_tab" value="payment">';
-                        wp_nonce_field( 'dw_save_settings_action', 'dw_save_settings_nonce_field' );
-                        ?>
+
+                    <?php elseif ($active_tab == 'payment'): ?>
                         <div class="dw-form-section">
-                            <h3>Rekening Tujuan Transfer (Admin)</h3>
-                            <p class="dw-help-text" style="margin-bottom: 20px;">Data ini akan ditampilkan kepada pedagang saat membeli paket atau menyetor komisi manual.</p>
-                            
+                            <h3><span class="dashicons dashicons-bank"></span> Rekening Admin</h3>
                             <div class="dw-input-group">
                                 <label>Nama Bank</label>
-                                <input type="text" name="dw_bank_name" value="<?php echo esc_attr(get_option('dw_bank_name')); ?>" placeholder="Contoh: BCA / BRI">
+                                <input type="text" name="dw_bank_name" value="<?php echo esc_attr(get_option('dw_bank_name')); ?>" placeholder="Contoh: BANK BRI">
                             </div>
                             <div class="dw-input-group">
                                 <label>Nomor Rekening</label>
                                 <input type="text" name="dw_bank_account" value="<?php echo esc_attr(get_option('dw_bank_account')); ?>">
                             </div>
                             <div class="dw-input-group">
-                                <label>Atas Nama Pemilik</label>
+                                <label>Atas Nama</label>
                                 <input type="text" name="dw_bank_holder" value="<?php echo esc_attr(get_option('dw_bank_holder')); ?>">
                             </div>
                             
-                            <div class="dw-input-group" style="margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px;">
-                                <label style="font-size: 16px;">QRIS Platform (Scan)</label>
-                                <div style="display:flex; gap:10px; align-items:center;">
-                                    <input type="text" name="dw_qris_image_url" id="dw_qris_field" value="<?php echo esc_attr(get_option('dw_qris_image_url')); ?>" class="regular-text" placeholder="URL Gambar QRIS">
-                                    <button type="button" class="button button-secondary" id="btn_upl_qris_admin"><span class="dashicons dashicons-upload"></span> Upload QRIS</button>
+                            <div class="dw-input-group" style="margin-top: 30px; border-top: 1px solid #f1f5f9; padding-top: 25px;">
+                                <label>QRIS Platform</label>
+                                <div style="display:flex; gap:10px; align-items:center; margin-bottom: 15px;">
+                                    <input type="text" name="dw_qris_image_url" id="dw_qris_field" value="<?php echo esc_attr(get_option('dw_qris_image_url')); ?>" placeholder="URL Gambar QRIS">
+                                    <button type="button" class="button" id="btn_upl_qris_admin">Pilih Gambar</button>
                                 </div>
-                                
                                 <div class="dw-qris-preview">
-                                    <img id="prev_qris_admin" src="<?php echo esc_url(get_option('dw_qris_image_url') ?: 'https://placehold.co/200x200?text=No+QRIS'); ?>" style="max-width:200px; height:auto; display:block;">
-                                    <p class="dw-help-text" style="text-align:center;">Preview QRIS</p>
+                                    <img id="prev_qris_admin" src="<?php echo esc_url(get_option('dw_qris_image_url') ?: 'https://placehold.co/200x200?text=No+QRIS'); ?>" style="max-width:200px; height:auto; display:block; border-radius: 8px;">
                                 </div>
                             </div>
                         </div>
@@ -148,15 +158,38 @@ function dw_admin_settings_page_handler() {
                             });
                         });
                         </script>
-                        <?php
-                    } elseif ($active_tab == 'whatsapp') {
-                        echo '<input type="hidden" name="active_tab" value="whatsapp">';
-                        wp_nonce_field( 'dw_save_settings_action', 'dw_save_settings_nonce_field' );
-                        ?>
+
+                    <?php elseif ($active_tab == 'referral'): ?>
                         <div class="dw-form-section">
-                            <h3>Integrasi WhatsApp Gateway</h3>
-                            <p class="dw-help-text">Konfigurasi untuk pengiriman notifikasi otomatis (misal: Fonnte, Watzap, dll).</p>
+                            <h3><span class="dashicons dashicons-awards"></span> Referral & Reward Kuota</h3>
+                            <p class="dw-help-text" style="margin-bottom: 25px;">Atur hadiah otomatis untuk pedagang yang berhasil mengajak pembeli baru bergabung.</p>
                             
+                            <div class="dw-input-group">
+                                <label>Hadiah Kuota Transaksi (Bonus)</label>
+                                <input type="number" name="dw_bonus_quota_referral" value="<?php echo esc_attr(get_option('dw_bonus_quota_referral', 5)); ?>" min="0">
+                                <p class="dw-help-text">Jumlah kuota transaksi GRATIS yang diberikan kepada Pedagang setiap kali ada 1 Pembeli baru mendaftar melalui link referral mereka.</p>
+                            </div>
+
+                            <div class="dw-input-group">
+                                <label>Prefix Kode Referral Pedagang</label>
+                                <input type="text" name="dw_prefix_referral_pedagang" value="<?php echo esc_attr(get_option('dw_prefix_referral_pedagang', 'TOKO')); ?>" placeholder="Contoh: TOKO">
+                                <p class="dw-help-text">Awalan kode referral otomatis untuk pedagang (Misal: TOKO-XXXX). Gunakan maksimal 5 karakter.</p>
+                            </div>
+
+                            <div class="dw-input-group">
+                                <label>Metode Verifikasi Reward</label>
+                                <select name="dw_ref_auto_verify">
+                                    <?php $current_verify = get_option('dw_ref_auto_verify', 'auto'); ?>
+                                    <option value="auto" <?php selected($current_verify, 'auto'); ?>>Berikan Kuota Otomatis (Instan)</option>
+                                    <option value="manual" <?php selected($current_verify, 'manual'); ?>>Tinjau Manual Oleh Admin</option>
+                                </select>
+                                <p class="dw-help-text">Otomatis akan langsung menambah kuota pedagang. Manual mengharuskan Anda menyetujui di halaman Verifikasi Akun.</p>
+                            </div>
+                        </div>
+
+                    <?php elseif ($active_tab == 'whatsapp'): ?>
+                        <div class="dw-form-section">
+                            <h3><span class="dashicons dashicons-whatsapp"></span> Integrasi WhatsApp Gateway</h3>
                             <div class="dw-input-group">
                                 <label>API URL Endpoint</label>
                                 <input type="text" name="dw_wa_api_url" value="<?php echo esc_attr(get_option('dw_wa_api_url')); ?>" placeholder="https://api.fonnte.com/send">
@@ -165,10 +198,12 @@ function dw_admin_settings_page_handler() {
                                 <label>API Key / Token</label>
                                 <input type="password" name="dw_wa_api_key" value="<?php echo esc_attr(get_option('dw_wa_api_key')); ?>">
                             </div>
+                            <div class="dw-input-group">
+                                <label>Sender Number / ID</label>
+                                <input type="text" name="dw_wa_sender" value="<?php echo esc_attr(get_option('dw_wa_sender')); ?>">
+                            </div>
                         </div>
-                        <?php
-                    }
-                    ?>
+                    <?php endif; ?>
                     
                     <button type="submit" name="dw_settings_submit" class="dw-btn-save">Simpan Perubahan</button>
                 </form>
@@ -177,4 +212,3 @@ function dw_admin_settings_page_handler() {
     </div>
     <?php
 }
-?>
