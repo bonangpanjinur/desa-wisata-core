@@ -2,267 +2,181 @@
 if (!defined('ABSPATH')) exit;
 
 /**
- * UI Verifikator UMKM yang Disempurnakan
+ * UI Verifikator Akun (Pedagang & Desa)
  */
+$nonce = wp_create_nonce('dw_admin_nonce');
 ?>
 
 <style>
-    /* Modern Dashboard Styling */
-    .dw-admin-wrap {
-        margin: 20px 20px 0 0;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
-    }
+    .dw-admin-wrap { margin: 20px 20px 0 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    
+    /* Filter Bar */
+    .dw-header-flex { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 25px; }
+    .dw-filter-group { display: flex; gap: 15px; background: #fff; padding: 10px 20px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    .dw-filter-item label { display: block; font-size: 11px; font-weight: bold; text-transform: uppercase; color: #94a3b8; margin-bottom: 5px; }
+    .dw-filter-item select { border: 1px solid #e2e8f0; border-radius: 6px; padding: 5px 10px; min-width: 150px; }
 
-    /* Stats Cards */
-    .dw-stats-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 20px;
-        margin-bottom: 30px;
-    }
-
-    .dw-stat-card {
-        background: #fff;
-        padding: 20px;
-        border-radius: 12px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-        border-left: 5px solid #ddd;
-        transition: transform 0.2s;
-    }
-
-    .dw-stat-card:hover { transform: translateY(-3px); }
-    .dw-stat-card.pending { border-left-color: #f59e0b; }
-    .dw-stat-card.approved { border-left-color: #10b981; }
-    .dw-stat-card.rejected { border-left-color: #ef4444; }
-
-    .dw-stat-label { color: #6b7280; font-size: 0.875rem; font-weight: 500; text-transform: uppercase; }
-    .dw-stat-value { color: #111827; font-size: 1.875rem; font-weight: 700; margin-top: 5px; }
-
-    /* Modern Table Container */
-    .dw-table-container {
-        background: #fff;
-        border-radius: 12px;
-        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
-        overflow: hidden;
-    }
-
-    .dw-custom-table {
-        width: 100%;
-        border-collapse: collapse;
-        text-align: left;
-    }
-
-    .dw-custom-table th {
-        background: #f9fafb;
-        padding: 15px 20px;
-        font-weight: 600;
-        color: #374151;
-        border-bottom: 1px solid #e5e7eb;
-    }
-
-    .dw-custom-table td {
-        padding: 15px 20px;
-        border-bottom: 1px solid #f3f4f6;
-        vertical-align: middle;
-    }
+    /* Table Styling */
+    .dw-main-card { background: #fff; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); overflow: hidden; }
+    .dw-table { width: 100%; border-collapse: collapse; }
+    .dw-table th { background: #f8fafc; padding: 15px 20px; text-align: left; font-weight: 600; color: #475569; border-bottom: 1px solid #e2e8f0; }
+    .dw-table td { padding: 15px 20px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+    
+    /* Type Badges */
+    .role-badge { padding: 4px 8px; border-radius: 6px; font-size: 10px; font-weight: 800; text-transform: uppercase; }
+    .role-desa { background: #e0f2fe; color: #0369a1; }
+    .role-pedagang { background: #fef3c7; color: #92400e; }
 
     /* Status Badges */
-    .dw-badge {
-        padding: 4px 10px;
-        border-radius: 9999px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        display: inline-flex;
-        align-items: center;
-    }
+    .status-badge { padding: 5px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+    .status-pending { background: #f1f5f9; color: #475569; }
+    .status-approved { background: #dcfce7; color: #15803d; }
+    .status-rejected { background: #fee2e2; color: #b91c1c; }
 
-    .badge-pending { background: #fef3c7; color: #92400e; }
-    .badge-approved { background: #d1fae5; color: #065f46; }
-    .badge-rejected { background: #fee2e2; color: #991b1b; }
-
-    /* Action Buttons */
-    .dw-btn {
-        padding: 8px 12px;
-        border-radius: 6px;
-        font-size: 0.875rem;
-        cursor: pointer;
-        transition: all 0.2s;
-        border: none;
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        text-decoration: none;
-        font-weight: 500;
-    }
-
-    .btn-view { background: #eff6ff; color: #2563eb; }
-    .btn-view:hover { background: #dbeafe; }
-    .btn-approve { background: #10b981; color: white; }
+    .btn-action { padding: 8px 14px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; font-weight: 600; transition: 0.2s; }
+    .btn-approve { background: #10b981; color: #fff; }
     .btn-approve:hover { background: #059669; }
-    .btn-reject { background: #ef4444; color: white; }
-    .btn-reject:hover { background: #dc2626; }
-
-    /* Search Bar Overlay */
-    .dw-filter-bar {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 20px;
-    }
-
-    .dw-search-input {
-        padding: 10px 15px;
-        border: 1px solid #d1d5db;
-        border-radius: 8px;
-        width: 300px;
-    }
-
-    /* UMKM Profile Mini */
-    .umkm-profile {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-    }
-
-    .umkm-logo {
-        width: 40px;
-        height: 40px;
-        border-radius: 8px;
-        background: #f3f4f6;
-        object-fit: cover;
-    }
-
-    .umkm-info-main { font-weight: 600; color: #111827; display: block; }
-    .umkm-info-sub { color: #6b7280; font-size: 0.75rem; }
+    .btn-reject { background: #ef4444; color: #fff; }
 </style>
 
 <div class="wrap dw-admin-wrap">
-    <h1 class="wp-heading-inline">Verifikasi UMKM Desa</h1>
-    <hr class="wp-header-end">
-
-    <!-- Summary Stats -->
-    <div class="dw-stats-grid">
-        <div class="dw-stat-card pending">
-            <div class="dw-stat-label">Menunggu Verifikasi</div>
-            <div class="dw-stat-value">12</div>
+    <div class="dw-header-flex">
+        <div>
+            <h1 style="margin:0;">Verifikasi Akun Sistem</h1>
+            <p style="color:#64748b; margin:5px 0 0 0;">Kelola pendaftaran akun Pedagang UMKM dan Admin Desa.</p>
         </div>
-        <div class="dw-stat-card approved">
-            <div class="dw-stat-label">UMKM Terverifikasi</div>
-            <div class="dw-stat-value">48</div>
-        </div>
-        <div class="dw-stat-card rejected">
-            <div class="dw-stat-label">Ditolak</div>
-            <div class="dw-stat-value">3</div>
-        </div>
-    </div>
-
-    <!-- Filter & Search -->
-    <div class="dw-filter-bar">
-        <input type="text" class="dw-search-input" placeholder="Cari nama UMKM atau pemilik...">
-        <div class="dw-actions">
-            <select class="dw-search-input" style="width: auto;">
-                <option>Semua Kategori</option>
-                <option>Kuliner</option>
-                <option>Kerajinan</option>
-                <option>Jasa</option>
-            </select>
+        
+        <div class="dw-filter-group">
+            <div class="dw-filter-item">
+                <label>Status</label>
+                <select id="filter-status">
+                    <option value="pending">Menunggu</option>
+                    <option value="approved">Aktif</option>
+                    <option value="rejected">Ditolak</option>
+                </select>
+            </div>
+            <div class="dw-filter-item">
+                <label>Tipe Akun</label>
+                <select id="filter-role">
+                    <option value="">Semua Akun</option>
+                    <option value="pedagang">Pedagang UMKM</option>
+                    <option value="admin_desa">Admin Desa</option>
+                </select>
+            </div>
         </div>
     </div>
 
-    <!-- Modern List Table -->
-    <div class="dw-table-container">
-        <table class="dw-custom-table">
+    <div class="dw-main-card">
+        <table class="dw-table">
             <thead>
                 <tr>
-                    <th>UMKM & Pemilik</th>
-                    <th>Kategori</th>
-                    <th>Tanggal Daftar</th>
+                    <th>Akun & Pemilik</th>
+                    <th>Tipe</th>
+                    <th>Lokasi</th>
+                    <th>Terdaftar</th>
                     <th>Status</th>
                     <th>Aksi</th>
                 </tr>
             </thead>
-            <tbody>
-                <!-- Contoh Item UMKM -->
-                <tr>
-                    <td>
-                        <div class="umkm-profile">
-                            <img src="https://ui-avatars.com/api/?name=Warung+Sate&background=random" class="umkm-logo" alt="Logo">
-                            <div>
-                                <span class="umkm-info-main">Warung Sate Barokah</span>
-                                <span class="umkm-info-sub">Oleh: Ahmad Subarjo</span>
-                            </div>
-                        </div>
-                    </td>
-                    <td><span class="umkm-info-main">Kuliner</span></td>
-                    <td>24 Des 2025</td>
-                    <td><span class="dw-badge badge-pending">Menunggu</span></td>
-                    <td>
-                        <div style="display: flex; gap: 8px;">
-                            <a href="#" class="dw-btn btn-view" title="Detail">
-                                <span class="dashicons dashicons-visibility"></span> Periksa
-                            </a>
-                            <button class="dw-btn btn-approve" title="Terima">
-                                <span class="dashicons dashicons-yes"></span>
-                            </button>
-                            <button class="dw-btn btn-reject" title="Tolak">
-                                <span class="dashicons dashicons-no"></span>
-                            </button>
-                        </div>
-                    </td>
-                </tr>
-
-                <tr>
-                    <td>
-                        <div class="umkm-profile">
-                            <img src="https://ui-avatars.com/api/?name=Anyaman+Bambu&background=random" class="umkm-logo" alt="Logo">
-                            <div>
-                                <span class="umkm-info-main">Kerajinan Anyaman Bambu</span>
-                                <span class="umkm-info-sub">Oleh: Siti Aminah</span>
-                            </div>
-                        </div>
-                    </td>
-                    <td><span class="umkm-info-main">Kerajinan</span></td>
-                    <td>22 Des 2025</td>
-                    <td><span class="dw-badge badge-approved">Terverifikasi</span></td>
-                    <td>
-                        <a href="#" class="dw-btn btn-view">
-                            <span class="dashicons dashicons-visibility"></span> Detail
-                        </a>
-                    </td>
-                </tr>
+            <tbody id="account-list">
+                <tr><td colspan="6" style="text-align:center; padding:50px; color:#94a3b8;">Memuat data akun...</td></tr>
             </tbody>
         </table>
-    </div>
-
-    <!-- Pagination Placeholder -->
-    <div class="tablenav bottom">
-        <div class="tablenav-pages">
-            <span class="displaying-num">2 item</span>
-            <span class="pagination-links">
-                <span class="tablenav-pages-navspan button disabled" aria-hidden="true">«</span>
-                <span class="paging-input">1 dari <span class="total-pages">1</span></span>
-                <span class="tablenav-pages-navspan button disabled" aria-hidden="true">»</span>
-            </span>
-        </div>
     </div>
 </div>
 
 <script>
-    jQuery(document).ready(function($) {
-        // Logika interaksi sederhana (contoh)
-        $('.btn-approve').on('click', function() {
-            if(confirm('Apakah Anda yakin ingin memverifikasi UMKM ini?')) {
-                // Tambahkan AJAX call di sini
-                $(this).closest('tr').fadeOut();
+jQuery(document).ready(function($) {
+    const ajaxurl = '<?php echo admin_url('admin-ajax.php'); ?>';
+    const nonce = '<?php echo $nonce; ?>';
+
+    function loadAccounts() {
+        const status = $('#filter-status').val();
+        const role = $('#filter-role').val();
+        
+        $('#account-list').html('<tr><td colspan="6" style="text-align:center; padding:50px;">Sedang mengambil data...</td></tr>');
+
+        $.post(ajaxurl, {
+            action: 'dw_get_umkm_list',
+            status: status,
+            role: role,
+            nonce: nonce
+        }, function(res) {
+            if (res.success) {
+                let html = '';
+                if (res.data.length === 0) {
+                    html = '<tr><td colspan="6" style="text-align:center; padding:50px;">Tidak ada pendaftaran ditemukan.</td></tr>';
+                } else {
+                    res.data.forEach(function(item) {
+                        html += `
+                        <tr id="row-${item.id}">
+                            <td>
+                                <div style="display:flex; align-items:center; gap:12px;">
+                                    <img src="${item.logo}" style="width:38px; border-radius:8px; border:1px solid #e2e8f0;">
+                                    <div>
+                                        <strong style="display:block; color:#1e293b;">${item.name}</strong>
+                                        <small style="color:#64748b;">${item.owner}</small>
+                                    </div>
+                                </div>
+                            </td>
+                            <td><span class="role-badge role-${item.role.toLowerCase()}">${item.role}</span></td>
+                            <td style="font-size:12px; color:#475569; max-width:200px;">${item.location}</td>
+                            <td style="font-size:12px;">${item.date}</td>
+                            <td><span class="status-badge status-${item.status}">${item.status.toUpperCase()}</span></td>
+                            <td>
+                                ${item.status === 'pending' ? `
+                                    <div style="display:flex; gap:5px;">
+                                        <button class="btn-action btn-approve" data-id="${item.id}" title="Setujui Akun">Setuju</button>
+                                        <button class="btn-action btn-reject" data-id="${item.id}" title="Tolak Akun">Tolak</button>
+                                    </div>
+                                ` : `<button class="btn-action" style="background:#f1f5f9; color:#475569;">Detail</button>`}
+                            </td>
+                        </tr>`;
+                    });
+                }
+                $('#account-list').html(html);
             }
         });
+    }
 
-        $('.btn-reject').on('click', function() {
-            let alasan = prompt('Alasan penolakan:');
-            if(alasan) {
-                // Tambahkan AJAX call di sini
-                $(this).closest('tr').fadeOut();
+    // Event Listeners
+    $('#filter-status, #filter-role').on('change', loadAccounts);
+    loadAccounts();
+
+    // Action Approve
+    $(document).on('click', '.btn-approve', function() {
+        const id = $(this).data('id');
+        if(!confirm('Aktifkan akun ini?')) return;
+
+        $.post(ajaxurl, {
+            action: 'dw_process_umkm_verification',
+            user_id: id,
+            type: 'approve',
+            nonce: nonce
+        }, function(res) {
+            if(res.success) {
+                $(`#row-${id}`).css('background', '#f0fdf4').fadeOut(500);
             }
         });
     });
+
+    // Action Reject
+    $(document).on('click', '.btn-reject', function() {
+        const id = $(this).data('id');
+        const reason = prompt('Alasan penolakan:');
+        if(!reason) return;
+
+        $.post(ajaxurl, {
+            action: 'dw_process_umkm_verification',
+            user_id: id,
+            type: 'reject',
+            reason: reason,
+            nonce: nonce
+        }, function(res) {
+            if(res.success) {
+                $(`#row-${id}`).css('background', '#fef2f2').fadeOut(500);
+            }
+        });
+    });
+});
 </script>
