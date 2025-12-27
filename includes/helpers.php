@@ -5,12 +5,11 @@
  * File Path:   includes/helpers.php
  *
  * Fungsi bantuan umum untuk plugin Desa Wisata Core.
- * Termasuk fungsi JWT, formatting, utilitas, Relasi Wilayah, dan Komisi.
- * * --- UPDATE v3.4 ---
- * 1. Added: Relasi otomatis Pedagang - Desa berdasarkan Kelurahan.
- * 2. Added: Logika komisi berjenjang (Admin vs Desa).
- * 3. Integrated: Semua fungsi original JWT & Stock v3.3 tetap utuh.
- * 4. Added: Logika Monetisasi Desa (Freemium).
+ * Termasuk fungsi JWT, formatting, utilitas, Relasi Wilayah, Komisi Dinamis, dan Verifikator.
+ * * --- UPDATE v3.5 ---
+ * 1. Added: Fitur Verifikator UMKM & Kode Unik.
+ * 2. Added: Saldo Balance User & Komisi Dinamis.
+ * 3. Integrated: Semua fungsi original JWT, Stock, Relasi v3.4, & Monetisasi tetap utuh.
  *
  * @package DesaWisataCore
  */
@@ -79,6 +78,55 @@ function dw_reduce_pedagang_kuota($user_id) {
     ));
 
     return $result !== false;
+}
+
+
+// =============================================================================
+// VERIFIKATOR UMKM & KODE UNIK (NEW v3.5)
+// =============================================================================
+
+/**
+ * Mencari User ID Verifikator berdasarkan Kode Unik
+ */
+function dw_get_verifier_id_by_code($code) {
+    if (empty($code)) return false;
+    $users = get_users([
+        'meta_key'   => 'dw_verifier_code',
+        'meta_value' => strtoupper(sanitize_text_field($code)),
+        'number'     => 1,
+        'fields'     => 'ID'
+    ]);
+    return !empty($users) ? $users[0] : false;
+}
+
+/**
+ * Mengambil persentase komisi dinamis dari pengaturan admin
+ */
+function dw_get_commission_settings() {
+    $default = ['platform' => 50, 'desa' => 20, 'verifier' => 30];
+    $saved = get_option('dw_commission_settings', $default);
+    return wp_parse_args($saved, $default);
+}
+
+/**
+ * Menghasilkan kode unik untuk verifikator baru
+ */
+function dw_generate_verifier_code($user_id) {
+    $prefix = "UMKM-";
+    $random = strtoupper(wp_generate_password(4, false));
+    $code = $prefix . $user_id . "-" . $random;
+    update_user_meta($user_id, 'dw_verifier_code', $code);
+    return $code;
+}
+
+/**
+ * Menambahkan saldo ke user (Meta: dw_balance)
+ */
+function dw_add_user_balance($user_id, $amount, $note = '') {
+    if (!$user_id || $amount <= 0) return;
+    $bal = (float) get_user_meta($user_id, 'dw_balance', true);
+    update_user_meta($user_id, 'dw_balance', $bal + $amount);
+    dw_add_log($user_id, "Saldo Bertambah: $note (+" . dw_format_rupiah($amount) . ")", 'balance');
 }
 
 
@@ -236,13 +284,11 @@ function dw_add_token_to_blacklist($jwt, $user_id, $expires_at) {
 
 /**
  * Mencari Desa Wisata berdasarkan Kelurahan dan menghubungkan Pedagang secara otomatis.
- * Fungsi ini memastikan statistik pedagang tercatat di wilayah wisata tersebut.
  */
 function dw_auto_relate_pedagang_to_village($pedagang_id, $kelurahan_id) {
     global $wpdb;
     if (empty($kelurahan_id)) return;
 
-    // Cari Desa Wisata dengan kelurahan ID (dari API Wilayah) yang sama
     $desa_id = $wpdb->get_var($wpdb->prepare(
         "SELECT id FROM {$wpdb->prefix}dw_desa WHERE api_kelurahan_id = %s LIMIT 1",
         $kelurahan_id
@@ -253,8 +299,10 @@ function dw_auto_relate_pedagang_to_village($pedagang_id, $kelurahan_id) {
             ['id_desa' => $desa_id, 'is_independent' => 0], 
             ['id' => $pedagang_id]
         );
+        // Sync metadata user for verifikator logic
+        $user_id_pedagang = $wpdb->get_var($wpdb->prepare("SELECT id_user FROM {$wpdb->prefix}dw_pedagang WHERE id = %d", $pedagang_id));
+        update_user_meta($user_id_pedagang, 'dw_parent_desa_id', $desa_id);
     } else {
-        // Jika tidak ada desa, status menjadi Independen
         $wpdb->update("{$wpdb->prefix}dw_pedagang", 
             ['id_desa' => 0, 'is_independent' => 1], 
             ['id' => $pedagang_id]
@@ -269,7 +317,6 @@ function dw_sync_independent_merchants_to_new_village($desa_id, $kelurahan_id) {
     global $wpdb;
     if (empty($kelurahan_id)) return;
 
-    // Update semua pedagang yang independen di kelurahan yang sama
     $wpdb->query($wpdb->prepare(
         "UPDATE {$wpdb->prefix}dw_pedagang SET id_desa = %d, is_independent = 0 
          WHERE api_kelurahan_id = %s AND id_desa = 0",
@@ -284,18 +331,15 @@ function dw_sync_independent_merchants_to_new_village($desa_id, $kelurahan_id) {
 function dw_get_calculated_commission($pedagang_id, $paket_price) {
     global $wpdb;
     
-    // Ambil data relasi desa dan siapa yang meng-approve pendaftaran pedagang
     $pedagang = $wpdb->get_row($wpdb->prepare(
         "SELECT id_desa, approved_by FROM {$wpdb->prefix}dw_pedagang WHERE id = %d",
         $pedagang_id
     ));
 
-    // Ketentuan: Desa tidak dapat apa-apa jika tidak ada relasi ATAU admin pusat yang ACC.
     if (!$pedagang || empty($pedagang->id_desa) || $pedagang->approved_by !== 'desa') {
         return 0;
     }
 
-    // Ambil persentase komisi yang diatur di data Desa Wisata tersebut
     $persentase = $wpdb->get_var($wpdb->prepare(
         "SELECT persentase_komisi_penjualan FROM {$wpdb->prefix}dw_desa WHERE id = %d",
         $pedagang->id_desa
@@ -529,31 +573,24 @@ function dw_is_wishlisted($item_id, $item_type = 'wisata', $user_id = null) {
 
 /**
  * Check if Desa is Premium (Verified/Paid)
- * * @param int $user_id Optional. User ID to check. Defaults to current user.
- * @return boolean
  */
 function dw_is_desa_premium($user_id = null) {
     if (!$user_id) {
         $user_id = get_current_user_id();
     }
 
-    // Admin selalu premium
     if (user_can($user_id, 'manage_options')) {
         return true;
     }
 
-    // Cek status paket dari user meta
-    // Nilai 'active' diset ketika pembayaran paket terverifikasi
     $status = get_user_meta($user_id, 'dw_paket_status', true);
-    
-    // Cek juga tanggal kadaluarsa jika ada
     $expiry = get_user_meta($user_id, 'dw_paket_expiry', true);
     
     if ($status === 'active') {
         if (!empty($expiry)) {
             $today = date('Y-m-d');
             if ($today > $expiry) {
-                return false; // Paket sudah expired
+                return false; 
             }
         }
         return true;
@@ -565,32 +602,27 @@ function dw_is_desa_premium($user_id = null) {
 /**
  * Check if Desa can upload more Wisata
  * Limit: 2 for Free, Unlimited for Premium
- * * @param int $user_id
- * @return boolean
  */
 function dw_can_add_wisata($user_id = null) {
     if (!$user_id) {
         $user_id = get_current_user_id();
     }
 
-    // Jika premium, bebas upload
     if (dw_is_desa_premium($user_id)) {
         return true;
     }
 
-    // Hitung jumlah post type 'wisata' milik user ini
     $args = array(
-        'author'    => $user_id,
-        'post_type' => 'wisata',
+        'author'      => $user_id,
+        'post_type'   => 'dw_wisata',
         'post_status' => array('publish', 'pending', 'draft', 'future', 'private'),
-        'fields'    => 'ids',
+        'fields'      => 'ids',
         'posts_per_page' => -1
     );
     
     $query = new WP_Query($args);
     $count = $query->found_posts;
 
-    // Batas untuk akun gratis adalah 2
     if ($count >= 2) {
         return false;
     }

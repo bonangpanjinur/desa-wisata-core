@@ -1,56 +1,91 @@
 <?php
 /**
- * File Name:   includes/commission-handler.php
- * Description: Handles all commission-related logic.
+ * File: includes/commission-handler.php
+ * Deskripsi: Logika inti pembagian komisi dinamis lintas aktor (Platform, Desa, Verifikator).
+ * Update: Integrasi dengan Payout Ledger untuk pencatatan riwayat komisi.
  */
 
 if (!defined('ABSPATH')) exit;
 
 /**
- * Calculates and records commission for a transaction.
- *
- * @param int $order_id The ID of the order.
- * @param int $pedagang_id The ID of the merchant.
- * @param float $total_transaksi The total transaction amount.
+ * Memproses pembagian komisi saat transaksi sukses
+ * * @param int $transaction_id ID Transaksi / Order
+ * @param float $total_admin_fee Total potongan biaya layanan yang diambil oleh sistem
+ */
+function dw_process_transaction_commissions($transaction_id, $total_admin_fee) {
+    global $wpdb;
+    
+    // 1. Dapatkan data pedagang dari transaksi
+    $pedagang_user_id = get_post_meta($transaction_id, '_pedagang_user_id', true);
+    if (!$pedagang_user_id) return;
+
+    // 2. Cari siapa Verifikatornya (pemilik kode)
+    $verifier_id = get_user_meta($pedagang_user_id, 'dw_verified_by', true);
+    
+    // 3. Cari Desa induk (relasi wilayah v3.4)
+    $desa_id = get_user_meta($pedagang_user_id, 'dw_parent_desa_id', true);
+    
+    // Cari User ID dari Desa tersebut untuk pengiriman saldo
+    $desa_user_id = 0;
+    if ($desa_id) {
+        $desa_user_id = $wpdb->get_var($wpdb->prepare("SELECT id_user_desa FROM {$wpdb->prefix}dw_desa WHERE id = %d", $desa_id));
+    }
+
+    // 4. Ambil persentase pengaturan dinamis dari Admin
+    $settings = dw_get_commission_settings();
+    
+    // 5. Hitung porsi masing-masing aktor
+    $share_platform = ($settings['platform'] / 100) * $total_admin_fee;
+    $share_desa     = ($settings['desa'] / 100) * $total_admin_fee;
+    $share_verifier = ($settings['verifier'] / 100) * $total_admin_fee;
+
+    // 6. Distribusi Saldo & Pencatatan Ledger (Riwayat)
+    $ledger_table = $wpdb->prefix . 'dw_payout_ledger';
+
+    // A. Jatah Platform (Super Admin ID 1)
+    dw_add_user_balance(1, $share_platform, "Platform Commission - Trans #$transaction_id");
+    
+    // B. Jatah Desa (Pemilik Wilayah)
+    if ($desa_user_id && $share_desa > 0) {
+        dw_add_user_balance($desa_user_id, $share_desa, "Wilayah Fee - Trans #$transaction_id");
+        
+        // Catat ke Ledger (seperti versi sebelumnya)
+        $wpdb->insert($ledger_table, [
+            'order_id'        => $transaction_id,
+            'payable_to_type' => 'desa',
+            'payable_to_id'   => $desa_id,
+            'amount'          => $share_desa,
+            'status'          => 'paid_to_balance', // Status khusus saldo internal
+        ]);
+    }
+
+    // C. Jatah Verifikator (Pemilik Kode)
+    if ($verifier_id && $share_verifier > 0) {
+        dw_add_user_balance($verifier_id, $share_verifier, "Verifier Fee - Trans #$transaction_id");
+        
+        // Catat ke Ledger
+        $wpdb->insert($ledger_table, [
+            'order_id'        => $transaction_id,
+            'payable_to_type' => 'verifikator',
+            'payable_to_id'   => $verifier_id,
+            'amount'          => $share_verifier,
+            'status'          => 'paid_to_balance',
+        ]);
+    } else if ($share_verifier > 0) {
+        // Jika tidak ada verifikator, jatahnya kembali ke Platform
+        dw_add_user_balance(1, $share_verifier, "Verifier Fee (Admin Fallback) - Trans #$transaction_id");
+    }
+}
+
+/**
+ * Fungsi lama untuk kompatibilitas jika masih dipanggil di bagian lain
+ * Dialihkan ke sistem pemrosesan komisi dinamis yang baru.
  */
 function dw_record_commission($order_id, $pedagang_id, $total_transaksi) {
-    global $wpdb;
-    $pedagang_table = $wpdb->prefix . 'dw_pedagang';
-    $desa_table = $wpdb->prefix . 'dw_desa';
-    $payout_ledger_table = $wpdb->prefix . 'dw_payout_ledger';
-
-    // Get merchant data
-    $pedagang = $wpdb->get_row($wpdb->prepare(
-        "SELECT id_desa, approved_by FROM $pedagang_table WHERE id = %d",
-        $pedagang_id
-    ));
-
-    if (!$pedagang || !$pedagang->id_desa || $pedagang->approved_by !== 'desa') {
-        return; // No commission if not linked to a village or not approved by a village
-    }
-
-    // Get village data
-    $desa = $wpdb->get_row($wpdb->prepare(
-        "SELECT persentase_komisi_penjualan FROM $desa_table WHERE id = %d",
-        $pedagang->id_desa
-    ));
-
-    if (!$desa || $desa->persentase_komisi_penjualan <= 0) {
-        return; // No commission if percentage is not set
-    }
-
-    // Calculate commission
-    $commission_amount = ($total_transaksi * $desa->persentase_komisi_penjualan) / 100;
-
-    // Record commission in the payout ledger
-    $wpdb->insert(
-        $payout_ledger_table,
-        [
-            'order_id' => $order_id,
-            'payable_to_type' => 'desa',
-            'payable_to_id' => $pedagang->id_desa,
-            'amount' => $commission_amount,
-            'status' => 'unpaid',
-        ]
-    );
+    // Karena sekarang sistem menggunakan potongan biaya layanan (Admin Fee) sebagai dasar pembagian,
+    // Kita asumsikan Admin Fee dihitung di sini atau diambil dari pengaturan global.
+    $admin_fee_pct = get_option('dw_global_admin_fee_percent', 10); // Misal default 10%
+    $total_admin_fee = ($total_transaksi * $admin_fee_pct) / 100;
+    
+    dw_process_transaction_commissions($order_id, $total_admin_fee);
 }

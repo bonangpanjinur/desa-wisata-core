@@ -40,7 +40,29 @@ if ( is_admin() ) {
     require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-ongkir.php';
     require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-templates.php';
 }
+function dw_add_verifikator_menu() {
+    // Menu Dashboard Verifikator
+    // Tampil untuk Admin dan Verifikator UMKM
+    if (current_user_can('administrator') || current_user_can('verifikator_umkm')) {
+        add_menu_page(
+            'Verifikator UMKM',
+            'Verifikator UMKM',
+            'read', // Kapabilitas dasar agar menu muncul
+            'dw-verifikator-dashboard',
+            'dw_render_verifikator_page',
+            'dashicons-groups',
+            25
+        );
+    }
+}
+add_action('admin_menu', 'dw_add_verifikator_menu');
 
+/**
+ * Fungsi untuk memanggil file tampilan
+ */
+function dw_render_verifikator_page() {
+    include plugin_dir_path(__FILE__) . 'admin-pages/page-verifikator-umkm.php';
+}
 /**
  * 2. FUNGSI RENDER (JEMBATAN UI)
  */

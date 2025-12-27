@@ -5,7 +5,7 @@
  * File Path:   includes/roles-capabilities.php
  *
  * Mengelola peran pengguna kustom dan hak akses (capabilities).
- * * UPDATE: Menambahkan Role Ojek & Capabilities terkait.
+ * * UPDATE: Menambahkan Role Verifikator UMKM & Komisi Dinamis.
  * * FEATURES: Self-Healing Logic, Duplicate Fixer, CPT Access Control.
  * @package DesaWisataCore
  */
@@ -21,7 +21,7 @@ if ( ! defined( 'DW_ROLE_ADMIN_DESA' ) ) {
 
 /**
  * Daftar Capabilities Custom Plugin
- * Ditambahkan: dw_verify_ojek (untuk verifikasi pendaftaran driver)
+ * Menambahkan kapabilitas untuk Verifikator UMKM
  */
 function dw_get_custom_capabilities() {
     return [
@@ -29,16 +29,19 @@ function dw_get_custom_capabilities() {
         'dw_approve_pedagang', 'dw_manage_produk', 'dw_manage_pesanan', 'dw_manage_promosi',
         'dw_manage_banners', 'dw_view_logs', 'dw_manage_ongkir', 'dw_moderate_reviews',
         // Ojek Caps
-        'dw_verify_ojek', 'dw_view_orders', 'dw_bid_orders'
+        'dw_verify_ojek', 'dw_view_orders', 'dw_bid_orders',
+        // Verifikator UMKM Caps
+        'dw_manage_pedagang_binaan', 'dw_view_commission_reports', 'verify_umkm'
     ];
 }
 
 function dw_create_roles_and_caps() {
-    // Hapus peran lama untuk refresh bersih (termasuk ojek jika perlu update caps)
+    // Hapus peran lama untuk refresh bersih
     if ( get_role( 'admin_kabupaten' ) ) remove_role('admin_kabupaten');
     if ( get_role( DW_ROLE_ADMIN_DESA ) ) remove_role(DW_ROLE_ADMIN_DESA);
     if ( get_role( 'pedagang' ) ) remove_role('pedagang');
     if ( get_role( 'dw_ojek' ) ) remove_role('dw_ojek'); 
+    if ( get_role( 'verifikator_umkm' ) ) remove_role('verifikator_umkm');
 
     // 1. Role: Admin Kabupaten
     add_role('admin_kabupaten', 'Admin Kabupaten', [ 'read' => true ]);
@@ -52,10 +55,11 @@ function dw_create_roles_and_caps() {
         $admin_kab_role->add_cap('dw_moderate_reviews');   
         $admin_kab_role->add_cap('moderate_comments');     
         $admin_kab_role->add_cap('dw_manage_pedagang'); 
-        $admin_kab_role->add_cap('dw_verify_ojek'); // NEW: Verifikasi Ojek
+        $admin_kab_role->add_cap('dw_verify_ojek');
+        $admin_kab_role->add_cap('verify_umkm');
     }
 
-    // 2. Role: Admin Desa (FIXED)
+    // 2. Role: Admin Desa
     add_role(DW_ROLE_ADMIN_DESA, 'Admin Desa', [
         'read' => true,
         'upload_files' => true, 
@@ -69,11 +73,12 @@ function dw_create_roles_and_caps() {
         $admin_desa_role->add_cap('read_dw_wisata');          
         $admin_desa_role->add_cap('dw_manage_pedagang'); 
         $admin_desa_role->add_cap('dw_approve_pedagang');
-        $admin_desa_role->add_cap('dw_verify_ojek'); // NEW: Verifikasi Ojek Lokal
+        $admin_desa_role->add_cap('dw_verify_ojek');
+        $admin_desa_role->add_cap('verify_umkm'); // Hak memverifikasi UMKM lokal
     }
 
     // 3. Role: Pedagang
-    add_role('pedagang', 'Pedagang', [ // Legacy slug 'pedagang' kept for compatibility, or change to 'dw_pedagang' if preferred
+    add_role('pedagang', 'Pedagang', [
         'read' => true,
         'upload_files' => true, 
     ]);
@@ -87,15 +92,27 @@ function dw_create_roles_and_caps() {
         $pedagang_role->add_cap('assign_terms', 'kategori_produk');
     }
 
-    // 4. Role: Ojek Desa (NEW)
+    // 4. Role: Ojek Desa
     add_role('dw_ojek', 'Ojek Desa', [
-        'read' => true,         // Akses Dashboard/Ajax
-        'upload_files' => true, // Upload KTP/SIM/Motor
+        'read' => true,
+        'upload_files' => true,
     ]);
     $ojek_role = get_role('dw_ojek');
     if ($ojek_role) {
-        $ojek_role->add_cap('dw_view_orders'); // Lihat order masuk
-        $ojek_role->add_cap('dw_bid_orders');  // Nego harga
+        $ojek_role->add_cap('dw_view_orders');
+        $ojek_role->add_cap('dw_bid_orders');
+    }
+
+    // 5. Role: Verifikator UMKM (NEW)
+    add_role('verifikator_umkm', 'Verifikator UMKM', [
+        'read'         => true,
+        'upload_files' => true,
+    ]);
+    $verifikator_role = get_role('verifikator_umkm');
+    if ($verifikator_role) {
+        $verifikator_role->add_cap('dw_manage_pedagang_binaan');
+        $verifikator_role->add_cap('dw_view_commission_reports');
+        $verifikator_role->add_cap('verify_umkm');
     }
 
     dw_ensure_admin_capabilities();
@@ -131,12 +148,12 @@ function dw_ensure_admin_capabilities() {
 
 // --- SELF HEALING: Update Role Otomatis ---
 function dw_force_refresh_caps_once() {
-    // Cek apakah Admin Desa punya hak 'dw_manage_pedagang'. Jika tidak, refresh.
-    // Cek juga apakah role Ojek sudah ada
     $role_desa = get_role(DW_ROLE_ADMIN_DESA);
     $role_ojek = get_role('dw_ojek');
+    $role_verifikator = get_role('verifikator_umkm');
 
-    if ( ($role_desa && !$role_desa->has_cap('dw_manage_pedagang')) || !$role_ojek ) {
+    // Refresh jika Admin Desa kurang cap, role Ojek hilang, atau role Verifikator hilang
+    if ( ($role_desa && !$role_desa->has_cap('dw_manage_pedagang')) || !$role_ojek || !$role_verifikator ) {
         dw_create_roles_and_caps();
         
         if (defined('DW_CORE_VERSION')) {
@@ -157,12 +174,10 @@ function dw_fix_duplicate_roles() {
     }
 
     $target_role_name = 'Admin Desa';
-    $correct_slug     = DW_ROLE_ADMIN_DESA; // 'admin_desa'
+    $correct_slug     = DW_ROLE_ADMIN_DESA;
 
     foreach ( $wp_roles->roles as $slug => $details ) {
         if ( $details['name'] === $target_role_name && $slug !== $correct_slug ) {
-            
-            // 1. Pindahkan user ke role yang benar
             $users = get_users( array( 'role' => $slug ) );
             if ( ! empty( $users ) ) {
                 foreach ( $users as $user ) {
@@ -170,13 +185,7 @@ function dw_fix_duplicate_roles() {
                     $user->remove_role( $slug );
                 }
             }
-
-            // 2. Hapus Role Duplikat
             remove_role( $slug );
-            
-            if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-                error_log( "Desa Wisata Core: Menghapus role duplikat '$slug'." );
-            }
         }
     }
 }
@@ -257,4 +266,3 @@ function dw_restrict_cpt_queries_by_role( $query ) {
         } else { $query->set( 'post__in', [0] ); }
     }
 }
-?>
