@@ -3,8 +3,8 @@
  * File Name:   activation.php
  * File Folder: includes/
  * Description: File aktivasi plugin utuh terintegrasi v3.5. 
- * Menangani pembuatan seluruh tabel Desa Wisata Core (Master Data, Transaksi, Ojek, UMKM, Verifikator).
- * Perbaikan: Menghapus komentar inline SQL untuk kompatibilitas dbDelta.
+ * Menangani pembuatan seluruh tabel Desa Wisata Core & Migrasi Verifikator.
+ * Perbaikan: Menghapus redudansi fungsi dw_plugin_update_check dan memperbaiki sintaks SQL.
  * @package DesaWisataCore
  */
 
@@ -63,7 +63,7 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_desa );
 
-    // 2. Tabel Pedagang (UMKM) - UPDATE v3.5: Integrasi Verifikator
+    // 2. Tabel Pedagang (UMKM) - UPDATE v3.5
     $sql_pedagang = "CREATE TABLE {$table_prefix}pedagang (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_user BIGINT(20) UNSIGNED NOT NULL,
@@ -150,7 +150,6 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta($sql_ojek);
 
-
     /* =========================================
        2. KONTEN (INVENTORY & WISATA)
        ========================================= */
@@ -224,7 +223,6 @@ function dw_activate_plugin() {
         KEY id_produk (id_produk)
     ) $charset_collate;";
     dbDelta( $sql_variasi );
-
 
     /* =========================================
        3. TRANSAKSI (E-COMMERCE FLOW & OJEK)
@@ -303,7 +301,6 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_items );
 
-
     /* =========================================
        4. MODEL BISNIS: PAKET & KOMISI
        ========================================= */
@@ -343,7 +340,8 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_pembelian );
 
-    // 11. Tabel Payout Ledger (UPDATE v3.5: Multi-actor support)
+    // 11. Tabel Payout Ledger (UPDATE v3.5)
+    // Perbaikan: Menghilangkan komentar SQL inline agar tidak error di MariaDB
     $sql_ledger = "CREATE TABLE {$table_prefix}payout_ledger (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         order_id BIGINT(20) NOT NULL, 
@@ -358,7 +356,6 @@ function dw_activate_plugin() {
         KEY status_lookup (payable_to_type, payable_to_id, status)
     ) $charset_collate;";
     dbDelta( $sql_ledger );
-
 
     /* =========================================
        5. PENDUKUNG LAINNYA
@@ -430,7 +427,7 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_ulasan );
 
-    // 16. Tabel Audit Logs (UPDATE v3.5: Audit Trail)
+    // 16. Tabel Audit Logs
     $sql_logs = "CREATE TABLE {$table_prefix}logs (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         user_id BIGINT(20) UNSIGNED DEFAULT 0,
@@ -570,21 +567,19 @@ function dw_activate_plugin() {
 
 /**
  * Logika Update Otomatis (Jika versi DB berbeda)
+ * Peringatan: Fungsi dw_plugin_update_check() sudah dideklarasikan di init.php.
+ * Fungsi di bawah ini hanya dijalankan melalui hook aktivasi untuk migrasi database.
  */
-function dw_plugin_update_check() {
-    $db_version = get_option('dw_core_db_version', '1.0');
-    if ($db_version < '3.5') {
-        dw_activate_plugin();
-    }
-}
-add_action('plugins_loaded', 'dw_plugin_update_check');
-
 function dw_core_activate_plugin() {
     dw_activate_plugin();
 }
 
 /**
  * Registrasi Hook Aktivasi
- * Menggunakan string literal untuk file utama jika konstanta DW_CORE_FILE tidak terbaca
  */
-register_activation_hook( WP_PLUGIN_DIR . '/desa-wisata-core/desa-wisata-core.php', 'dw_activate_plugin' );
+$main_plugin_file = WP_PLUGIN_DIR . '/desa-wisata-core/desa-wisata-core.php';
+if (file_exists($main_plugin_file)) {
+    register_activation_hook( $main_plugin_file, 'dw_activate_plugin' );
+} elseif (defined('DW_CORE_FILE')) {
+    register_activation_hook( DW_CORE_FILE, 'dw_activate_plugin' );
+}
