@@ -2,8 +2,8 @@
 /**
  * File Name:   activation.php
  * File Folder: includes/
- * Description: File aktivasi plugin utuh terintegrasi v3.6. 
- * Menangani pembuatan seluruh tabel Desa Wisata Core (25 Tabel) & Modul Verifikator UMKM.
+ * Description: File aktivasi plugin utuh terintegrasi v3.7. 
+ * Menangani pembuatan seluruh tabel Desa Wisata Core & Modul Verifikator UMKM.
  * @package DesaWisataCore
  */
 
@@ -62,12 +62,12 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_desa );
 
-    // 2. Tabel Pedagang (UMKM)
+    // 2. Tabel Pedagang (UMKM) - UPDATE v3.7 (Integrasi Verifikator & Relasi Desa)
     $sql_pedagang = "CREATE TABLE {$table_prefix}pedagang (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_user BIGINT(20) UNSIGNED NOT NULL,
-        id_desa BIGINT(20) DEFAULT NULL,
-        id_verifikator BIGINT(20) DEFAULT 0,
+        id_desa BIGINT(20) DEFAULT NULL, -- Tetap punya relasi dengan desa
+        id_verifikator BIGINT(20) DEFAULT 0, -- Legacy ID Verifikator
         nama_toko VARCHAR(255) NOT NULL,
         slug_toko VARCHAR(255) NOT NULL,
         nama_pemilik VARCHAR(255) NOT NULL,
@@ -86,10 +86,16 @@ function dw_activate_plugin() {
         total_ulasan_toko INT DEFAULT 0,
         status_pendaftaran ENUM('menunggu','disetujui','ditolak','menunggu_desa') DEFAULT 'menunggu_desa',
         status_akun ENUM('aktif','nonaktif','suspend','nonaktif_habis_kuota') DEFAULT 'nonaktif',
+        
+        -- System Verifikasi & Referral Baru --
+        kode_referal_digunakan VARCHAR(50) DEFAULT NULL, -- Kode dari Verifikator UMKM
+        verified_by_id BIGINT(20) DEFAULT NULL, -- User ID WP yang memverifikasi
+        verifier_role ENUM('admin', 'desa', 'verifikator_umkm') DEFAULT NULL, -- Penentu komisi
         is_verified TINYINT(1) DEFAULT 0,
         verified_at DATETIME DEFAULT NULL,
+        
         is_independent TINYINT(1) DEFAULT 1,
-        approved_by VARCHAR(20) DEFAULT NULL,
+        approved_by VARCHAR(20) DEFAULT NULL, 
         sisa_transaksi INT DEFAULT 0,
         shipping_ojek_lokal_aktif TINYINT(1) DEFAULT 0,
         shipping_ojek_lokal_zona JSON DEFAULT NULL,
@@ -111,7 +117,7 @@ function dw_activate_plugin() {
         PRIMARY KEY  (id),
         UNIQUE KEY id_user (id_user),
         KEY id_desa (id_desa),
-        KEY id_verifikator (id_verifikator),
+        KEY kode_referal_digunakan (kode_referal_digunakan),
         KEY slug_toko (slug_toko)
     ) $charset_collate;";
     dbDelta($sql_pedagang);
@@ -149,18 +155,17 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta($sql_ojek);
 
-    // 2C. Tabel Verifikator UMKM (Baru v3.6)
+    // 2C. Tabel Verifikator (UPDATE v3.7 - Mendukung Referral & Tipe)
     $sql_verifikator = "CREATE TABLE {$table_prefix}verifikator (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_user BIGINT(20) UNSIGNED NOT NULL,
         nama_lengkap VARCHAR(255) NOT NULL,
+        kode_referal VARCHAR(50) NOT NULL, -- Kode referal unik
+        tipe_verifikator ENUM('umkm', 'desa') DEFAULT 'umkm',
+        id_desa BIGINT(20) DEFAULT NULL, -- Relasi jika verifikator orang desa
         nik VARCHAR(50) NOT NULL,
         nomor_wa VARCHAR(20) NOT NULL,
         alamat_lengkap TEXT,
-        provinsi VARCHAR(100),
-        kabupaten VARCHAR(100),
-        kecamatan VARCHAR(100),
-        kelurahan VARCHAR(100),
         api_provinsi_id VARCHAR(20),
         api_kabupaten_id VARCHAR(20),
         api_kecamatan_id VARCHAR(20),
@@ -168,11 +173,12 @@ function dw_activate_plugin() {
         total_verifikasi_sukses INT DEFAULT 0,
         total_pendapatan_komisi DECIMAL(15,2) DEFAULT 0,
         saldo_saat_ini DECIMAL(15,2) DEFAULT 0,
-        status ENUM('aktif','pending','nonaktif') DEFAULT 'pending',
+        status ENUM('aktif','pending','nonaktif') DEFAULT 'aktif',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         PRIMARY KEY (id),
         UNIQUE KEY id_user (id_user),
+        UNIQUE KEY kode_referal (kode_referal),
         KEY idx_lokasi_v (api_kabupaten_id)
     ) $charset_collate;";
     dbDelta($sql_verifikator);
@@ -203,8 +209,7 @@ function dw_activate_plugin() {
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         PRIMARY KEY  (id),
         KEY id_desa (id_desa),
-        KEY slug (slug),
-        KEY kategori (kategori)
+        KEY slug (slug)
     ) $charset_collate;";
     dbDelta( $sql_wisata );
 
@@ -230,9 +235,7 @@ function dw_activate_plugin() {
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         PRIMARY KEY  (id),
         KEY id_pedagang (id_pedagang),
-        KEY slug (slug),
-        KEY harga (harga),
-        KEY kategori (kategori)
+        KEY slug (slug)
     ) $charset_collate;";
     dbDelta( $sql_produk );
 
@@ -252,7 +255,7 @@ function dw_activate_plugin() {
     dbDelta( $sql_variasi );
 
     /* =========================================
-       3. TRANSAKSI (FLOW & OJEK)
+       3. TRANSAKSI (E-COMMERCE FLOW)
        ========================================= */
 
     // 6. Tabel Transaksi Utama
@@ -267,42 +270,23 @@ function dw_activate_plugin() {
         nama_penerima VARCHAR(255),
         no_hp VARCHAR(20),
         alamat_lengkap TEXT,
-        ojek_data JSON DEFAULT NULL,
-        provinsi VARCHAR(100),
-        kabupaten VARCHAR(100),
-        kecamatan VARCHAR(100),
-        kelurahan VARCHAR(100),
-        kode_pos VARCHAR(10),
-        metode_pembayaran VARCHAR(50),
-        status_transaksi ENUM('menunggu_pembayaran','pembayaran_dikonfirmasi','pembayaran_gagal','diproses','dikirim','selesai','dibatalkan','refunded','menunggu_driver','penawaran_driver','nego','menunggu_penjemputan','dalam_perjalanan') DEFAULT 'menunggu_pembayaran',
-        url_bukti_bayar VARCHAR(255) DEFAULT NULL,
+        status_transaksi ENUM('menunggu_pembayaran','pembayaran_dikonfirmasi','diproses','dikirim','selesai','dibatalkan') DEFAULT 'menunggu_pembayaran',
         bukti_pembayaran VARCHAR(255) DEFAULT NULL,
-        catatan_pembeli TEXT,
-        tanggal_transaksi DATETIME DEFAULT CURRENT_TIMESTAMP,
-        tanggal_pembayaran DATETIME DEFAULT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY  (id),
         UNIQUE KEY kode_unik (kode_unik),
-        KEY id_pembeli (id_pembeli),
-        KEY status_transaksi (status_transaksi)
+        KEY id_pembeli (id_pembeli)
     ) $charset_collate;";
     dbDelta( $sql_transaksi );
 
-    // 7. Tabel Sub Transaksi
+    // 7. Tabel Sub Transaksi (Per Pedagang)
     $sql_sub = "CREATE TABLE {$table_prefix}transaksi_sub (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_transaksi BIGINT(20) NOT NULL,
         id_pedagang BIGINT(20) NOT NULL,
-        nama_toko VARCHAR(255),
         sub_total DECIMAL(15,2) NOT NULL,
         ongkir DECIMAL(15,2) NOT NULL,
-        total_pesanan_toko DECIMAL(15,2) NOT NULL,
-        metode_pengiriman VARCHAR(100),
-        kurir_nama VARCHAR(100),
-        kurir_layanan VARCHAR(100),
-        no_resi VARCHAR(100) DEFAULT NULL,
-        status_pesanan ENUM('menunggu_konfirmasi','diproses','diantar_ojek','dikirim_ekspedisi','selesai','dibatalkan','lunas') DEFAULT 'menunggu_konfirmasi',
-        catatan_penjual TEXT,
+        status_pesanan ENUM('menunggu_konfirmasi','diproses','dikirim','selesai','dibatalkan') DEFAULT 'menunggu_konfirmasi',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY  (id),
         KEY id_transaksi (id_transaksi),
@@ -315,16 +299,12 @@ function dw_activate_plugin() {
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_sub_transaksi BIGINT(20) NOT NULL,
         id_produk BIGINT(20) NOT NULL,
-        id_variasi BIGINT(20) DEFAULT 0,
         nama_produk VARCHAR(255) NOT NULL,
-        nama_variasi VARCHAR(255) DEFAULT NULL,
         harga_satuan DECIMAL(15,2) NOT NULL,
         jumlah INT NOT NULL,
         total_harga DECIMAL(15,2) NOT NULL,
-        catatan_item TEXT,
         PRIMARY KEY  (id),
-        KEY id_sub_transaksi (id_sub_transaksi),
-        KEY id_produk (id_produk)
+        KEY id_sub_transaksi (id_sub_transaksi)
     ) $charset_collate;";
     dbDelta( $sql_items );
 
@@ -341,9 +321,9 @@ function dw_activate_plugin() {
         jumlah_transaksi INT NOT NULL,
         target_role ENUM('pedagang','ojek') NOT NULL DEFAULT 'pedagang', 
         persentase_komisi_desa DECIMAL(5,2) DEFAULT 0,
+        persentase_komisi_verifikator DECIMAL(5,2) DEFAULT 0, -- Komisi Verifikator UMKM
         status ENUM('aktif','nonaktif') DEFAULT 'aktif',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         PRIMARY KEY  (id)
     ) $charset_collate;";
     dbDelta( $sql_paket );
@@ -353,82 +333,174 @@ function dw_activate_plugin() {
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_pedagang BIGINT(20) NOT NULL,
         id_paket BIGINT(20) NOT NULL,
-        nama_paket_snapshot VARCHAR(100) NOT NULL,
         harga_paket DECIMAL(15,2) NOT NULL,
-        jumlah_transaksi INT NOT NULL,
-        persentase_komisi_desa DECIMAL(5,2) DEFAULT 0,
-        url_bukti_bayar VARCHAR(255),
         status ENUM('pending','disetujui','ditolak') DEFAULT 'pending',
-        catatan_admin TEXT,
+        url_bukti_bayar VARCHAR(255),
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        processed_at DATETIME DEFAULT NULL,
         PRIMARY KEY  (id),
         KEY id_pedagang (id_pedagang)
     ) $charset_collate;";
     dbDelta( $sql_pembelian );
 
-    // 11. Tabel Payout Ledger
+    // 11. Tabel Payout Ledger (Untuk Distribusi Dana)
     $sql_ledger = "CREATE TABLE {$table_prefix}payout_ledger (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         order_id BIGINT(20) NOT NULL, 
-        payable_to_type VARCHAR(50) NOT NULL, 
+        payable_to_type VARCHAR(50) NOT NULL, -- 'desa', 'verifikator', 'admin'
         payable_to_id BIGINT(20) NOT NULL, 
         amount DECIMAL(18,2) NOT NULL,
         status VARCHAR(50) DEFAULT 'unpaid',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        paid_at DATETIME DEFAULT NULL,
         PRIMARY KEY  (id),
-        KEY order_id (order_id),
-        KEY status_lookup (payable_to_type, payable_to_id, status)
+        KEY order_id (order_id)
     ) $charset_collate;";
     dbDelta( $sql_ledger );
 
     /* =========================================
-       5. PENDUKUNG (CART, CHAT, WHATSAPP, DLL)
+       5. PENDUKUNG LAINNYA
        ========================================= */
 
-    // 12. Cart
-    dbDelta("CREATE TABLE {$table_prefix}cart (id BIGINT(20) NOT NULL AUTO_INCREMENT, user_id BIGINT(20) UNSIGNED NULL, session_id VARCHAR(64) NULL, id_produk BIGINT(20) NOT NULL, id_variasi BIGINT(20) DEFAULT 0, qty INT NOT NULL DEFAULT 1, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (id)) $charset_collate;");
-    
-    // 13. Chat Message
-    dbDelta("CREATE TABLE {$table_prefix}chat_message (id BIGINT(20) NOT NULL AUTO_INCREMENT, sender_id BIGINT(20) UNSIGNED NOT NULL, receiver_id BIGINT(20) UNSIGNED NOT NULL, message TEXT NOT NULL, is_read TINYINT(1) DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (id)) $charset_collate;");
+    // 12. Tabel Cart
+    $sql_cart = "CREATE TABLE {$table_prefix}cart ( 
+        id BIGINT(20) NOT NULL AUTO_INCREMENT,
+        user_id BIGINT(20) UNSIGNED NULL,
+        id_produk BIGINT(20) NOT NULL,
+        qty INT NOT NULL DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY  (id),
+        KEY user_id (user_id)
+    ) $charset_collate;";
+    dbDelta( $sql_cart );
 
-    // 14. Promosi
-    dbDelta("CREATE TABLE {$table_prefix}promosi (id BIGINT(20) NOT NULL AUTO_INCREMENT, tipe ENUM('produk','wisata') NOT NULL, target_id BIGINT(20) NOT NULL, pemohon_id BIGINT(20) UNSIGNED NOT NULL, status ENUM('pending','aktif','selesai','ditolak') DEFAULT 'pending', created_at DATETIME DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (id)) $charset_collate;");
+    // 13. Tabel Chat Message
+    $sql_chat = "CREATE TABLE {$table_prefix}chat_message (
+        id BIGINT(20) NOT NULL AUTO_INCREMENT,
+        sender_id BIGINT(20) UNSIGNED NOT NULL,
+        receiver_id BIGINT(20) UNSIGNED NOT NULL,
+        message TEXT NOT NULL,
+        is_read TINYINT(1) DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY  (id),
+        KEY chat_pair (sender_id, receiver_id)
+    ) $charset_collate;";
+    dbDelta( $sql_chat );
 
-    // 15. Ulasan
-    dbDelta("CREATE TABLE {$table_prefix}ulasan (id BIGINT(20) NOT NULL AUTO_INCREMENT, tipe VARCHAR(50) NOT NULL, target_id BIGINT(20) NOT NULL, rating INT(1) NOT NULL, komentar TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (id)) $charset_collate;");
+    // 14. Tabel Promosi
+    $sql_promosi = "CREATE TABLE {$table_prefix}promosi (
+        id BIGINT(20) NOT NULL AUTO_INCREMENT,
+        tipe ENUM('produk','wisata') NOT NULL,
+        target_id BIGINT(20) NOT NULL,
+        biaya DECIMAL(10,2) NOT NULL,
+        status ENUM('pending','aktif','selesai') DEFAULT 'pending',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY  (id)
+    ) $charset_collate;";
+    dbDelta( $sql_promosi );
 
-    // 16. Logs
-    dbDelta("CREATE TABLE {$table_prefix}logs (id BIGINT(20) NOT NULL AUTO_INCREMENT, user_id BIGINT(20) UNSIGNED DEFAULT 0, activity TEXT NOT NULL, type VARCHAR(50) DEFAULT 'info', created_at DATETIME DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (id)) $charset_collate;");
+    // 15. Tabel Ulasan
+    $sql_ulasan = "CREATE TABLE {$table_prefix}ulasan (
+        id BIGINT(20) NOT NULL AUTO_INCREMENT,
+        tipe VARCHAR(50) NOT NULL,
+        target_id BIGINT(20) NOT NULL,
+        user_id BIGINT(20) UNSIGNED NOT NULL,
+        rating INT(1) NOT NULL,
+        komentar TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY  (id)
+    ) $charset_collate;";
+    dbDelta( $sql_ulasan );
 
-    // 17. Banner
-    dbDelta("CREATE TABLE {$table_prefix}banner (id BIGINT(20) NOT NULL AUTO_INCREMENT, judul VARCHAR(255), gambar VARCHAR(255) NOT NULL, link VARCHAR(255), status ENUM('aktif','nonaktif') DEFAULT 'aktif', created_at DATETIME DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (id)) $charset_collate;");
+    // 16. Tabel Audit Logs
+    $sql_logs = "CREATE TABLE {$table_prefix}logs (
+        id BIGINT(20) NOT NULL AUTO_INCREMENT,
+        user_id BIGINT(20) UNSIGNED DEFAULT 0,
+        activity TEXT NOT NULL, 
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY  (id)
+    ) $charset_collate;";
+    dbDelta( $sql_logs );
 
-    // 18. User Alamat
-    dbDelta("CREATE TABLE {$table_prefix}user_alamat (id BIGINT(20) NOT NULL AUTO_INCREMENT, user_id BIGINT(20) UNSIGNED NOT NULL, nama_penerima VARCHAR(255), no_hp VARCHAR(20), alamat_lengkap TEXT, is_default TINYINT(1) DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (id)) $charset_collate;");
+    // 17. Tabel Banner
+    $sql_banner = "CREATE TABLE {$table_prefix}banner (
+        id BIGINT(20) NOT NULL AUTO_INCREMENT,
+        gambar VARCHAR(255) NOT NULL,
+        link VARCHAR(255),
+        status ENUM('aktif','nonaktif') DEFAULT 'aktif',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY  (id)
+    ) $charset_collate;";
+    dbDelta( $sql_banner );
 
-    // 19. Revoked Tokens
-    dbDelta("CREATE TABLE {$table_prefix}revoked_tokens (id BIGINT(20) NOT NULL AUTO_INCREMENT, token_hash VARCHAR(64) NOT NULL, user_id BIGINT(20) UNSIGNED NOT NULL, expires_at DATETIME NOT NULL, PRIMARY KEY (id)) $charset_collate;");
+    // 18. Tabel User Alamat
+    $sql_alamat = "CREATE TABLE {$table_prefix}user_alamat (
+        id BIGINT(20) NOT NULL AUTO_INCREMENT,
+        user_id BIGINT(20) UNSIGNED NOT NULL,
+        nama_penerima VARCHAR(255),
+        alamat_lengkap TEXT,
+        is_default TINYINT(1) DEFAULT 0,
+        PRIMARY KEY  (id),
+        KEY user_id (user_id)
+    ) $charset_collate;";
+    dbDelta( $sql_alamat );
 
-    // 20. Refresh Tokens
-    dbDelta("CREATE TABLE {$table_prefix}refresh_tokens (id BIGINT(20) NOT NULL AUTO_INCREMENT, token VARCHAR(255) NOT NULL, user_id BIGINT(20) UNSIGNED NOT NULL, expires_at DATETIME NOT NULL, PRIMARY KEY (id)) $charset_collate;");
+    // 19. Tabel Revoked Tokens (Security)
+    $sql_revoked = "CREATE TABLE {$table_prefix}revoked_tokens (
+        id BIGINT(20) NOT NULL AUTO_INCREMENT,
+        token_hash VARCHAR(64) NOT NULL,
+        expires_at DATETIME NOT NULL,
+        PRIMARY KEY  (id)
+    ) $charset_collate;";
+    dbDelta( $sql_revoked );
 
-    // 21. WhatsApp Templates
-    dbDelta("CREATE TABLE {$table_prefix}whatsapp_templates (id BIGINT(20) NOT NULL AUTO_INCREMENT, kode VARCHAR(50) NOT NULL, judul VARCHAR(100) NOT NULL, template_pesan TEXT NOT NULL, is_active TINYINT(1) DEFAULT 1, PRIMARY KEY (id), UNIQUE KEY kode (kode)) $charset_collate;");
+    // 20. Tabel Refresh Tokens (Security)
+    $sql_refresh = "CREATE TABLE {$table_prefix}refresh_tokens (
+        id BIGINT(20) NOT NULL AUTO_INCREMENT,
+        token VARCHAR(255) NOT NULL,
+        user_id BIGINT(20) UNSIGNED NOT NULL,
+        expires_at DATETIME NOT NULL,
+        PRIMARY KEY  (id),
+        UNIQUE KEY token (token)
+    ) $charset_collate;";
+    dbDelta( $sql_refresh );
 
-    // 22. Wishlist
-    dbDelta("CREATE TABLE {$table_prefix}wishlist (id BIGINT(20) NOT NULL AUTO_INCREMENT, user_id BIGINT(20) UNSIGNED NOT NULL, item_id BIGINT(20) UNSIGNED NOT NULL, item_type VARCHAR(20) NOT NULL DEFAULT 'wisata', created_at DATETIME DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (id)) $charset_collate;");
+    // 21. Tabel Template WhatsApp
+    $sql_wa = "CREATE TABLE {$table_prefix}whatsapp_templates (
+        id BIGINT(20) NOT NULL AUTO_INCREMENT,
+        kode VARCHAR(50) NOT NULL,
+        template_pesan TEXT NOT NULL,
+        PRIMARY KEY  (id),
+        UNIQUE KEY kode (kode)
+    ) $charset_collate;";
+    dbDelta( $sql_wa );
 
-    // 23. Log Kuota
-    dbDelta("CREATE TABLE {$table_prefix}quota_logs (id BIGINT(20) NOT NULL AUTO_INCREMENT, user_id BIGINT(20) NOT NULL, quota_change INT(11) NOT NULL, type VARCHAR(50) NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (id)) $charset_collate;");
+    // 22. Tabel Wishlist
+    $sql_wishlist = "CREATE TABLE {$table_prefix}wishlist (
+        id BIGINT(20) NOT NULL AUTO_INCREMENT,
+        user_id BIGINT(20) UNSIGNED NOT NULL,
+        item_id BIGINT(20) UNSIGNED NOT NULL,
+        item_type VARCHAR(20) NOT NULL, 
+        PRIMARY KEY  (id)
+    ) $charset_collate;";
+    dbDelta( $sql_wishlist );
+
+    // 23. Tabel Log Kuota (Sisa Transaksi)
+    $sql_quota_logs = "CREATE TABLE {$table_prefix}quota_logs (
+        id BIGINT(20) NOT NULL AUTO_INCREMENT,
+        user_id BIGINT(20) NOT NULL,
+        quota_change INT(11) NOT NULL,
+        description TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY  (id)
+    ) $charset_collate;";
+    dbDelta($sql_quota_logs);
 
     /* =========================================
-       6. FINALISASI
+       8. FINALISASI
        ========================================= */
 
-    update_option( 'dw_core_db_version', '3.6' ); 
+    update_option( 'dw_core_db_version', '3.7' ); 
     
+    // Inisialisasi Role & Capability
     if ( ! function_exists( 'dw_create_roles_and_caps' ) ) {
         $roles_file = dirname( __FILE__ ) . '/roles-capabilities.php';
         if ( file_exists( $roles_file ) ) { require_once $roles_file; }
@@ -439,14 +511,6 @@ function dw_activate_plugin() {
     }
     
     flush_rewrite_rules();
-}
-
-/**
- * FIX FATAL ERROR: Wrapper untuk aktivasi
- * Fungsi ini dipanggil oleh file utama plugin desa-wisata-core.php
- */
-function dw_core_activate_plugin() {
-    dw_activate_plugin();
 }
 
 /**
