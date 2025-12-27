@@ -1,7 +1,7 @@
 <?php
 /**
  * File: includes/list-tables/class-dw-verifikator-list-table.php
- * Deskripsi: List Table untuk menampilkan daftar akun Verifikator UMKM (Super Admin View).
+ * Deskripsi: Class tabel untuk menampilkan list akun Verifikator UMKM (Super Admin View).
  */
 
 if (!defined('ABSPATH')) exit;
@@ -49,7 +49,7 @@ class DW_Verifikator_List_Table extends WP_List_Table {
             'order' => 'DESC'
         ];
 
-        // Penanganan Pencarian
+        // Search Support
         if (!empty($_REQUEST['s'])) {
             $args['search'] = '*' . esc_attr($_REQUEST['s']) . '*';
             $args['search_columns'] = ['user_login', 'display_name', 'user_email'];
@@ -71,17 +71,16 @@ class DW_Verifikator_List_Table extends WP_List_Table {
                 return '<strong><a href="'.$edit_link.'">' . esc_html($item->display_name) . '</a></strong><br/><small>' . esc_html($item->user_email) . '</small>';
             case 'v_code':
                 $code = get_user_meta($item->ID, 'dw_verifier_code', true);
-                return $code ? '<code style="font-weight:bold; color:#2271b1">' . esc_html($code) . '</code>' : '<span style="color:#666">Belum Ada</span>';
+                return $code ? '<code style="font-weight:bold; color:#2271b1">' . esc_html($code) . '</code>' : '<span style="color:#666">N/A</span>';
             case 'merchants':
                 global $wpdb;
                 $count = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$wpdb->prefix}dw_pedagang WHERE id_verifikator = %d", $item->ID));
-                return '<strong>' . (int)$count . '</strong> Pedagang';
+                return '<strong>' . (int)$count . '</strong> UMKM';
             case 'balance':
                 $bal = (float) get_user_meta($item->ID, 'dw_balance', true);
-                // Fungsi dw_format_rupiah diasumsikan ada di helpers.php
-                return '<span style="color:#46b450; font-weight:bold;">' . (function_exists('dw_format_rupiah') ? dw_format_rupiah($bal) : number_format($bal)) . '</span>';
+                return '<span style="color:#46b450; font-weight:bold;">Rp ' . number_format($bal, 0, ',', '.') . '</span>';
             case 'registered':
-                return date('d/m/Y H:i', strtotime($item->user_registered));
+                return date('d/m/Y', strtotime($item->user_registered));
             case 'cb':
                 return sprintf('<input type="checkbox" name="users[]" value="%s" />', $item->ID);
             default:

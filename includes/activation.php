@@ -3,8 +3,9 @@
  * File Name:   activation.php
  * File Folder: includes/
  * Description: File aktivasi plugin utuh terintegrasi v3.5. 
- * Menangani pembuatan seluruh tabel Desa Wisata Core & Migrasi Verifikator.
- * Perbaikan: Menghilangkan komentar inline SQL untuk kompatibilitas dbDelta & MariaDB.
+ * Menangani pembuatan seluruh tabel Desa Wisata Core (Master Data, Transaksi, Ojek, UMKM, Verifikator).
+ * Perbaikan: Menghapus komentar inline SQL untuk kompatibilitas dbDelta.
+ * @package DesaWisataCore
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -116,7 +117,7 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta($sql_pedagang);
 
-    // 3. Tabel Ojek
+    // 2B. Tabel Ojek
     $sql_ojek = "CREATE TABLE {$table_prefix}ojek (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_user BIGINT(20) UNSIGNED NOT NULL,
@@ -149,11 +150,12 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta($sql_ojek);
 
+
     /* =========================================
        2. KONTEN (INVENTORY & WISATA)
        ========================================= */
 
-    // 4. Tabel Wisata
+    // 3. Tabel Wisata
     $sql_wisata = "CREATE TABLE {$table_prefix}wisata (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_desa BIGINT(20) NOT NULL,
@@ -180,7 +182,7 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_wisata );
 
-    // 5. Tabel Produk
+    // 4. Tabel Produk
     $sql_produk = "CREATE TABLE {$table_prefix}produk (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_pedagang BIGINT(20) NOT NULL,
@@ -208,7 +210,7 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_produk );
 
-    // 6. Tabel Variasi Produk
+    // 5. Tabel Variasi Produk
     $sql_variasi = "CREATE TABLE {$table_prefix}produk_variasi (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_produk BIGINT(20) NOT NULL,
@@ -223,11 +225,12 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_variasi );
 
+
     /* =========================================
        3. TRANSAKSI (E-COMMERCE FLOW & OJEK)
        ========================================= */
 
-    // 7. Tabel Transaksi Utama
+    // 6. Tabel Transaksi Utama
     $sql_transaksi = "CREATE TABLE {$table_prefix}transaksi (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         kode_unik VARCHAR(50) NOT NULL,
@@ -260,7 +263,7 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_transaksi );
 
-    // 8. Tabel Sub Transaksi
+    // 7. Tabel Sub Transaksi
     $sql_sub = "CREATE TABLE {$table_prefix}transaksi_sub (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_transaksi BIGINT(20) NOT NULL,
@@ -282,7 +285,7 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_sub );
 
-    // 9. Tabel Item Transaksi
+    // 8. Tabel Item Transaksi
     $sql_items = "CREATE TABLE {$table_prefix}transaksi_items (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_sub_transaksi BIGINT(20) NOT NULL,
@@ -300,11 +303,12 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_items );
 
+
     /* =========================================
        4. MODEL BISNIS: PAKET & KOMISI
        ========================================= */
 
-    // 10. Tabel Paket Transaksi
+    // 9. Tabel Paket Transaksi
     $sql_paket = "CREATE TABLE {$table_prefix}paket_transaksi (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         nama_paket VARCHAR(100) NOT NULL,
@@ -320,7 +324,7 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_paket );
 
-    // 11. Tabel Pembelian Paket
+    // 10. Tabel Pembelian Paket
     $sql_pembelian = "CREATE TABLE {$table_prefix}pembelian_paket (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_pedagang BIGINT(20) NOT NULL,
@@ -339,7 +343,7 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_pembelian );
 
-    // 12. Tabel Payout Ledger (UPDATE v3.5: Support Verifikator)
+    // 11. Tabel Payout Ledger (UPDATE v3.5: Multi-actor support)
     $sql_ledger = "CREATE TABLE {$table_prefix}payout_ledger (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         order_id BIGINT(20) NOT NULL, 
@@ -355,11 +359,12 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_ledger );
 
+
     /* =========================================
        5. PENDUKUNG LAINNYA
        ========================================= */
 
-    // 13. Tabel Cart
+    // 12. Tabel Cart
     $sql_cart = "CREATE TABLE {$table_prefix}cart ( 
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         user_id BIGINT(20) UNSIGNED NULL,
@@ -374,7 +379,7 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_cart );
 
-    // 14. Tabel Chat Message
+    // 13. Tabel Chat Message
     $sql_chat = "CREATE TABLE {$table_prefix}chat_message (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         produk_id BIGINT(20) DEFAULT 0,
@@ -391,7 +396,7 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_chat );
 
-    // 15. Tabel Promosi
+    // 14. Tabel Promosi
     $sql_promosi = "CREATE TABLE {$table_prefix}promosi (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         tipe ENUM('produk','wisata') NOT NULL,
@@ -407,7 +412,7 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_promosi );
 
-    // 16. Tabel Ulasan (Universal)
+    // 15. Tabel Ulasan (Universal)
     $sql_ulasan = "CREATE TABLE {$table_prefix}ulasan (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         tipe VARCHAR(50) NOT NULL,
@@ -425,7 +430,7 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_ulasan );
 
-    // 17. Tabel Logs (Audit Trail v3.5)
+    // 16. Tabel Audit Logs (UPDATE v3.5: Audit Trail)
     $sql_logs = "CREATE TABLE {$table_prefix}logs (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         user_id BIGINT(20) UNSIGNED DEFAULT 0,
@@ -437,7 +442,7 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_logs );
 
-    // 18. Tabel Banner
+    // 17. Tabel Banner
     $sql_banner = "CREATE TABLE {$table_prefix}banner (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         judul VARCHAR(255),
@@ -450,22 +455,16 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_banner );
     
-    // 19. Tabel User Alamat
+    // 18. Tabel User Alamat
     $sql_alamat = "CREATE TABLE {$table_prefix}user_alamat (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         user_id BIGINT(20) UNSIGNED NOT NULL,
         nama_penerima VARCHAR(255),
         no_hp VARCHAR(20),
         alamat_lengkap TEXT,
-        provinsi VARCHAR(100),
-        kabupaten VARCHAR(100),
-        kecamatan VARCHAR(100),
-        kelurahan VARCHAR(100),
+        provinsi VARCHAR(100), kabupaten VARCHAR(100), kecamatan VARCHAR(100), kelurahan VARCHAR(100),
         kode_pos VARCHAR(10), 
-        api_provinsi_id VARCHAR(20),
-        api_kabupaten_id VARCHAR(20),
-        api_kecamatan_id VARCHAR(20),
-        api_kelurahan_id VARCHAR(20),
+        api_provinsi_id VARCHAR(20), api_kabupaten_id VARCHAR(20), api_kecamatan_id VARCHAR(20), api_kelurahan_id VARCHAR(20),
         is_default TINYINT(1) DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY  (id),
@@ -478,7 +477,7 @@ function dw_activate_plugin() {
        6. SECURITY & SYSTEM TOKENS
        ========================================= */
 
-    // 20. Tabel Revoked Tokens
+    // 19. Tabel Revoked Tokens
     $sql_revoked = "CREATE TABLE {$table_prefix}revoked_tokens (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         token_hash VARCHAR(64) NOT NULL,
@@ -490,7 +489,7 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_revoked );
 
-    // 21. Tabel Refresh Tokens
+    // 20. Tabel Refresh Tokens
     $sql_refresh = "CREATE TABLE {$table_prefix}refresh_tokens (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         token VARCHAR(255) NOT NULL,
@@ -504,10 +503,10 @@ function dw_activate_plugin() {
 
 
     /* =========================================
-       7. NOTIFIKASI & LOGISTIK
+       7. NOTIFIKASI & LAIN-LAIN
        ========================================= */
 
-    // 22. Tabel Template WhatsApp
+    // 21. Tabel Template WhatsApp
     $sql_wa = "CREATE TABLE {$table_prefix}whatsapp_templates (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         kode VARCHAR(50) NOT NULL,
@@ -521,7 +520,7 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_wa );
 
-    // 23. Tabel Wishlist
+    // 22. Tabel Wishlist
     $sql_wishlist = "CREATE TABLE {$wpdb->prefix}dw_wishlist (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         user_id BIGINT(20) UNSIGNED NOT NULL,
@@ -535,8 +534,9 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_wishlist );
 
-    // 24. Tabel Log Kuota
-    $sql_quota_logs = "CREATE TABLE {$table_prefix}quota_logs (
+    // 23. Tabel Log Kuota
+    $table_quota_logs = $table_prefix . 'quota_logs';
+    $sql_quota_logs = "CREATE TABLE $table_quota_logs (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         user_id BIGINT(20) NOT NULL,
         quota_change INT(11) NOT NULL,
@@ -551,18 +551,14 @@ function dw_activate_plugin() {
 
 
     /* =========================================
-       8. FINALISASI & SETUP ROLE
+       8. FINALISASI
        ========================================= */
 
-    // Update versi DB ke v3.5
     update_option( 'dw_core_db_version', '3.5' ); 
     
-    // Load Roles Setup
     if ( ! function_exists( 'dw_create_roles_and_caps' ) ) {
         $roles_file = dirname( __FILE__ ) . '/roles-capabilities.php';
-        if ( file_exists( $roles_file ) ) {
-            require_once $roles_file;
-        }
+        if ( file_exists( $roles_file ) ) { require_once $roles_file; }
     }
 
     if ( function_exists( 'dw_create_roles_and_caps' ) ) {
@@ -575,22 +571,20 @@ function dw_activate_plugin() {
 /**
  * Logika Update Otomatis (Jika versi DB berbeda)
  */
-function dw_check_db_update() {
+function dw_plugin_update_check() {
     $db_version = get_option('dw_core_db_version', '1.0');
     if ($db_version < '3.5') {
         dw_activate_plugin();
     }
 }
-add_action('plugins_loaded', 'dw_check_db_update');
+add_action('plugins_loaded', 'dw_plugin_update_check');
 
-/**
- * Alias wrapper untuk legacy support
- */
 function dw_core_activate_plugin() {
     dw_activate_plugin();
 }
 
-// Hook Registrasi Utama - Gunakan string jika konstanta belum terbaca
-if (defined('DW_CORE_FILE')) {
-    register_activation_hook(DW_CORE_FILE, 'dw_activate_plugin');
-}
+/**
+ * Registrasi Hook Aktivasi
+ * Menggunakan string literal untuk file utama jika konstanta DW_CORE_FILE tidak terbaca
+ */
+register_activation_hook( WP_PLUGIN_DIR . '/desa-wisata-core/desa-wisata-core.php', 'dw_activate_plugin' );
