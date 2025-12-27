@@ -29,7 +29,9 @@ require_once DW_PLUGIN_DIR . 'includes/helpers.php';
 // Post Types & Taxonomies
 require_once DW_PLUGIN_DIR . 'includes/post-types.php';
 require_once DW_PLUGIN_DIR . 'includes/taxonomies.php';
+require_once DW_CORE_PLUGIN_DIR . 'includes/class-dw-referral-handler.php';
 
+`DW_Referral_Handler::generate_code('pedagang')` `DW_Referral_Handler::log_relation(...)` 
 // Access Control & Roles
 require_once DW_PLUGIN_DIR . 'includes/roles-capabilities.php';
 require_once DW_PLUGIN_DIR . 'includes/access-control.php';
