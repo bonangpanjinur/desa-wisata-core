@@ -12,6 +12,7 @@
 if (!defined('ABSPATH')) exit;
 
 $current_user_id = get_current_user_id();
+$user_data       = get_userdata($current_user_id);
 $verifier_code   = get_user_meta($current_user_id, 'dw_verifier_code', true);
 $balance         = (float) get_user_meta($current_user_id, 'dw_balance', true);
 $is_admin        = current_user_can('administrator');
@@ -44,32 +45,38 @@ if (empty($verifier_code) && current_user_can('verifikator_umkm')) {
 ?>
 
 <div class="wrap dw-admin-container">
-    <h1 class="wp-heading-inline">Dashboard Verifikator UMKM</h1>
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h1 class="wp-heading-inline">Dashboard Verifikator UMKM</h1>
+        <div style="background: #fff; padding: 5px 15px; border-radius: 20px; border: 1px solid #ccd0d4; font-size: 12px; font-weight: 600;">
+            <span class="dashicons dashicons-admin-users" style="font-size: 16px; margin-top: 3px; color: #2271b1;"></span> 
+            Akun: <?php echo esc_html($user_data->display_name); ?> (<?php echo esc_html(strtoupper(str_replace('_', ' ', $user_data->roles[0]))); ?>)
+        </div>
+    </div>
     <hr class="wp-header-end">
 
     <div class="dw-dashboard-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; margin-top: 20px;">
         
-        <!-- BOX 1: KODE VERIFIKATOR (Identitas Utama) -->
+        <!-- BOX 1: KODE VERIFIKATOR (Identitas Utama Akun) -->
         <div class="postbox" style="padding: 20px; border-left: 4px solid #2271b1; background: #fff;">
-            <h3 style="margin-top:0; color: #1d2327;">Kode Unik Verifikator</h3>
+            <h3 style="margin-top:0; color: #1d2327;">Identitas Kode Agen</h3>
             <div style="font-size: 28px; font-weight: bold; color: #2271b1; background: #f0f6fb; padding: 15px; border-radius: 8px; text-align: center; border: 1px dashed #2271b1; margin: 15px 0;">
                 <?php echo $verifier_code ? esc_html($verifier_code) : '<span style="color:#d63638; font-size:16px;">KODE BELUM TERSEDIA</span>'; ?>
             </div>
             <p class="description" style="margin-top:10px; font-style: italic;">
-                Berikan kode ini kepada pedagang saat mereka mendaftar. Setiap transaksi dari pedagang yang menggunakan kode Anda akan menyumbang komisi secara otomatis.
+                Berikan kode ini kepada calon pedagang. Akun pedagang yang menggunakan kode ini akan otomatis masuk dalam pengawasan dan bagi hasil Anda.
             </p>
         </div>
 
-        <!-- BOX 2: SALDO EARNINGS (Hasil Kerja) -->
+        <!-- BOX 2: SALDO EARNINGS (Dompet Akun) -->
         <div class="postbox" style="padding: 20px; border-left: 4px solid #46b450; background: #fff;">
-            <h3 style="margin-top:0; color: #1d2327;">Saldo Komisi Saya</h3>
+            <h3 style="margin-top:0; color: #1d2327;">Dompet Komisi</h3>
             <div style="font-size: 28px; font-weight: bold; color: #46b450; margin: 15px 0;">
                 Rp <?php echo number_format($balance, 0, ',', '.'); ?>
             </div>
-            <p class="description">Akumulasi bagi hasil yang telah diverifikasi dari UMKM binaan Anda.</p>
+            <p class="description">Total bagi hasil bersih yang bisa Anda cairkan ke rekening bank.</p>
             <div style="margin-top: 20px;">
                 <button class="button button-primary button-large" style="width:100%; height: 45px; font-weight: bold;">
-                    <span class="dashicons dashicons-money-alt" style="margin-top:4px;"></span> Ajukan Penarikan (Withdraw)
+                    <span class="dashicons dashicons-money-alt" style="margin-top:4px;"></span> Tarik Saldo Ke Rekening
                 </button>
             </div>
         </div>
@@ -77,7 +84,7 @@ if (empty($verifier_code) && current_user_can('verifikator_umkm')) {
         <!-- BOX 3: KONFIGURASI ADMIN (Dinamis) -->
         <?php if ($is_admin) : ?>
         <div class="postbox" style="padding: 20px; border-left: 4px solid #d63638; background: #fff;">
-            <h3 style="margin-top:0; color: #1d2327;">Konfigurasi Komisi (Admin Only)</h3>
+            <h3 style="margin-top:0; color: #1d2327;">Konfigurasi Komisi Global</h3>
             <form method="post" style="margin-top: 15px;">
                 <?php 
                 wp_nonce_field('dw_save_comm_nonce');
@@ -85,7 +92,7 @@ if (empty($verifier_code) && current_user_can('verifikator_umkm')) {
                 ?>
                 <table class="form-table" style="margin:0">
                     <tr>
-                        <th style="width:140px; padding:10px 0; font-size: 13px;">Platform (Pusat)</th>
+                        <th style="width:140px; padding:10px 0; font-size: 13px;">Pusat (Platform)</th>
                         <td><input type="number" name="comm_platform" value="<?php echo esc_attr($comm['platform']); ?>" style="width: 70px; padding: 5px;"> %</td>
                     </tr>
                     <tr>
@@ -97,8 +104,8 @@ if (empty($verifier_code) && current_user_can('verifikator_umkm')) {
                         <td><input type="number" name="comm_verifier" value="<?php echo esc_attr($comm['verifier']); ?>" style="width: 70px; padding: 5px;"> %</td>
                     </tr>
                 </table>
-                <p style="font-size:11px; color:#666; margin: 10px 0;">* Perubahan ini akan berdampak pada transaksi baru setelah tombol simpan diklik.</p>
-                <input type="submit" name="dw_save_comm_settings" class="button button-secondary" value="Simpan Skema Komisi">
+                <p style="font-size:11px; color:#666; margin: 10px 0;">* Admin Pusat mengatur porsi pembagian dari total Admin Fee setiap transaksi.</p>
+                <input type="submit" name="dw_save_comm_settings" class="button button-secondary" value="Simpan Skema">
             </form>
         </div>
         <?php endif; ?>
@@ -106,14 +113,18 @@ if (empty($verifier_code) && current_user_can('verifikator_umkm')) {
 
     <!-- SEKSI TABEL: DAFTAR BINAAN -->
     <div class="dw-table-section" style="margin-top: 40px; background: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border: 1px solid #ccd0d4;">
-        <h2 style="margin-top:0; display: flex; align-items: center;">
-            <span class="dashicons dashicons-store" style="margin-right: 10px;"></span> Daftar UMKM Binaan Anda
-        </h2>
-        <p class="description" style="margin-bottom: 20px;">Daftar pedagang di bawah ini adalah mereka yang mendaftar secara sah menggunakan kode verifikator Anda.</p>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h2 style="margin:0; display: flex; align-items: center;">
+                <span class="dashicons dashicons-store" style="margin-right: 10px; color: #2271b1;"></span> UMKM Binaan Anda
+            </h2>
+            <button class="button button-secondary">
+                <span class="dashicons dashicons-download" style="margin-top:4px;"></span> Export Laporan
+            </button>
+        </div>
+        <p class="description">Daftar pedagang yang sah menggunakan kode verifikator akun Anda.</p>
         
-        <div id="verifikator-umkm-table">
+        <div id="verifikator-umkm-table" style="margin-top: 20px;">
             <?php
-            // Memastikan class list table tersedia
             $list_table_path = plugin_dir_path(__FILE__) . '../list-tables/class-dw-verifikator-pedagang-list-table.php';
             if (file_exists($list_table_path)) {
                 require_once $list_table_path;
@@ -125,7 +136,7 @@ if (empty($verifier_code) && current_user_can('verifikator_umkm')) {
                     echo '<div class="notice notice-error"><p>Gagal memuat tabel: Class tidak ditemukan.</p></div>';
                 }
             } else {
-                echo '<div class="notice notice-warning"><p>File tabel belum tersedia. Silakan buat file <code>class-dw-verifikator-pedagang-list-table.php</code>.</p></div>';
+                echo '<div class="notice notice-warning"><p>File tabel belum tersedia di folder <code>list-tables</code>.</p></div>';
             }
             ?>
         </div>
@@ -133,7 +144,6 @@ if (empty($verifier_code) && current_user_can('verifikator_umkm')) {
 </div>
 
 <style>
-    /* Tambahan styling agar dashboard terlihat lebih premium */
     .dw-admin-container .postbox {
         border-radius: 8px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.05);
@@ -145,5 +155,9 @@ if (empty($verifier_code) && current_user_can('verifikator_umkm')) {
     }
     #verifikator-umkm-table .wp-list-table th {
         background: #f8f9fa;
+    }
+    .dw-admin-container .button-primary {
+        background: #2271b1;
+        border-color: #2271b1;
     }
 </style>
