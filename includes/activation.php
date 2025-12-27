@@ -2,15 +2,8 @@
 /**
  * File Name:   activation.php
  * File Folder: includes/
- * File Path:   includes/activation.php
- *
- * Mengelola pembuatan dan pembaruan seluruh struktur database (Migration).
- * * UPDATE v3.5: 
- * 1. Integrasi Verifikator UMKM (id_verifikator, is_verified).
- * 2. Audit Trail System (Tabel Logs Diperluas).
- * 3. Skema Payout Ledger untuk Multi-Aktor (Platform, Desa, Verifikator).
- * 4. Kompatibilitas penuh dengan skema v1.1.5 (Ojek, Kuota, Kode Pos).
- * * @package DesaWisataCore
+ * Description: File aktivasi plugin utuh terintegrasi v3.5. 
+ * Menangani pembuatan seluruh tabel Desa Wisata Core & Migrasi Verifikator.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -68,12 +61,12 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_desa );
 
-    // 2. Tabel Pedagang (UMKM) - INTEGRASI VERIFIKATOR v3.5
+    // 2. Tabel Pedagang (UMKM) - UPDATE v3.5: Integrasi Verifikator
     $sql_pedagang = "CREATE TABLE {$table_prefix}pedagang (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_user BIGINT(20) UNSIGNED NOT NULL,
         id_desa BIGINT(20) DEFAULT NULL,
-        id_verifikator BIGINT(20) DEFAULT 0, -- NEW: Relasi ke Akun Verifikator
+        id_verifikator BIGINT(20) DEFAULT 0,
         nama_toko VARCHAR(255) NOT NULL,
         slug_toko VARCHAR(255) NOT NULL,
         nama_pemilik VARCHAR(255) NOT NULL,
@@ -92,8 +85,8 @@ function dw_activate_plugin() {
         total_ulasan_toko INT DEFAULT 0,
         status_pendaftaran ENUM('menunggu','disetujui','ditolak','menunggu_desa') DEFAULT 'menunggu_desa',
         status_akun ENUM('aktif','nonaktif','suspend','nonaktif_habis_kuota') DEFAULT 'nonaktif',
-        is_verified TINYINT(1) DEFAULT 0,    -- NEW: Status Verifikasi Fisik/Lapang
-        verified_at DATETIME DEFAULT NULL,   -- NEW: Timestamp Verifikasi
+        is_verified TINYINT(1) DEFAULT 0,
+        verified_at DATETIME DEFAULT NULL,
         is_independent TINYINT(1) DEFAULT 1,
         approved_by VARCHAR(20) DEFAULT NULL,
         sisa_transaksi INT DEFAULT 0,
@@ -117,7 +110,7 @@ function dw_activate_plugin() {
         PRIMARY KEY  (id),
         UNIQUE KEY id_user (id_user),
         KEY id_desa (id_desa),
-        KEY id_verifikator (id_verifikator), -- INDEX untuk dashboard verifikator
+        KEY id_verifikator (id_verifikator),
         KEY slug_toko (slug_toko)
     ) $charset_collate;";
     dbDelta($sql_pedagang);
@@ -154,7 +147,6 @@ function dw_activate_plugin() {
         KEY idx_lokasi_ojek (api_kecamatan_id, status_kerja)
     ) $charset_collate;";
     dbDelta($sql_ojek);
-
 
     /* =========================================
        2. KONTEN (INVENTORY & WISATA)
@@ -230,9 +222,8 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_variasi );
 
-
     /* =========================================
-       3. TRANSAKSI & FLOW KEUANGAN
+       3. TRANSAKSI (E-COMMERCE FLOW & OJEK)
        ========================================= */
 
     // 7. Tabel Transaksi Utama
@@ -268,7 +259,7 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_transaksi );
 
-    // 8. Tabel Sub Transaksi (Per Toko)
+    // 8. Tabel Sub Transaksi
     $sql_sub = "CREATE TABLE {$table_prefix}transaksi_sub (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_transaksi BIGINT(20) NOT NULL,
@@ -307,7 +298,6 @@ function dw_activate_plugin() {
         KEY id_produk (id_produk)
     ) $charset_collate;";
     dbDelta( $sql_items );
-
 
     /* =========================================
        4. MODEL BISNIS: PAKET & KOMISI
@@ -348,7 +338,7 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_pembelian );
 
-    // 12. Tabel Payout Ledger (UPDATE v3.5: Multi-Payable Type)
+    // 12. Tabel Payout Ledger (UPDATE v3.5: Support Verifikator)
     $sql_ledger = "CREATE TABLE {$table_prefix}payout_ledger (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         order_id BIGINT(20) NOT NULL, 
@@ -364,9 +354,8 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_ledger );
 
-
     /* =========================================
-       5. FITUR SOSIAL & PENDUKUNG
+       5. PENDUKUNG LAINNYA
        ========================================= */
 
     // 13. Tabel Cart
@@ -411,7 +400,7 @@ function dw_activate_plugin() {
         biaya DECIMAL(10,2) NOT NULL,
         status ENUM('pending','aktif','selesai','ditolak') DEFAULT 'pending',
         mulai_tanggal DATETIME DEFAULT NULL,
-        selesai_tanggal DATETIME DEFAULT NULL,
+        finished_tanggal DATETIME DEFAULT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY  (id)
     ) $charset_collate;";
@@ -435,12 +424,12 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_ulasan );
 
-    // 17. Tabel Audit Logs (UPDATE v3.5: Struktur Diperluas)
+    // 17. Tabel Logs (Audit Trail v3.5)
     $sql_logs = "CREATE TABLE {$table_prefix}logs (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         user_id BIGINT(20) UNSIGNED DEFAULT 0,
         activity TEXT NOT NULL, 
-        type VARCHAR(50) DEFAULT 'info', -- 'balance', 'auth', 'order', 'info'
+        type VARCHAR(50) DEFAULT 'info',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY  (id),
         KEY user_id (user_id)
@@ -545,7 +534,7 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_wishlist );
 
-    // 24. Tabel Log Kuota (Ojek & Pedagang)
+    // 24. Tabel Log Kuota
     $sql_quota_logs = "CREATE TABLE {$table_prefix}quota_logs (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         user_id BIGINT(20) NOT NULL,
@@ -561,13 +550,13 @@ function dw_activate_plugin() {
 
 
     /* =========================================
-       8. FINALISASI & ROLE SETUP
+       8. FINALISASI & SETUP ROLE
        ========================================= */
 
     // Update versi DB ke v3.5
     update_option( 'dw_core_db_version', '3.5' ); 
     
-    // Pastikan file roles-capabilities sudah di-load
+    // Load Roles Setup
     if ( ! function_exists( 'dw_create_roles_and_caps' ) ) {
         $roles_file = dirname( __FILE__ ) . '/roles-capabilities.php';
         if ( file_exists( $roles_file ) ) {
@@ -575,7 +564,6 @@ function dw_activate_plugin() {
         }
     }
 
-    // Jalankan pendaftaran role terbaru (Termasuk Verifikator UMKM)
     if ( function_exists( 'dw_create_roles_and_caps' ) ) {
         dw_create_roles_and_caps();
     }
