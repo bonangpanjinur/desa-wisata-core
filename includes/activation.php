@@ -4,6 +4,7 @@
  * File Folder: includes/
  * Description: File aktivasi plugin utuh terintegrasi v3.5. 
  * Menangani pembuatan seluruh tabel Desa Wisata Core & Migrasi Verifikator.
+ * Perbaikan: Menghilangkan komentar inline SQL untuk kompatibilitas dbDelta & MariaDB.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -342,7 +343,7 @@ function dw_activate_plugin() {
     $sql_ledger = "CREATE TABLE {$table_prefix}payout_ledger (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         order_id BIGINT(20) NOT NULL, 
-        payable_to_type VARCHAR(50) NOT NULL, -- 'desa', 'platform', atau 'verifikator'
+        payable_to_type VARCHAR(50) NOT NULL, 
         payable_to_id BIGINT(20) NOT NULL, 
         amount DECIMAL(18,2) NOT NULL,
         status VARCHAR(50) DEFAULT 'unpaid',
@@ -589,5 +590,7 @@ function dw_core_activate_plugin() {
     dw_activate_plugin();
 }
 
-// Hook Registrasi Utama
-register_activation_hook(DW_CORE_FILE, 'dw_activate_plugin');
+// Hook Registrasi Utama - Gunakan string jika konstanta belum terbaca
+if (defined('DW_CORE_FILE')) {
+    register_activation_hook(DW_CORE_FILE, 'dw_activate_plugin');
+}
