@@ -1,12 +1,12 @@
 <?php
 /**
  * File Name:   includes/ajax-handlers.php
- * Description: Semua penanganan permintaan AJAX untuk Admin dan Frontend.
+ * Description: Semua penanganan permintaan AJAX terpadu untuk Desa Wisata Core v3.6.
  * * Fitur Utama:
  * 1. Integrasi API Wilayah (Emsifa & Wilayah.id Legacy).
- * 2. Verifikasi Akun Terpadu (Pedagang & Admin Desa).
- * 3. Manajemen Paket Transaksi & Kuota.
- * 4. Kontrol Status Produk Pedagang.
+ * 2. Verifikasi Akun Terpadu (Pedagang & Admin Desa) dari Tabel Kustom.
+ * 3. Manajemen Verifikator UMKM (Statistik & Komisi).
+ * 4. Manajemen Paket Transaksi & Status Produk.
  */
 
 if (!defined('ABSPATH')) exit;
@@ -17,7 +17,7 @@ if (!defined('ABSPATH')) exit;
  * =============================================================================
  */
 
-// Hook untuk kompatibilitas skrip lama (wilayah.id)
+// Legacy Hooks (wilayah.id)
 add_action('wp_ajax_dw_get_cities', 'dw_handle_get_cities');
 add_action('wp_ajax_dw_get_districts', 'dw_handle_get_districts');
 add_action('wp_ajax_dw_get_villages', 'dw_handle_get_villages');
@@ -44,7 +44,7 @@ function dw_handle_get_villages() {
     wp_send_json_success(json_decode(wp_remote_retrieve_body($response)));
 }
 
-// Hook terpadu (Emsifa API dengan Caching)
+// Unified Hook (Emsifa API)
 add_action('wp_ajax_dw_get_wilayah', 'dw_ajax_get_wilayah');
 add_action('wp_ajax_nopriv_dw_get_wilayah', 'dw_ajax_get_wilayah');
 function dw_ajax_get_wilayah() {
@@ -79,16 +79,51 @@ function dw_ajax_get_wilayah() {
 
 /**
  * =============================================================================
- * 2. MODERN ACCOUNT VERIFICATION (PEDAGANG & DESA)
+ * 2. MANAJEMEN VERIFIKATOR UMKM (UNTUK ADMIN PUSAT)
  * =============================================================================
  */
 
 /**
- * Mengambil daftar pendaftaran akun (Pedagang & Admin Desa)
+ * Mengambil Daftar Verifikator (Untuk Admin Pusat)
+ */
+add_action('wp_ajax_dw_get_verifikator_list', 'dw_get_verifikator_list');
+function dw_get_verifikator_list() {
+    global $wpdb;
+    check_ajax_referer('dw_admin_nonce', 'nonce');
+
+    $table = $wpdb->prefix . 'dw_verifikator';
+    $results = $wpdb->get_results("SELECT * FROM $table ORDER BY created_at DESC");
+
+    $data = array();
+    foreach ($results as $row) {
+        $data[] = array(
+            'id'         => $row->id,
+            'name'       => $row->nama_lengkap,
+            'location'   => $row->kecamatan . ', ' . $row->kabupaten,
+            'total_docs' => $row->total_verifikasi_sukses,
+            'income'     => 'Rp ' . number_format($row->total_pendapatan_komisi, 0, ',', '.'),
+            'balance'    => 'Rp ' . number_format($row->saldo_saat_ini, 0, ',', '.'),
+            'status'     => $row->status,
+            'wa'         => $row->nomor_wa
+        );
+    }
+    wp_send_json_success($data);
+}
+
+/**
+ * =============================================================================
+ * 3. VERIFIKASI AKUN (UNTUK VERIFIKATOR / ADMIN DESA)
+ * =============================================================================
+ */
+
+/**
+ * Mengambil Daftar Akun dari Tabel dw_pedagang & dw_desa
  */
 add_action('wp_ajax_dw_get_umkm_list', 'dw_ajax_get_umkm_list');
 function dw_ajax_get_umkm_list() {
+    global $wpdb;
     check_ajax_referer('dw_admin_nonce', 'nonce');
+    
     if (!current_user_can('manage_options') && !current_user_can('admin_desa')) {
         wp_send_json_error('Akses ditolak.');
     }
@@ -96,101 +131,124 @@ function dw_ajax_get_umkm_list() {
     $req_status = isset($_POST['status']) ? sanitize_text_field($_POST['status']) : 'pending';
     $req_role   = isset($_POST['role']) ? sanitize_text_field($_POST['role']) : ''; 
 
-    // Mapping UI status ke Database value (Approved = Active)
-    $status_db = ($req_status === 'approved') ? 'active' : $req_status;
+    $table_pedagang = $wpdb->prefix . 'dw_pedagang';
+    $table_desa     = $wpdb->prefix . 'dw_desa';
+    
+    $results = array();
 
-    $args = array(
-        'number'  => 100,
-        'orderby' => 'user_registered',
-        'order'   => 'DESC'
-    );
-
-    // Filter Role
-    if (!empty($req_role)) {
-        $args['role'] = $req_role;
-    } else {
-        $args['role__in'] = array('pedagang', 'admin_desa');
+    // 1. Ambil Data Pedagang (UMKM)
+    if (empty($req_role) || $req_role === 'pedagang') {
+        $status_query = ($req_status === 'pending') ? 'menunggu_desa' : (($req_status === 'approved') ? 'disetujui' : 'ditolak');
+        
+        $pedagang = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, id_user, nama_toko as name, nama_pemilik as owner, kabupaten_nama, provinsi_nama, status_pendaftaran, created_at, 'Pedagang' as role_type 
+             FROM $table_pedagang WHERE status_pendaftaran = %s",
+            $status_query
+        ));
+        
+        if ($pedagang) $results = array_merge($results, $pedagang);
     }
 
-    // Filter Status Akun (Handling jika meta belum ada)
-    $args['meta_query'] = array('relation' => 'OR');
-    if ($status_db === 'pending') {
-        $args['meta_query'][] = array('key' => '_status_akun', 'compare' => 'NOT EXISTS');
-        $args['meta_query'][] = array('key' => '_status_akun', 'value' => 'pending', 'compare' => '=');
-        $args['meta_query'][] = array('key' => '_status_akun', 'value' => '', 'compare' => '=');
-    } else {
-        $args['meta_query'][] = array('key' => '_status_akun', 'value' => $status_db, 'compare' => '=');
+    // 2. Ambil Data Desa
+    if (empty($req_role) || $req_role === 'admin_desa') {
+        $status_query = ($req_status === 'approved') ? 'aktif' : 'pending';
+        
+        $desa = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, id_user_desa as id_user, nama_desa as name, nama_desa as owner, kabupaten as kabupaten_nama, provinsi as provinsi_nama, status, created_at, 'Desa' as role_type 
+             FROM $table_desa WHERE status = %s",
+            $status_query
+        ));
+        
+        if ($desa) $results = array_merge($results, $desa);
     }
 
-    $users = get_users($args);
-    $data  = array();
-
-    foreach ($users as $user) {
-        // Ambil data lokasi dari meta
-        $prov = get_user_meta($user->ID, 'dw_provinsi_name', true) ?: '-';
-        $kota = get_user_meta($user->ID, 'dw_kota_name', true) ?: '-';
-        $location = ($prov !== '-') ? $kota . ', ' . $prov : 'Lokasi belum diset';
-
+    $data = array();
+    foreach ($results as $row) {
+        $location = ($row->kabupaten_nama) ? $row->kabupaten_nama . ', ' . $row->provinsi_nama : 'Lokasi tidak diset';
+        
         $data[] = array(
-            'id'       => $user->ID,
-            'name'     => get_user_meta($user->ID, 'dw_nama_usaha', true) ?: (get_user_meta($user->ID, 'dw_nama_desa', true) ?: $user->display_name),
-            'owner'    => $user->display_name,
-            'role'     => in_array('admin_desa', (array)$user->roles) ? 'Desa' : 'Pedagang',
+            'id'       => $row->id,
+            'user_id'  => $row->id_user,
+            'name'     => $row->name,
+            'owner'    => $row->owner,
+            'role'     => $row->role_type,
             'location' => $location,
-            'category' => get_user_meta($user->ID, 'dw_kategori_usaha', true) ?: '-',
-            'date'     => date('d/m/Y', strtotime($user->user_registered)),
-            'logo'     => "https://ui-avatars.com/api/?name=" . urlencode($user->display_name) . "&background=random",
+            'date'     => date('d/m/Y', strtotime($row->created_at)),
+            'logo'     => "https://ui-avatars.com/api/?name=" . urlencode($row->name) . "&background=random",
             'status'   => $req_status
         );
     }
+
     wp_send_json_success($data);
 }
 
 /**
- * Memproses Verifikasi Akun (Setuju/Tolak)
+ * Memproses Verifikasi UMKM / Desa (Approve & Reject)
+ * Mencatat Komisi jika yang memproses adalah verifikator terdaftar.
  */
 add_action('wp_ajax_dw_process_umkm_verification', 'dw_ajax_process_umkm_verification');
-add_action('wp_ajax_dw_verify_merchant', 'dw_ajax_process_umkm_verification'); // Alias kompatibilitas
 function dw_ajax_process_umkm_verification() {
-    // Mendukung nonce lama dan baru
-    $nonce = isset($_POST['nonce']) ? $_POST['nonce'] : (isset($_POST['security']) ? $_POST['security'] : '');
-    if (!wp_verify_nonce($nonce, 'dw_admin_nonce') && !wp_verify_nonce($nonce, 'dw_nonce')) {
-        wp_send_json_error('Sesi keamanan kedaluwarsa.');
-    }
+    global $wpdb;
+    check_ajax_referer('dw_admin_nonce', 'nonce');
 
     if (!current_user_can('manage_options') && !current_user_can('admin_desa')) {
         wp_send_json_error('Akses ditolak.');
     }
 
-    $user_id = isset($_POST['user_id']) ? intval($_POST['user_id']) : (isset($_POST['merchant_id']) ? intval($_POST['merchant_id']) : 0);
-    $type    = isset($_POST['type']) ? sanitize_text_field($_POST['type']) : (isset($_POST['verification_action']) ? sanitize_text_field($_POST['verification_action']) : '');
-    $reason  = isset($_POST['reason']) ? sanitize_textarea_field($_POST['reason']) : '';
+    $id      = intval($_POST['user_id']); // Row ID di tabel kustom
+    $role    = sanitize_text_field($_POST['role']); // 'Desa' atau 'Pedagang'
+    $type    = sanitize_text_field($_POST['type']); // 'approve' atau 'reject'
+    $reason  = sanitize_textarea_field($_POST['reason']);
+    $current_user_id = get_current_user_id();
+
+    $table_name = ($role === 'Desa') ? $wpdb->prefix . 'dw_desa' : $wpdb->prefix . 'dw_pedagang';
     
-    if (!$user_id) wp_send_json_error('ID akun tidak valid.');
+    if ($type === 'approve') {
+        if ($role === 'Desa') {
+            $update = $wpdb->update($table_name, array('status' => 'aktif'), array('id' => $id));
+        } else {
+            $update = $wpdb->update($table_name, 
+                array(
+                    'status_pendaftaran' => 'disetujui',
+                    'status_akun' => 'aktif',
+                    'is_verified' => 1,
+                    'verified_at' => current_time('mysql'),
+                    'id_verifikator' => $current_user_id
+                ), 
+                array('id' => $id)
+            );
 
-    $current_admin = wp_get_current_user();
-    $verifier_role = in_array('administrator', (array)$current_admin->roles) ? 'admin_pusat' : 'admin_desa';
-
-    if ($type === 'approve' || $type === 'confirm') {
-        update_user_meta($user_id, '_status_akun', 'active');
-        update_user_meta($user_id, '_approved_by_role', $verifier_role); 
-        update_user_meta($user_id, '_approved_by_user_id', $current_admin->ID);
-        update_user_meta($user_id, '_approved_date', current_time('mysql'));
-
-        if (function_exists('dw_add_log')) {
-            dw_add_log($current_admin->ID, "Menyetujui pendaftaran ID {$user_id} sebagai {$verifier_role}", 'info');
+            // LOGIKA KOMISI VERIFIKATOR UMKM
+            $komisi = 10000; // Contoh: Rp 10.000 per verifikasi sukses
+            $wpdb->query($wpdb->prepare(
+                "UPDATE {$wpdb->prefix}dw_verifikator 
+                 SET total_verifikasi_sukses = total_verifikasi_sukses + 1, 
+                     total_pendapatan_komisi = total_pendapatan_komisi + %d,
+                     saldo_saat_ini = saldo_saat_ini + %d
+                 WHERE id_user = %d",
+                $komisi, $komisi, $current_user_id
+            ));
         }
-        wp_send_json_success('Akun telah berhasil diaktifkan.');
+        
+        if ($update !== false) {
+            wp_send_json_success('Akun berhasil diaktifkan dan diverifikasi.');
+        }
     } else {
-        update_user_meta($user_id, '_status_akun', 'rejected');
-        update_user_meta($user_id, '_rejection_reason', $reason);
-        wp_send_json_success('Pendaftaran akun ditolak.');
+        $update = ($role === 'Desa') ? 
+            $wpdb->update($table_name, array('status' => 'pending', 'alasan_penolakan' => $reason), array('id' => $id)) :
+            $wpdb->update($table_name, array('status_pendaftaran' => 'ditolak'), array('id' => $id));
+            
+        if ($update !== false) {
+            wp_send_json_success('Pendaftaran ditolak.');
+        }
     }
+
+    wp_send_json_error('Gagal memperbarui database.');
 }
 
 /**
  * =============================================================================
- * 3. VERIFIKASI PAKET TRANSAKSI & KUOTA
+ * 4. MANAJEMEN PAKET & PRODUK (LAMA)
  * =============================================================================
  */
 
@@ -216,12 +274,6 @@ function dw_handle_package_verification() {
     }
     wp_send_json_error(['message' => 'Gagal memproses verifikasi paket.']);
 }
-
-/**
- * =============================================================================
- * 4. DASHBOARD PRODUK
- * =============================================================================
- */
 
 add_action('wp_ajax_dw_toggle_product_status', 'dw_handle_toggle_product');
 function dw_handle_toggle_product() {
