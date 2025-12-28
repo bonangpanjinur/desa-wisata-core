@@ -6,6 +6,7 @@
  * - Memperbaiki Fatal error: Cannot redeclare dw_core_load_dependencies().
  * - Mengganti nama fungsi loading dependensi agar tidak bentrok dengan main file.
  * - Memastikan semua komponen inti (UMKM, Verifikator, Pembeli) termuat.
+ * - Terintegrasi dengan Sistem Referral Baru.
  * @package DesaWisataCore
  */
 
@@ -18,9 +19,10 @@ if (!defined('DW_CORE_VERSION')) define('DW_CORE_VERSION', '3.6');
 if (!defined('DW_CORE_PLUGIN_DIR')) define('DW_CORE_PLUGIN_DIR', plugin_dir_path(dirname(__FILE__)));
 if (!defined('DW_CORE_PLUGIN_URL')) define('DW_CORE_PLUGIN_URL', plugin_dir_url(dirname(__FILE__)));
 
-// Fallback legacy constants
+// Fallback legacy constants agar kompatibel dengan kode lama yang pakai DW_PATH
 if (!defined('DW_PLUGIN_DIR')) define('DW_PLUGIN_DIR', DW_CORE_PLUGIN_DIR);
 if (!defined('DW_PLUGIN_URL')) define('DW_PLUGIN_URL', DW_CORE_PLUGIN_URL);
+if (!defined('DW_PATH')) define('DW_PATH', DW_CORE_PLUGIN_DIR);
 
 /**
  * 2. Load Dependencies secara sistematis
@@ -37,13 +39,19 @@ function dw_core_initialize_all_components() {
     // Post Types, Taxonomies & Referral
     require_once DW_CORE_PLUGIN_DIR . 'includes/post-types.php';
     require_once DW_CORE_PLUGIN_DIR . 'includes/taxonomies.php';
-    require_once DW_CORE_PLUGIN_DIR . 'includes/class-dw-referral-handler.php';
+    
+    // --> SISTEM REFERRAL UTAMA (Diintegrasikan dari versi sebelumnya) <--
+    require_once DW_CORE_PLUGIN_DIR . 'includes/class-dw-referral-logic.php'; // Logika Database Referral
+    require_once DW_CORE_PLUGIN_DIR . 'includes/class-dw-referral-hooks.php'; // Hooks Pendaftaran
+    require_once DW_CORE_PLUGIN_DIR . 'includes/class-dw-referral-handler.php'; // Handler AJAX/Legacy
+    // ---------------------------------------------------------------------
 
     // UI/UX & Admin
     require_once DW_CORE_PLUGIN_DIR . 'includes/admin-assets.php';
     require_once DW_CORE_PLUGIN_DIR . 'includes/admin-menus.php';
     require_once DW_CORE_PLUGIN_DIR . 'includes/meta-boxes.php';
     require_once DW_CORE_PLUGIN_DIR . 'includes/admin-ui-tweaks.php';
+    require_once DW_CORE_PLUGIN_DIR . 'includes/list-tables/index.php'; // Loader List Table
 
     // Handlers & Features
     require_once DW_CORE_PLUGIN_DIR . 'includes/ajax-handlers.php';
@@ -51,6 +59,10 @@ function dw_core_initialize_all_components() {
     require_once DW_CORE_PLUGIN_DIR . 'includes/commission-handler.php';
     require_once DW_CORE_PLUGIN_DIR . 'includes/relasi-handler.php';
     require_once DW_CORE_PLUGIN_DIR . 'includes/class-dw-ojek-handler.php';
+
+    // Logic Updates & Seeder (Diintegrasikan dari versi sebelumnya)
+    require_once DW_CORE_PLUGIN_DIR . 'includes/class-dw-seeder.php';
+    require_once DW_CORE_PLUGIN_DIR . 'includes/dw-logic-updates.php';
 
     // Integrasi Eksternal & Fitur Tambahan
     require_once DW_CORE_PLUGIN_DIR . 'includes/whatsapp-templates.php';
@@ -72,6 +84,11 @@ function dw_core_init_classes() {
     // Init Ojek Handler
     if (class_exists('DW_Ojek_Handler')) {
         DW_Ojek_Handler::init();
+    }
+    
+    // Init Referral Hooks (Agar logika pendaftaran Desa/Verifikator/Pedagang jalan)
+    if (class_exists('DW_Referral_Hooks')) {
+        new DW_Referral_Hooks();
     }
 }
 add_action('plugins_loaded', 'dw_core_init_classes', 20);
