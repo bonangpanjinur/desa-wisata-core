@@ -32,7 +32,13 @@ function dw_render_pedagang() {
 
 function dw_render_produk() { 
     require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-produk.php';
-    if (function_exists('dw_produk_page_render')) dw_produk_page_render(); 
+    // Update: Menggunakan nama fungsi render yang sesuai dengan file page-produk.php Anda (dw_produk_page_info_render)
+    // Fallback ke dw_produk_page_render jika dw_produk_page_info_render tidak ada (untuk kompatibilitas)
+    if (function_exists('dw_produk_page_info_render')) {
+        dw_produk_page_info_render(); 
+    } elseif (function_exists('dw_produk_page_render')) {
+        dw_produk_page_render();
+    }
 } 
 
 function dw_render_wisata() { 
