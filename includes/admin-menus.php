@@ -2,7 +2,7 @@
 /**
  * File Name:   includes/admin-menus.php
  * Description: Mengatur menu admin dan meload halaman admin secara Lazy Loading v3.6.
- * UPDATE: Integrasi Penuh Manajemen Pembeli, Verifikator, Desa, dan Log Reward Referral.
+ * UPDATE: Sinkronisasi nama fungsi render dengan file page terbaru.
  * @package DesaWisataCore
  */
 
@@ -22,18 +22,18 @@ function dw_render_dashboard() {
 
 function dw_render_desa() { 
     require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-desa.php';
-    if (function_exists('dw_desa_page_render')) dw_desa_page_render(); 
+    // Update: Sesuai file page-desa.php terbaru
+    if (function_exists('dw_render_page_desa')) dw_render_page_desa(); 
 }
 
 function dw_render_pedagang() { 
     require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-pedagang.php';
-    if (function_exists('dw_pedagang_page_render')) dw_pedagang_page_render(); 
+    // Update: Sesuai file page-pedagang.php terbaru
+    if (function_exists('dw_render_page_pedagang')) dw_render_page_pedagang(); 
 }
 
 function dw_render_produk() { 
     require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-produk.php';
-    // Update: Menggunakan nama fungsi render yang sesuai dengan file page-produk.php Anda (dw_produk_page_info_render)
-    // Fallback ke dw_produk_page_render jika dw_produk_page_info_render tidak ada (untuk kompatibilitas)
     if (function_exists('dw_produk_page_info_render')) {
         dw_produk_page_info_render(); 
     } elseif (function_exists('dw_produk_page_render')) {
@@ -53,6 +53,7 @@ function dw_render_pesanan() {
 
 function dw_render_pembeli() { 
     require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-pembeli.php';
+    if (function_exists('dw_render_page_pembeli')) dw_render_page_pembeli();
 }
 
 function dw_render_komisi() { 
@@ -108,15 +109,20 @@ function dw_render_ojek_management() {
 // v3.6: Render Daftar Reward Referral
 function dw_render_referral_rewards() {
     require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-referral-rewards.php';
+    if (function_exists('dw_render_page_referral_rewards')) dw_render_page_referral_rewards();
 }
 
 // Render Khusus Verifikator
 function dw_render_verifikator_list_page() {
     require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-verifikator-list.php';
+    // Update: Sesuai file page-verifikator-list.php
+    if (function_exists('dw_render_page_verifikator_list')) dw_render_page_verifikator_list();
 }
 
 function dw_render_verifikator_dashboard_page() {
     require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-verifikator-umkm.php';
+    // Update: Sesuai file page-verifikator-umkm.php
+    if (function_exists('dw_render_page_verifikasi_umkm')) dw_render_page_verifikasi_umkm();
 }
 
 /**
