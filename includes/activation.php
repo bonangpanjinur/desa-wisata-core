@@ -2,10 +2,13 @@
 /**
  * File Name:   activation.php
  * File Folder: includes/
- * Description: File aktivasi plugin utuh terintegrasi v3.6. 
- * Menangani pembuatan 25 tabel Desa Wisata Core secara mendetail.
- * UPDATE: Penyesuaian untuk Sistem Referral, Verifikasi Otomatis & Komisi Paket.
- * @package DesaWisataCore
+ * Description: File aktivasi plugin utuh terintegrasi v3.7.
+ * Menangani pembuatan tabel database Desa Wisata Core.
+ * * FIXES APPLIED:
+ * 1. Menghapus komentar SQL inline (-- comment) yang membuat dbDelta gagal.
+ * 2. Memperbaiki format spasi agar sesuai standar ketat dbDelta.
+ * 3. Menambahkan error logging untuk debugging.
+ * * @package DesaWisataCore
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -16,10 +19,14 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Fungsi Utama Aktivasi Plugin
  */
 function dw_activate_plugin() {
+    // Debugging: Cek apakah fungsi ini terpanggil (cek di debug.log)
+    error_log( '[DW Core] Aktivasi dimulai...' );
+
     global $wpdb;
     $charset_collate = $wpdb->get_charset_collate();
     $table_prefix = $wpdb->prefix . 'dw_';
 
+    // Wajib ada untuk fungsi dbDelta()
     require_once( ABSPATH . 'wp-admin/includes/upgrade.php' );
 
     /* =========================================
@@ -27,6 +34,7 @@ function dw_activate_plugin() {
        ========================================= */
 
     // 1. Tabel Desa
+    // Hapus komentar "-- NEW: ..." agar dbDelta bisa membaca query
     $sql_desa = "CREATE TABLE {$table_prefix}desa (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_user_desa BIGINT(20) UNSIGNED NOT NULL,
@@ -37,7 +45,7 @@ function dw_activate_plugin() {
         foto VARCHAR(255) DEFAULT NULL,
         foto_sampul VARCHAR(255) DEFAULT NULL,
         total_pendapatan DECIMAL(15,2) DEFAULT 0,
-        saldo_komisi DECIMAL(15,2) DEFAULT 0, -- NEW: Menyimpan saldo hasil komisi referral
+        saldo_komisi DECIMAL(15,2) DEFAULT 0,
         no_rekening_desa VARCHAR(50) DEFAULT NULL,
         nama_bank_desa VARCHAR(100) DEFAULT NULL,
         atas_nama_rekening_desa VARCHAR(100) DEFAULT NULL,
@@ -64,16 +72,16 @@ function dw_activate_plugin() {
         KEY slug_desa (slug_desa),
         KEY idx_lokasi (api_kabupaten_id)
     ) $charset_collate;";
+    
+    // Eksekusi dbDelta satu per satu untuk memastikan isolasi error
     dbDelta( $sql_desa );
 
     // 2. Tabel Pedagang
-    // Note: id_verifikator digunakan untuk Logic Verifikasi Otomatis
-    // terdaftar_melalui_kode digunakan untuk tracking referral
     $sql_pedagang = "CREATE TABLE {$table_prefix}pedagang (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_user BIGINT(20) UNSIGNED NOT NULL,
         id_desa BIGINT(20) DEFAULT NULL,
-        id_verifikator BIGINT(20) DEFAULT 0, -- Logic: Jika daftar pakai kode Verifikator A, ini terisi ID Verifikator A
+        id_verifikator BIGINT(20) DEFAULT 0,
         nama_toko VARCHAR(255) NOT NULL,
         slug_toko VARCHAR(255) NOT NULL,
         kode_referral_saya VARCHAR(50) DEFAULT NULL,
@@ -182,7 +190,7 @@ function dw_activate_plugin() {
         status ENUM('aktif','pending','nonaktif') DEFAULT 'pending',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        PRIMARY KEY (id),
+        PRIMARY KEY  (id),
         UNIQUE KEY id_user (id_user),
         UNIQUE KEY kode_referral (kode_referral),
         KEY idx_lokasi_v (api_kabupaten_id)
@@ -345,7 +353,6 @@ function dw_activate_plugin() {
        ========================================= */
 
     // 9. Paket Transaksi
-    // UPDATE: Menambahkan 'komisi_nominal' agar bisa setting komisi dalam Rupiah (misal: Rp 5000/paket)
     $sql_paket = "CREATE TABLE {$table_prefix}paket_transaksi (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         nama_paket VARCHAR(100) NOT NULL,
@@ -353,8 +360,8 @@ function dw_activate_plugin() {
         harga DECIMAL(15,2) NOT NULL,
         jumlah_transaksi INT NOT NULL,
         target_role ENUM('pedagang','ojek') NOT NULL DEFAULT 'pedagang', 
-        persentase_komisi_desa DECIMAL(5,2) DEFAULT 0, -- Komisi dalam Persen (Opsional)
-        komisi_nominal DECIMAL(15,2) DEFAULT 0, -- NEW: Komisi dalam Rupiah (Utama)
+        persentase_komisi_desa DECIMAL(5,2) DEFAULT 0,
+        komisi_nominal DECIMAL(15,2) DEFAULT 0,
         status ENUM('aktif','nonaktif') DEFAULT 'aktif',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -363,7 +370,6 @@ function dw_activate_plugin() {
     dbDelta( $sql_paket );
 
     // 10. Pembelian Paket
-    // UPDATE: Menambahkan 'komisi_nominal_cair' untuk snapshot histori
     $sql_pembelian = "CREATE TABLE {$table_prefix}pembelian_paket (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_pedagang BIGINT(20) NOT NULL,
@@ -372,7 +378,7 @@ function dw_activate_plugin() {
         harga_paket DECIMAL(15,2) NOT NULL,
         jumlah_transaksi INT NOT NULL,
         persentase_komisi_desa DECIMAL(5,2) DEFAULT 0,
-        komisi_nominal_cair DECIMAL(15,2) DEFAULT 0, -- NEW: Snapshot komisi yang diberikan ke referrer saat transaksi ini
+        komisi_nominal_cair DECIMAL(15,2) DEFAULT 0,
         url_bukti_bayar VARCHAR(255),
         status ENUM('pending','disetujui','ditolak') DEFAULT 'pending',
         catatan_admin TEXT,
@@ -399,17 +405,17 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_ledger );
 
-    // NEW TABLE: 11B. Riwayat Komisi Masuk (Penting untuk Laporan Desa/Verifikator)
+    // 11B. Riwayat Komisi Masuk
     $sql_riwayat_komisi = "CREATE TABLE {$table_prefix}riwayat_komisi (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
-        id_penerima BIGINT(20) NOT NULL, -- ID Desa atau ID Verifikator
-        role_penerima VARCHAR(50) NOT NULL, -- 'desa' atau 'verifikator'
-        id_sumber_pedagang BIGINT(20) NOT NULL, -- Pedagang yang beli paket
+        id_penerima BIGINT(20) NOT NULL,
+        role_penerima VARCHAR(50) NOT NULL,
+        id_sumber_pedagang BIGINT(20) NOT NULL,
         id_pembelian_paket BIGINT(20) NOT NULL,
         jumlah_komisi DECIMAL(15,2) NOT NULL,
         keterangan TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (id),
+        PRIMARY KEY  (id),
         KEY idx_penerima (id_penerima, role_penerima)
     ) $charset_collate;";
     dbDelta($sql_riwayat_komisi);
@@ -588,7 +594,7 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta($sql_quota_logs);
 
-    // 24. Tabel Reward Referral (Lacak Hubungan Pedagang & Pembeli Baru)
+    // 24. Tabel Reward Referral
     $sql_referral_reward = "CREATE TABLE {$table_prefix}referral_reward (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_pedagang BIGINT(20) NOT NULL,
@@ -597,7 +603,7 @@ function dw_activate_plugin() {
         bonus_quota_diberikan INT DEFAULT 0,
         status ENUM('pending', 'verified', 'fraud') DEFAULT 'pending',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (id),
+        PRIMARY KEY  (id),
         KEY id_pedagang (id_pedagang),
         KEY id_user_baru (id_user_baru)
     ) $charset_collate;";
@@ -607,8 +613,11 @@ function dw_activate_plugin() {
        5. FINALISASI
        ========================================= */
 
-    update_option( 'dw_core_db_version', '3.7' ); // Version Bump
+    update_option( 'dw_core_db_version', '3.7' ); 
     
+    // Log kesuksesan
+    error_log( '[DW Core] Tabel database berhasil dibuat/diupdate.' );
+
     if ( ! function_exists( 'dw_create_roles_and_caps' ) ) {
         $roles_file = dirname( __FILE__ ) . '/roles-capabilities.php';
         if ( file_exists( $roles_file ) ) { require_once $roles_file; }
@@ -630,10 +639,16 @@ function dw_core_activate_plugin() {
 
 /**
  * Registrasi Hook Aktivasi
+ * * Logic sebelumnya mencoba menebak path file utama. Ini berisiko jika folder direname.
+ * Gunakan konstanta DW_CORE_FILE yang didefinisikan di file utama plugin jika ada,
+ * atau gunakan fallback ke path default.
  */
-$main_plugin_file = WP_PLUGIN_DIR . '/desa-wisata-core/desa-wisata-core.php';
-if (file_exists($main_plugin_file)) {
-    register_activation_hook( $main_plugin_file, 'dw_activate_plugin' );
-} elseif (defined('DW_CORE_FILE')) {
+if ( defined( 'DW_CORE_FILE' ) ) {
     register_activation_hook( DW_CORE_FILE, 'dw_activate_plugin' );
+} else {
+    // Fallback manual jika constant belum di-load (jarang terjadi jika flow normal)
+    $main_plugin_file = WP_PLUGIN_DIR . '/desa-wisata-core/desa-wisata-core.php';
+    if (file_exists($main_plugin_file)) {
+        register_activation_hook( $main_plugin_file, 'dw_activate_plugin' );
+    }
 }
