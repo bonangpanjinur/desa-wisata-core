@@ -8,6 +8,9 @@
  * 1. Menghapus komentar SQL inline (-- comment) yang membuat dbDelta gagal.
  * 2. Memperbaiki format spasi agar sesuai standar ketat dbDelta.
  * 3. Menambahkan error logging untuk debugging.
+ * 4. UPDATE v3.8: Penyesuaian skema komisi Paket Transaksi (Generic Commission Fields).
+ * 5. UPDATE v3.9: Menambahkan kolom 'referrer_id' & 'referrer_type' di tabel pembelian_paket 
+ * untuk memastikan relasi komisi terhubung jelas ke Desa atau Verifikator.
  * * @package DesaWisataCore
  */
 
@@ -34,7 +37,6 @@ function dw_activate_plugin() {
        ========================================= */
 
     // 1. Tabel Desa
-    // Hapus komentar "-- NEW: ..." agar dbDelta bisa membaca query
     $sql_desa = "CREATE TABLE {$table_prefix}desa (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_user_desa BIGINT(20) UNSIGNED NOT NULL,
@@ -353,6 +355,7 @@ function dw_activate_plugin() {
        ========================================= */
 
     // 9. Paket Transaksi
+    // UPDATE: Menambahkan komisi_nominal & persentase_komisi (Generic)
     $sql_paket = "CREATE TABLE {$table_prefix}paket_transaksi (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         nama_paket VARCHAR(100) NOT NULL,
@@ -361,6 +364,7 @@ function dw_activate_plugin() {
         jumlah_transaksi INT NOT NULL,
         target_role ENUM('pedagang','ojek') NOT NULL DEFAULT 'pedagang', 
         persentase_komisi DECIMAL(5,2) DEFAULT 0,
+        komisi_nominal DECIMAL(15,2) DEFAULT 0,
         status ENUM('aktif','nonaktif') DEFAULT 'aktif',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -369,6 +373,7 @@ function dw_activate_plugin() {
     dbDelta( $sql_paket );
 
     // 10. Pembelian Paket
+    // UPDATE: Menambahkan referrer_id & referrer_type untuk snapshot relasi komisi
     $sql_pembelian = "CREATE TABLE {$table_prefix}pembelian_paket (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_pedagang BIGINT(20) NOT NULL,
@@ -376,7 +381,9 @@ function dw_activate_plugin() {
         nama_paket_snapshot VARCHAR(100) NOT NULL,
         harga_paket DECIMAL(15,2) NOT NULL,
         jumlah_transaksi INT NOT NULL,
-        persentase_komisi_desa DECIMAL(5,2) DEFAULT 0,
+        referrer_id BIGINT(20) DEFAULT 0, 
+        referrer_type ENUM('desa','verifikator') DEFAULT NULL,
+        persentase_komisi_referrer DECIMAL(5,2) DEFAULT 0,
         komisi_nominal_cair DECIMAL(15,2) DEFAULT 0,
         url_bukti_bayar VARCHAR(255),
         status ENUM('pending','disetujui','ditolak') DEFAULT 'pending',
@@ -384,7 +391,8 @@ function dw_activate_plugin() {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         processed_at DATETIME DEFAULT NULL,
         PRIMARY KEY  (id),
-        KEY id_pedagang (id_pedagang)
+        KEY id_pedagang (id_pedagang),
+        KEY idx_referrer (referrer_id, referrer_type)
     ) $charset_collate;";
     dbDelta( $sql_pembelian );
 
