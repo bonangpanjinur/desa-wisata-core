@@ -1,138 +1,162 @@
 <?php
 /**
  * Page: Manajemen Paket Transaksi
- * Description: CRUD Paket Kuota untuk Pedagang/Desa/Verifikator
- * Update: Perbaikan Label "Komisi Desa" menjadi "Komisi Desa/Verifikator"
+ * Database: dw_paket_transaksi (v3.7)
+ * Features: CRUD (Create, Read, Update, Delete) dengan dukungan Komisi Nominal.
  */
 
-if ( ! defined( 'ABSPATH' ) ) {
-    exit;
-}
+if ( ! defined( 'ABSPATH' ) ) exit;
 
-global $wpdb;
-$table_paket = $wpdb->prefix . 'dw_paket_transaksi';
+function dw_render_paket_transaksi_page() {
+    global $wpdb;
+    $table_paket = $wpdb->prefix . 'dw_paket_transaksi';
 
-// Handle Form Submission (Tambah/Edit)
-if ( isset( $_POST['submit_paket'] ) && check_admin_referer( 'dw_save_paket' ) ) {
-    $nama      = sanitize_text_field( $_POST['nama_paket'] );
-    $deskripsi = sanitize_textarea_field( $_POST['deskripsi'] );
-    $harga     = floatval( $_POST['harga'] );
-    $jumlah    = intval( $_POST['jumlah_transaksi'] );
-    $komisi    = floatval( $_POST['persentase_komisi'] ); // Menggunakan field komisi gabungan
-    
-    $data = array(
-        'nama_paket' => $nama,
-        'deskripsi' => $deskripsi,
-        'harga' => $harga,
-        'jumlah_transaksi' => $jumlah,
-        'persentase_komisi_desa' => $komisi, // Disimpan di kolom database yg lama tapi maknanya baru
-        'status' => 'aktif'
-    );
+    // --- 1. HANDLE POST (SIMPAN / UPDATE) ---
+    if ( isset( $_POST['submit_paket'] ) && check_admin_referer( 'dw_save_paket' ) ) {
+        $data = [
+            'nama_paket'       => sanitize_text_field( $_POST['nama_paket'] ),
+            'deskripsi'        => sanitize_textarea_field( $_POST['deskripsi'] ),
+            'harga'            => floatval( $_POST['harga'] ),
+            'jumlah_transaksi' => intval( $_POST['jumlah_transaksi'] ),
+            'komisi_nominal'   => floatval( $_POST['komisi_nominal'] ), // Field Baru v3.7
+            'status'           => 'aktif'
+        ];
+        $format = ['%s', '%s', '%f', '%d', '%f', '%s'];
 
-    if ( isset( $_POST['paket_id'] ) && ! empty( $_POST['paket_id'] ) ) {
-        $wpdb->update( $table_paket, $data, array( 'id' => intval( $_POST['paket_id'] ) ) );
-        echo '<div class="notice notice-success"><p>Paket berhasil diperbarui.</p></div>';
-    } else {
-        $wpdb->insert( $table_paket, $data );
-        echo '<div class="notice notice-success"><p>Paket baru berhasil dibuat.</p></div>';
+        if ( ! empty( $_POST['paket_id'] ) ) {
+            // UPDATE
+            $wpdb->update( $table_paket, $data, ['id' => intval($_POST['paket_id'])], $format, ['%d'] );
+            echo '<div class="notice notice-success is-dismissible"><p>Paket berhasil diperbarui.</p></div>';
+        } else {
+            // INSERT
+            $wpdb->insert( $table_paket, $data, $format );
+            echo '<div class="notice notice-success is-dismissible"><p>Paket baru berhasil disimpan.</p></div>';
+        }
     }
-}
 
-// Handle Delete
-if ( isset( $_GET['action'] ) && $_GET['action'] == 'delete' && isset( $_GET['id'] ) ) {
-    $wpdb->delete( $table_paket, array( 'id' => intval( $_GET['id'] ) ) );
-    echo '<div class="notice notice-success"><p>Paket dihapus.</p></div>';
-}
+    // --- 2. HANDLE DELETE ---
+    if ( isset( $_GET['action'] ) && $_GET['action'] === 'delete' && isset( $_GET['id'] ) ) {
+        $wpdb->delete( $table_paket, ['id' => intval($_GET['id'])], ['%d'] );
+        echo '<div class="notice notice-success is-dismissible"><p>Paket berhasil dihapus.</p></div>';
+    }
 
-$pakets = $wpdb->get_results( "SELECT * FROM $table_paket ORDER BY harga ASC" );
-?>
+    // --- 3. PREPARE EDIT DATA ---
+    $edit_data = null;
+    if ( isset( $_GET['action'] ) && $_GET['action'] === 'edit' && isset( $_GET['id'] ) ) {
+        $edit_data = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $table_paket WHERE id = %d", intval($_GET['id']) ) );
+    }
 
-<div class="wrap">
-    <h1 class="wp-heading-inline">Manajemen Paket Transaksi & Kuota</h1>
-    
-    <div style="display: flex; gap: 20px; margin-top: 20px;">
-        <!-- Form Tambah/Edit -->
-        <div class="dw-card" style="flex: 1; max-width: 400px;">
-            <h3>Tambah / Edit Paket</h3>
-            <form method="post" action="">
-                <?php wp_nonce_field( 'dw_save_paket' ); ?>
+    // --- 4. FETCH ALL PACKAGES ---
+    $pakets = $wpdb->get_results( "SELECT * FROM $table_paket WHERE status = 'aktif' ORDER BY harga ASC" );
+    ?>
+
+    <div class="wrap">
+        <h1 class="wp-heading-inline">Manajemen Paket & Komisi Referral</h1>
+        <hr class="wp-header-end">
+        
+        <div style="display:flex; gap:20px; margin-top: 20px;">
+            
+            <!-- FORM INPUT (KIRI) -->
+            <div class="dw-card" style="flex:1; background:#fff; padding:20px; border:1px solid #c3c4c7; height:fit-content;">
+                <h2><?php echo $edit_data ? 'Edit Paket' : 'Tambah Paket Baru'; ?></h2>
                 
-                <div class="form-field">
-                    <label>Nama Paket</label>
-                    <input type="text" name="nama_paket" required class="widefat">
-                </div>
-                <br>
-                <div class="form-field">
-                    <label>Deskripsi</label>
-                    <textarea name="deskripsi" class="widefat" rows="3"></textarea>
-                </div>
-                <br>
-                <div class="form-field">
-                    <label>Harga (Rp)</label>
-                    <input type="number" name="harga" required class="widefat">
-                </div>
-                <br>
-                <div class="form-field">
-                    <label>Jumlah Kuota Transaksi</label>
-                    <input type="number" name="jumlah_transaksi" required class="widefat">
-                    <p class="description">Berapa kali pedagang bisa menerima pesanan.</p>
-                </div>
-                <br>
-                <div class="form-field">
-                    <label><strong>Persentase Komisi Desa / Verifikator (%)</strong></label>
-                    <input type="number" step="0.1" name="persentase_komisi" required class="widefat" value="0">
-                    <p class="description">
-                        Persentase ini akan diberikan kepada pihak yang mereferensikan pedagang (Entah itu Kas Desa atau Dompet Verifikator).<br>
-                        <em>Contoh: Isi 10 untuk 10%.</em>
-                    </p>
-                </div>
-                <br>
-                <button type="submit" name="submit_paket" class="button button-primary">Simpan Paket</button>
-            </form>
-        </div>
-
-        <!-- Tabel List -->
-        <div class="dw-card" style="flex: 2;">
-            <table class="wp-list-table widefat fixed striped">
-                <thead>
-                    <tr>
-                        <th>Nama Paket</th>
-                        <th>Harga</th>
-                        <th>Kuota</th>
-                        <th>Komisi (Desa/Verif)</th>
-                        <th>Aksi</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php if ( empty( $pakets ) ) : ?>
-                        <tr><td colspan="5">Belum ada paket tersedia.</td></tr>
-                    <?php else : ?>
-                        <?php foreach ( $pakets as $p ) : ?>
-                        <tr>
-                            <td>
-                                <strong><?php echo esc_html( $p->nama_paket ); ?></strong><br>
-                                <small><?php echo esc_html( $p->deskripsi ); ?></small>
-                            </td>
-                            <td>Rp <?php echo number_format( $p->harga, 0, ',', '.' ); ?></td>
-                            <td><?php echo number_format( $p->jumlah_transaksi ); ?></td>
-                            <td><?php echo floatval( $p->persentase_komisi_desa ); ?>%</td>
-                            <td>
-                                <a href="?page=dw-paket-transaksi&action=delete&id=<?php echo $p->id; ?>" class="button button-small button-link-delete" onclick="return confirm('Hapus paket ini?')">Hapus</a>
-                            </td>
-                        </tr>
-                        <?php endforeach; ?>
+                <form method="post" action="<?php echo remove_query_arg(['action', 'id']); ?>">
+                    <?php wp_nonce_field( 'dw_save_paket' ); ?>
+                    <?php if ($edit_data): ?>
+                        <input type="hidden" name="paket_id" value="<?php echo esc_attr($edit_data->id); ?>">
                     <?php endif; ?>
-                </tbody>
-            </table>
+
+                    <div class="form-field" style="margin-bottom:15px;">
+                        <label style="font-weight:600;">Nama Paket</label>
+                        <input type="text" name="nama_paket" required class="widefat" 
+                               value="<?php echo $edit_data ? esc_attr($edit_data->nama_paket) : ''; ?>"
+                               placeholder="Contoh: Paket Starter">
+                    </div>
+
+                    <div class="form-field" style="margin-bottom:15px;">
+                        <label style="font-weight:600;">Deskripsi</label>
+                        <textarea name="deskripsi" class="widefat" rows="3"><?php echo $edit_data ? esc_textarea($edit_data->deskripsi) : ''; ?></textarea>
+                    </div>
+
+                    <div class="form-field" style="margin-bottom:15px;">
+                        <label style="font-weight:600;">Harga (Rp)</label>
+                        <input type="number" name="harga" required class="widefat" 
+                               value="<?php echo $edit_data ? esc_attr($edit_data->harga) : ''; ?>"
+                               placeholder="50000">
+                    </div>
+
+                    <div class="form-field" style="margin-bottom:15px;">
+                        <label style="font-weight:600;">Kuota Transaksi (Kali)</label>
+                        <input type="number" name="jumlah_transaksi" required class="widefat" 
+                               value="<?php echo $edit_data ? esc_attr($edit_data->jumlah_transaksi) : ''; ?>"
+                               placeholder="100">
+                        <p class="description">Jumlah transaksi yang didapat pedagang.</p>
+                    </div>
+
+                    <!-- UPDATE: Input Komisi Nominal -->
+                    <div style="background:#f0f6fc; padding:15px; border-left:4px solid #72aee6; margin-bottom:20px;">
+                        <label style="font-weight:600; color:#1d2327;">Komisi Referral (Rp)</label>
+                        <p class="description" style="margin:5px 0 10px;">Nominal Rupiah pasti yang akan masuk ke saldo Desa/Verifikator pemilik kode referral.</p>
+                        <input type="number" name="komisi_nominal" required class="widefat" 
+                               value="<?php echo $edit_data ? esc_attr($edit_data->komisi_nominal) : ''; ?>"
+                               placeholder="5000">
+                    </div>
+
+                    <div style="display:flex; gap:10px;">
+                        <button type="submit" name="submit_paket" class="button button-primary button-large" style="width:100%;">
+                            <?php echo $edit_data ? 'Update Paket' : 'Simpan Paket'; ?>
+                        </button>
+                        <?php if ($edit_data): ?>
+                            <a href="<?php echo remove_query_arg(['action', 'id']); ?>" class="button button-secondary button-large">Batal</a>
+                        <?php endif; ?>
+                    </div>
+                </form>
+            </div>
+
+            <!-- TABEL LIST (KANAN) -->
+            <div class="dw-card" style="flex:2; background:#fff; padding:0; border:1px solid #c3c4c7;">
+                <table class="wp-list-table widefat fixed striped">
+                    <thead>
+                        <tr>
+                            <th>Nama Paket</th>
+                            <th>Harga</th>
+                            <th>Kuota</th>
+                            <th>Komisi (Rp)</th>
+                            <th style="width:120px;">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if ( empty( $pakets ) ) : ?>
+                            <tr><td colspan="5" style="padding:20px; text-align:center;">Belum ada paket tersedia.</td></tr>
+                        <?php else : ?>
+                            <?php foreach ( $pakets as $p ) : ?>
+                            <tr>
+                                <td>
+                                    <strong><?php echo esc_html( $p->nama_paket ); ?></strong><br>
+                                    <small style="color:#646970;"><?php echo esc_html( $p->deskripsi ); ?></small>
+                                </td>
+                                <td>Rp <?php echo number_format( $p->harga, 0, ',', '.' ); ?></td>
+                                <td><?php echo number_format( $p->jumlah_transaksi ); ?></td>
+                                <td>
+                                    <span style="color: #008a20; font-weight: bold; background: #e7f7ed; padding: 2px 6px; border-radius: 4px;">
+                                        + Rp <?php echo number_format( $p->komisi_nominal, 0, ',', '.' ); ?>
+                                    </span>
+                                </td>
+                                <td>
+                                    <a href="?page=dw-paket-transaksi&action=edit&id=<?php echo $p->id; ?>" class="button button-small">Edit</a>
+                                    <a href="?page=dw-paket-transaksi&action=delete&id=<?php echo $p->id; ?>" 
+                                       class="button button-small button-link-delete" 
+                                       style="color: #b32d2e;"
+                                       onclick="return confirm('Hapus paket ini selamanya?')">Hapus</a>
+                                </td>
+                            </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
-</div>
-
-<style>
-    .dw-card {
-        background: #fff;
-        padding: 20px;
-        border: 1px solid #c3c4c7;
-        box-shadow: 0 1px 1px rgba(0,0,0,.04);
-    }
-</style>
+    <?php
+}
+?>

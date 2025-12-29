@@ -1,39 +1,23 @@
 <?php
 /**
  * File Name:   page-desa-verifikasi-pedagang.php
- * File Folder: includes/admin-pages/
- * File Path:   includes/admin-pages/page-desa-verifikasi-pedagang.php
- *
- * --- FASE 1: REFAKTOR PENDAFTARAN GRATIS ---
- * PERUBAHAN BESAR:
- * - MENGHAPUS "Tahap 2: Verifikasi Pembayaran".
- * - MENGHAPUS referensi ke `dw_transaksi_pendaftaran`.
- * - MENGHAPUS cek `dw_is_admin_desa_blocked` dan fungsinya.
- * - MENGUBAH handler `approve_kelayakan`:
- * - Sekarang juga mengupdate `status_akun` pedagang menjadi 'aktif'.
- * - Sekarang juga mengubah role user dari 'subscriber' menjadi 'pedagang'.
- * - Mengubah pesan notifikasi menjadi "akun Anda telah diaktifkan".
- *
- * --- PERBAIKAN (MODEL 3 - KUOTA GRATIS) ---
- * - Saat menyetujui kelayakan, sekarang mengambil 'default_kuota_transaksi_gratis'
- * dari 'dw_settings' dan menambahkannya ke 'sisa_transaksi' pedagang.
- * * --- UPDATE (MEMBERSHIP) ---
- * - Fitur ini dikunci jika status_akses_verifikasi desa != 'active' (Premium).
- *
- * @package DesaWisataCore
+ * Description: Verifikasi Pedagang oleh Desa.
+ * * LOGIKA MERGED:
+ * 1. Mempertahankan Cek Membership Premium Desa.
+ * 2. Mempertahankan Pemberian Kuota Gratis saat Approve.
+ * 3. UPDATE QUERY: Hanya menampilkan pedagang yang memakai Kode Referral Desa (atau Kode Pedagang di desa ini) 
+ * DAN tidak dihandle oleh Verifikator.
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
 /**
- * Handler untuk Aksi Admin Desa: Verifikasi Kelayakan, Tolak.
- * (Aksi Pembayaran Dihapus)
+ * Handler Aksi Admin Desa
  */
 function dw_desa_pedagang_verification_handler() {
     if (!isset($_POST['dw_desa_verification_action'])) return;
     if (!wp_verify_nonce($_POST['_wpnonce'], 'dw_desa_pedagang_nonce')) wp_die('Security check failed.');
 
-    // Cek kapabilitas (cek blokir dihapus)
     if (!current_user_can('dw_approve_pedagang')) {
         add_settings_error('dw_desa_notices', 'permission_denied', 'Anda tidak punya izin.', 'error');
         set_transient('settings_errors', get_settings_errors(), 30);
@@ -48,12 +32,12 @@ function dw_desa_pedagang_verification_handler() {
 
     $pedagang_data = $wpdb->get_row($wpdb->prepare("SELECT id_user, id_desa, nama_toko FROM {$wpdb->prefix}dw_pedagang WHERE id = %d", $pedagang_id));
     if (!$pedagang_data) return;
+    
     $id_user_pedagang = $pedagang_data->id_user;
     $desa_id = $pedagang_data->id_desa;
     $pedagang_name = $pedagang_data->nama_toko;
 
-    // --- [LOGIKA BARU] CEK STATUS MEMBERSHIP DESA (SECURITY CHECK) ---
-    // Mencegah bypass via inspect element/request langsung
+    // --- CEK PREMIUM DESA (LOGIKA LAMA) ---
     $desa_status = $wpdb->get_var($wpdb->prepare("SELECT status_akses_verifikasi FROM {$wpdb->prefix}dw_desa WHERE id = %d", $desa_id));
     if ($desa_status !== 'active') {
         add_settings_error('dw_desa_notices', 'feature_locked', 'GAGAL: Fitur Verifikasi Pedagang terkunci. Desa Anda harus status PREMIUM.', 'error');
@@ -61,81 +45,49 @@ function dw_desa_pedagang_verification_handler() {
         wp_redirect($redirect_url);
         exit;
     }
-    // --- [AKHIR LOGIKA BARU] ---
 
-    $log_prefix = '';
-    $notification_subject = '';
-    $notification_message = '';
-    $success_message = '';
-    $error = null;
-
-    // 1. Aksi Verifikasi Kelayakan (menunggu_desa -> disetujui/ditolak)
-    if (in_array($action_type, ['approve_kelayakan', 'reject_kelayakan'])) {
-        $new_status_pendaftaran = ($action_type === 'approve_kelayakan') ? 'disetujui' : 'ditolak';
-
-        // Update status pendaftaran
+    // --- HANDLE APPROVE ---
+    if ($action_type === 'approve_kelayakan') {
+        // Update status
         $wpdb->update(
             $wpdb->prefix . 'dw_pedagang',
-            ['status_pendaftaran' => $new_status_pendaftaran],
+            [
+                'status_pendaftaran' => 'disetujui',
+                'status_akun' => 'aktif', // Langsung aktif
+                'approved_by' => 'desa'
+            ],
             ['id' => $pedagang_id]
         );
 
-        dw_log_activity('KELAYAKAN_' . strtoupper($action_type), "Admin Desa mengubah status kelayakan Pedagang #{$pedagang_id} menjadi {$new_status_pendaftaran}.", get_current_user_id());
-
-        if ($new_status_pendaftaran === 'disetujui') {
-            // --- PERUBAHAN UTAMA (PEMBERIAN KUOTA GRATIS) ---
-            
-            // Ambil default kuota dari settings
-            $options = get_option('dw_settings');
-            $default_kuota = isset($options['kuota_gratis_default']) ? absint($options['kuota_gratis_default']) : 0;
-
-            // Langsung aktifkan akun dan tambahkan kuota gratis
-            $wpdb->update(
-                $wpdb->prefix . 'dw_pedagang',
-                [
-                    'status_akun' => 'aktif', // Langsung 'aktif'
-                    'sisa_transaksi' => $default_kuota // Tambahkan kuota gratis
-                ], 
-                ['id' => $pedagang_id]
-            );
-
-            $user = new WP_User($id_user_pedagang);
-            if ($user->exists()) {
-                $user->remove_role('subscriber');
-                $user->add_role('pedagang'); // Ubah role
-            }
-            // --- AKHIR PERUBAHAN ---
-
-            $success_message = "Kelayakan disetujui. Akun pedagang telah diaktifkan dengan {$default_kuota} kuota transaksi gratis.";
-            $notification_subject = "Pendaftaran Disetujui & Akun Aktif: {$pedagang_name}";
-            $notification_message = "Selamat! Kelayakan pendaftaran toko Anda, '{$pedagang_name}', telah disetujui oleh Admin Desa dan akun Anda sekarang *Aktif*. Anda mendapatkan {$default_kuota} kuota transaksi gratis untuk memulai.";
+        // Beri Kuota Gratis (LOGIKA LAMA)
+        $options = get_option('dw_settings');
+        $default_kuota = isset($options['kuota_gratis_default']) ? absint($options['kuota_gratis_default']) : 0;
         
-        } else { // Jika ditolak
-             $rejection_reason = sanitize_textarea_field($_POST['rejection_reason'] ?? 'Tidak memenuhi kriteria kelayakan lokal.');
-             dw_send_pedagang_notification($id_user_pedagang, "Pendaftaran Ditolak: {$pedagang_name}", "Mohon maaf, pendaftaran toko Anda, '{$pedagang_name}', telah ditolak oleh Admin Desa. Alasan: {$rejection_reason}.");
-             $success_message = 'Kelayakan ditolak. Pedagang dinotifikasi.';
+        $wpdb->update(
+            $wpdb->prefix . 'dw_pedagang',
+            ['sisa_transaksi' => $default_kuota],
+            ['id' => $pedagang_id]
+        );
+
+        // Update Role User
+        $user = new WP_User($id_user_pedagang);
+        if ($user->exists()) {
+            $user->remove_role('subscriber');
+            $user->add_role('pedagang');
         }
 
-    // 2. Aksi Verifikasi Pembayaran (DIHAPUS)
-    } elseif (in_array($action_type, ['approve_pembayaran', 'reject_pembayaran'])) {
-        $error = new WP_Error('rest_invalid_action', 'Aksi verifikasi pembayaran tidak lagi digunakan.', ['status' => 400]);
-    } else {
-        $error = new WP_Error('rest_invalid_action', 'Aksi tidak valid.', ['status' => 400]);
-    }
+        dw_log_activity('VERIFIKASI_DESA', "Desa menyetujui pedagang #{$pedagang_id}", get_current_user_id());
+        add_settings_error('dw_desa_notices', 'success', "Pedagang disetujui. Diberikan {$default_kuota} kuota gratis.", 'success');
 
-    // Handle Hasil
-    if ($error) {
-        add_settings_error('dw_desa_notices', $error->get_error_code(), $error->get_error_message(), 'error');
-    } else {
-        add_settings_error('dw_desa_notices', 'action_success', $success_message, ($action_type == 'reject_kelayakan') ? 'warning' : 'success');
-        if ($log_prefix && function_exists('dw_log_activity')) {
-             dw_log_activity($log_prefix . '_HANDLER', "Admin Desa #".get_current_user_id()." aksi '{$action_type}' Pedagang #{$pedagang_id}.", get_current_user_id());
-        }
-        if ($notification_subject && function_exists('dw_send_pedagang_notification')) {
-             dw_send_pedagang_notification($id_user_pedagang, $notification_subject, $notification_message);
-        }
-         // Invalidate cache notifikasi Admin Desa
-        wp_cache_delete('dw_desa_pending_pedagang_' . $desa_id, 'desa_wisata_core');
+    // --- HANDLE REJECT ---
+    } elseif ($action_type === 'reject_kelayakan') {
+        $alasan = sanitize_textarea_field($_POST['rejection_reason'] ?? '-');
+        $wpdb->update(
+            $wpdb->prefix . 'dw_pedagang',
+            ['status_pendaftaran' => 'ditolak'],
+            ['id' => $pedagang_id]
+        );
+        add_settings_error('dw_desa_notices', 'rejected', "Pedagang ditolak. Alasan: {$alasan}", 'warning');
     }
 
     set_transient('settings_errors', get_settings_errors(), 30);
@@ -144,104 +96,100 @@ function dw_desa_pedagang_verification_handler() {
 }
 add_action('admin_init', 'dw_desa_pedagang_verification_handler');
 
-
 /**
- * Render Halaman Admin Desa: Verifikasi Pedagang.
+ * Render Halaman
  */
 function dw_admin_desa_verifikasi_page_render() {
     global $wpdb;
     $current_user_id = get_current_user_id();
 
-    // UPDATE QUERY: Ambil juga status_akses_verifikasi
+    // Ambil Data Desa User Login
     $desa = $wpdb->get_row($wpdb->prepare("SELECT id, nama_desa, status_akses_verifikasi FROM {$wpdb->prefix}dw_desa WHERE id_user_desa = %d", $current_user_id));
+    
     if (!$desa) {
-        echo '<div class="wrap"><div class="notice notice-error"><p>Anda tidak terhubung dengan Desa manapun. Hubungi Super Admin.</p></div></div>';
+        echo '<div class="wrap"><div class="notice notice-error"><p>Anda tidak terhubung dengan Desa manapun.</p></div></div>';
         return;
     }
-    $desa_id = $desa->id;
 
-    // Ambil data pedagang yang perlu diurus oleh Desa ini.
-    $pedagang_kelayakan = $wpdb->get_results($wpdb->prepare(
-        "SELECT id, id_user, nama_toko, status_pendaftaran, created_at FROM {$wpdb->prefix}dw_pedagang
-         WHERE id_desa = %d AND status_pendaftaran = %s ORDER BY created_at ASC",
-        $desa_id, 'menunggu_desa'
-    ), ARRAY_A);
+    // --- QUERY PENTING: Filter Sesuai Request User ---
+    // 1. id_desa = Desa Ini
+    // 2. id_verifikator = 0 (Jika ada verifikator, masuk ke page verifikator)
+    // 3. terdaftar_melalui_kode != '' (Jika kosong, masuk ke Admin Pusat)
+    $sql = "SELECT * FROM {$wpdb->prefix}dw_pedagang 
+            WHERE id_desa = %d 
+            AND status_pendaftaran IN ('menunggu_desa', 'menunggu') 
+            AND id_verifikator = 0 
+            AND terdaftar_melalui_kode != ''
+            ORDER BY created_at ASC";
 
+    $pedagang_list = $wpdb->get_results($wpdb->prepare($sql, $desa->id), ARRAY_A);
     ?>
-    <div class="wrap dw-wrap">
-        <div class="dw-header">
-            <h1>Verifikasi Pedagang Desa <?php echo esc_html($desa->nama_desa); ?></h1>
-        </div>
-        <?php
-        $errors = get_transient('settings_errors');
-        if($errors) { settings_errors('dw_desa_notices'); delete_transient('settings_errors'); }
-        ?>
 
-        <!-- --- [LOGIKA BARU] UI BLOKIR JIKA TIDAK PREMIUM --- -->
+    <div class="wrap dw-wrap">
+        <h1>Verifikasi Pedagang Desa <?php echo esc_html($desa->nama_desa); ?></h1>
+        
+        <?php settings_errors('dw_desa_notices'); ?>
+
         <?php if ($desa->status_akses_verifikasi !== 'active'): ?>
-            
-            <div style="background: #fff; border-left: 4px solid #d63638; box-shadow: 0 1px 2px rgba(0,0,0,0.1); padding: 30px; margin-top: 20px; text-align: center;">
-                <span class="dashicons dashicons-lock" style="font-size: 60px; height: 60px; width: 60px; color: #d63638; margin-bottom: 20px;"></span>
-                <h2 style="margin-top: 0; color: #333;">Fitur Terkunci (Premium Only)</h2>
-                <p style="font-size: 16px; color: #666; max-width: 600px; margin: 0 auto 20px auto;">
-                    Maaf, fitur verifikasi UMKM/Pedagang hanya tersedia untuk <strong>Desa Premium</strong>. 
-                    Saat ini status desa Anda adalah <strong>FREE / LOCKED</strong>.
-                </p>
+             <!-- TAMPILAN BLOKIR PREMIUM (LAMA) -->
+            <div style="background: #fff; border-left: 4px solid #d63638; padding: 20px; margin-top: 20px;">
+                <h3><span class="dashicons dashicons-lock"></span> Fitur Terkunci</h3>
+                <p>Fitur verifikasi hanya untuk Desa Premium. Silakan upgrade membership desa Anda.</p>
+                <a href="<?php echo admin_url('admin.php?page=dw-desa'); ?>" class="button button-primary">Upgrade Premium</a>
+            </div>
+        <?php else: ?>
+            <!-- TAMPILAN TABEL -->
+            <div class="notice notice-info inline">
                 <p>
-                    Silakan lakukan pembayaran dan upgrade membership desa Anda melalui menu Manajemen Desa untuk membuka fitur ini dan membangun ekosistem ekonomi desa.
+                    Daftar di bawah ini adalah pedagang yang mendaftar menggunakan <strong>Kode Referral Desa Anda</strong> (atau kode pedagang di desa ini). <br>
+                    Pedagang yang mendaftar menggunakan Kode Verifikator akan muncul di dashboard Verifikator terkait. <br>
+                    Pedagang tanpa kode referral akan diverifikasi oleh Admin Pusat.
                 </p>
-                <a href="<?php echo admin_url('admin.php?page=dw-desa'); ?>" class="button button-primary button-hero">Upgrade ke Premium Sekarang</a>
             </div>
 
-        <?php else: ?>
-            <!-- --- TAMPILAN NORMAL (TABEL PEDAGANG) --- -->
-
-            <h2>Verifikasi Kelayakan Lokal (<?php echo count($pedagang_kelayakan); ?>)</h2>
-            <p>Pedagang di tahap ini baru mendaftar. Lakukan verifikasi kelayakan (cek domisili/lokasi usaha). Jika disetujui, akun pedagang akan langsung aktif dan mendapatkan kuota transaksi gratis.</p>
             <table class="wp-list-table widefat fixed striped">
                 <thead>
                     <tr>
-                        <th style="width: 30%;">Nama Toko</th>
-                        <th style="width: 20%;">Pengguna</th>
-                        <th style="width: 30%;">Tanggal Daftar</th>
-                        <th style="width: 20%;">Aksi</th>
+                        <th>Nama Toko</th>
+                        <th>Kode Referral</th>
+                        <th>Owner</th>
+                        <th>Tanggal</th>
+                        <th>Aksi</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <?php if (empty($pedagang_kelayakan)): ?>
-                        <tr><td colspan="4">Tidak ada pedagang menunggu verifikasi kelayakan.</td></tr>
-                    <?php else: foreach ($pedagang_kelayakan as $item): ?>
+                    <?php if (empty($pedagang_list)): ?>
+                        <tr><td colspan="5">Tidak ada pedagang yang perlu diverifikasi oleh Desa.</td></tr>
+                    <?php else: foreach ($pedagang_list as $p): ?>
                         <tr>
-                            <td><strong><?php echo esc_html($item['nama_toko']); ?></strong></td>
-                            <td><?php echo esc_html(get_user_by('id', $item['id_user'])->display_name ?? 'N/A'); ?></td>
-                            <td><?php echo date('d M Y H:i', strtotime($item['created_at'])); ?></td>
                             <td>
-                                 <form method="post" action="<?php echo admin_url('admin.php?page=dw-desa-verifikasi'); ?>" style="display:inline-block;">
-                                    <input type="hidden" name="pedagang_id" value="<?php echo esc_attr($item['id']); ?>">
-                                    <input type="hidden" name="action_type" value="approve_kelayakan">
-                                    <input type="hidden" name="dw_desa_verification_action" value="1">
+                                <strong><?php echo esc_html($p['nama_toko']); ?></strong><br>
+                                <small>WA: <?php echo esc_html($p['nomor_wa']); ?></small>
+                            </td>
+                            <td><span class="badge"><?php echo esc_html($p['terdaftar_melalui_kode']); ?></span></td>
+                            <td><?php echo esc_html($p['nama_pemilik']); ?></td>
+                            <td><?php echo date('d M Y', strtotime($p['created_at'])); ?></td>
+                            <td>
+                                <form method="post" style="display:inline;">
                                     <?php wp_nonce_field('dw_desa_pedagang_nonce'); ?>
-                                    <button type="submit" class="button button-primary button-small" onclick="return confirm('Setujui kelayakan dan aktifkan akun pedagang ini? (Akan mendapat kuota gratis)');">Setujui & Aktifkan</button>
+                                    <input type="hidden" name="dw_desa_verification_action" value="1">
+                                    <input type="hidden" name="pedagang_id" value="<?php echo $p['id']; ?>">
+                                    <button type="submit" name="action_type" value="approve_kelayakan" class="button button-primary button-small">Setujui & Aktifkan</button>
                                 </form>
-
-                                 <form method="post" action="<?php echo admin_url('admin.php?page=dw-desa-verifikasi'); ?>" style="display:inline-block;">
-                                    <input type="hidden" name="pedagang_id" value="<?php echo esc_attr($item['id']); ?>">
-                                    <input type="hidden" name="action_type" value="reject_kelayakan">
-                                    <input type="hidden" name="dw_desa_verification_action" value="1">
+                                <form method="post" style="display:inline;">
                                     <?php wp_nonce_field('dw_desa_pedagang_nonce'); ?>
-                                    <input type="text" name="rejection_reason" placeholder="Alasan Tolak" style="width: 80px; margin-right: 5px;">
-                                    <button type="submit" class="button button-secondary button-small" onclick="return confirm('Yakin menolak kelayakan?');">Tolak</button>
+                                    <input type="hidden" name="dw_desa_verification_action" value="1">
+                                    <input type="hidden" name="pedagang_id" value="<?php echo $p['id']; ?>">
+                                    <input type="text" name="rejection_reason" placeholder="Alasan" style="width:80px; font-size:10px;">
+                                    <button type="submit" name="action_type" value="reject_kelayakan" class="button button-secondary button-small">Tolak</button>
                                 </form>
                             </td>
                         </tr>
                     <?php endforeach; endif; ?>
                 </tbody>
             </table>
-
-        <?php endif; // END IF STATUS ACTIVE ?>
-        
+        <?php endif; ?>
     </div>
     <?php
 }
-
 ?>

@@ -1,4 +1,8 @@
 <?php
+/**
+ * Class DW_Referral_Hooks
+ * Menghubungkan event Pendaftaran & Transaksi dengan Logic Referral.
+ */
 
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
@@ -6,144 +10,91 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class DW_Referral_Hooks {
 
-    private $logic;
+    public function init() {
+        // Saat Pedagang Register -> Cek Kode -> Bind ke Verifikator/Desa
+        add_action( 'dw_after_pedagang_register', array( $this, 'bind_pedagang_to_referrer' ), 10, 2 );
 
-    public function __construct() {
-        $this->logic = new DW_Referral_Logic();
-        add_action( 'user_register', [ $this, 'handle_user_registration' ], 10, 1 );
+        // Saat Pembeli Register -> Cek Kode Pedagang -> Kasih Bonus ke Pedagang
+        add_action( 'dw_after_pembeli_register', array( $this, 'reward_pedagang_referral' ), 10, 2 );
+
+        // Saat Admin ACC Pembelian Paket -> Cairkan Komisi
+        add_action( 'dw_packet_purchase_approved', array( $this, 'process_commission_payment' ), 10, 2 );
     }
 
-    public function handle_user_registration( $user_id ) {
-        $user_info = get_userdata( $user_id );
-        $roles     = $user_info->roles;
-        $name      = $user_info->display_name;
-        $input_code = isset( $_POST['referral_code'] ) ? sanitize_text_field( $_POST['referral_code'] ) : '';
-
+    /**
+     * 1. Binding Pedagang ke Pemilik Kode
+     */
+    public function bind_pedagang_to_referrer( $pedagang_id, $post_data ) {
         global $wpdb;
-        $table_prefix = $wpdb->prefix . 'dw_';
-
-        // --- 1. PEDAGANG ---
-        if ( in_array( 'pedagang', $roles ) || in_array( 'umkm', $roles ) ) {
-            // A. Relasi
-            $this->process_pedagang_relation( $user_id, $input_code, $name );
-            
-            // B. Generate Kode Sendiri
-            $new_code = $this->logic->generate_referral_code( 'pedagang', $name );
-            
-            // Update table dw_pedagang
-            $wpdb->update( 
-                "{$table_prefix}pedagang", 
-                ['kode_referral_saya' => $new_code], 
-                ['id_user' => $user_id] 
-            );
-        }
-
-        // --- 2. PEMBELI ---
-        if ( in_array( 'subscriber', $roles ) || in_array( 'pembeli', $roles ) ) {
-            $this->process_pembeli_bonus( $user_id, $input_code );
-        }
-
-        // --- 3. DESA ---
-        if ( in_array( 'desa', $roles ) ) {
-            $new_code = $this->logic->generate_referral_code( 'desa', $name );
-            $exists = $wpdb->get_var( $wpdb->prepare("SELECT id FROM {$table_prefix}desa WHERE id_user_desa = %d", $user_id) );
-            
-            if($exists) {
-                $wpdb->update( "{$table_prefix}desa", ['kode_referral' => $new_code], ['id_user_desa' => $user_id] );
-            } else {
-                // Buat row baru dengan slug dan data dummy mandatory
-                $slug = sanitize_title($name);
-                $wpdb->insert( "{$table_prefix}desa", [
-                    'id_user_desa' => $user_id, 
-                    'nama_desa' => $name, 
-                    'slug_desa' => $slug,
-                    'kode_referral' => $new_code,
-                    'status' => 'pending'
-                ]);
-            }
-        }
-
-        // --- 4. VERIFIKATOR ---
-        if ( in_array( 'verifikator', $roles ) ) {
-            $new_code = $this->logic->generate_referral_code( 'verifikator', $name );
-            $exists = $wpdb->get_var( $wpdb->prepare("SELECT id FROM {$table_prefix}verifikator WHERE id_user = %d", $user_id) );
-            
-            if($exists) {
-                $wpdb->update( "{$table_prefix}verifikator", ['kode_referral' => $new_code], ['id_user' => $user_id] );
-            } else {
-                // Insert baru
-                $wpdb->insert( "{$table_prefix}verifikator", [
-                    'id_user' => $user_id, 
-                    'nama_lengkap' => $name, 
-                    'nik' => '-', // Mandatory field di schema v3.6
-                    'nomor_wa' => '-',
-                    'kode_referral' => $new_code
-                ]);
-            }
-        }
-    }
-
-    private function process_pedagang_relation( $user_id, $code, $shop_name ) {
-        global $wpdb;
-        $table_prefix = $wpdb->prefix . 'dw_';
         
-        $referrer_data = $this->logic->get_referrer_data( $code );
+        $referral_code = isset( $post_data['kode_referral'] ) ? sanitize_text_field( $post_data['kode_referral'] ) : '';
 
-        $id_desa        = 0; // null di DB, tapi kita set 0 jika perlu atau null
-        $id_verifikator = 0;
-        $is_independent = 1; // 1 = Admin Managed / Independent
-        $terdaftar_via  = $code;
-
-        if ( $referrer_data ) {
-            $is_independent = 0; // Terhubung ke Desa/Verifikator
-            
-            if ( $referrer_data['type'] === 'desa' ) {
-                $id_desa = $referrer_data['id'];
-            } elseif ( $referrer_data['type'] === 'verifikator' ) {
-                $id_verifikator = $referrer_data['id'];
-                // Karena schema verifikator tidak punya kolom parent desa, kita biarkan id_desa kosong/null
-                // Atau set id_desa = 0.
-            }
+        // JIKA TIDAK ADA KODE: Verifikasi lari ke Admin (Desa/Verifikator tidak di-set secara spesifik untuk verifikasi ini)
+        if ( empty( $referral_code ) ) {
+            // Opsional: Anda bisa set flag khusus jika mau, tapi default NULL/0 sudah cukup.
+            return;
         }
 
-        // Cek data pedagang
-        $row_exists = $wpdb->get_row( $wpdb->prepare("SELECT id FROM {$table_prefix}pedagang WHERE id_user = %d", $user_id) );
+        // Cari pemilik
+        $owner = DW_Referral_Logic::resolve_owner( $referral_code );
 
-        $data = [
-            'id_desa'         => $id_desa ?: NULL,
-            'id_verifikator'  => $id_verifikator,
-            'is_independent'  => $is_independent,
-            'terdaftar_melalui_kode' => $terdaftar_via
-        ];
+        if ( $owner ) {
+            $update_data = array(
+                'terdaftar_melalui_kode' => $referral_code
+            );
 
-        if ( $row_exists ) {
-            $wpdb->update( "{$table_prefix}pedagang", $data, ['id_user' => $user_id] );
-        } else {
-            // Insert data baru (Schema Pedagang v3.6 banyak kolom not null)
-            // Kita isi default dummy untuk field NOT NULL
-            $slug = sanitize_title($shop_name);
-            $insert_data = array_merge($data, [
-                'id_user' => $user_id,
-                'nama_toko' => $shop_name,
-                'slug_toko' => $slug,
-                'nama_pemilik' => $shop_name,
-                'nomor_wa' => '-',
-                'status_pendaftaran' => 'menunggu_desa'
-            ]);
-            $wpdb->insert( "{$table_prefix}pedagang", $insert_data );
+            // LOGIKA VERIFIKASI SESUAI REQUEST:
+            // Jika kode Verifikator -> Yang verifikasi Verifikator
+            if ( $owner['type'] === 'verifikator' ) {
+                $update_data['id_verifikator'] = $owner['id'];
+                // Status pendaftaran tetap menunggu agar diverifikasi di halaman verifikator
+            }
+            // Jika kode Desa -> Yang verifikasi Desa
+            elseif ( $owner['type'] === 'desa' ) {
+                $update_data['id_desa'] = $owner['id'];
+                $update_data['id_verifikator'] = 0; // Pastikan 0 agar tidak masuk list verifikator
+            }
+
+            $wpdb->update( "{$wpdb->prefix}dw_pedagang", $update_data, array( 'id' => $pedagang_id ) );
         }
     }
 
-    private function process_pembeli_bonus( $user_id, $code ) {
-        if ( empty( $code ) ) return;
-        $referrer_data = $this->logic->get_referrer_data( $code );
+    /**
+     * 2. Reward Kuota Pedagang (Saat Pembeli Daftar)
+     */
+    public function reward_pedagang_referral( $user_id_pembeli, $post_data ) {
+        global $wpdb;
+        $referral_code = isset( $post_data['kode_referral_pedagang'] ) ? sanitize_text_field( $post_data['kode_referral_pedagang'] ) : '';
+        
+        if ( empty( $referral_code ) ) return;
 
-        if ( $referrer_data && $referrer_data['type'] === 'pedagang' ) {
-            $pedagang_user_id = $referrer_data['user_id'];
-            update_user_meta( $user_id, 'dw_referred_by_pedagang', $pedagang_user_id );
-            
-            // Panggil fungsi add bonus yang sudah support table referral_reward
-            $this->logic->add_transaction_quota( $pedagang_user_id, $code, $user_id );
+        $owner = DW_Referral_Logic::resolve_owner( $referral_code );
+
+        if ( $owner && $owner['type'] === 'pedagang' ) {
+            $pedagang_id = $owner['id'];
+            $bonus_kuota = 5; // Configurable
+
+            // Log Reward
+            $wpdb->insert(
+                "{$wpdb->prefix}dw_referral_reward",
+                array(
+                    'id_pedagang' => $pedagang_id,
+                    'id_user_baru' => $user_id_pembeli,
+                    'kode_referral_used' => $referral_code,
+                    'bonus_quota_diberikan' => $bonus_kuota,
+                    'status' => 'verified'
+                )
+            );
+
+            // Tambah Kuota
+            $wpdb->query( $wpdb->prepare( "UPDATE {$wpdb->prefix}dw_pedagang SET sisa_transaksi = sisa_transaksi + %d, total_referral_pembeli = total_referral_pembeli + 1 WHERE id = %d", $bonus_kuota, $pedagang_id ) );
         }
+    }
+
+    /**
+     * 3. Trigger Komisi
+     */
+    public function process_commission_payment( $purchase_id, $pedagang_id ) {
+        DW_Referral_Logic::distribute_commission( $purchase_id, $pedagang_id );
     }
 }
