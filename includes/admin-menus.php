@@ -1,7 +1,7 @@
 <?php
 /**
  * File Name:   includes/admin-menus.php
- * Description: Mengatur menu admin dan meload halaman admin secara Lazy Loading v3.6.
+ * Description: Mengatur menu admin dan meload halaman admin secara Lazy Loading v3.7.
  * UPDATE: Sinkronisasi nama fungsi render dengan file page terbaru.
  * @package DesaWisataCore
  */
@@ -22,8 +22,12 @@ function dw_render_dashboard() {
 
 function dw_render_desa() { 
     require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-desa.php';
-    // Update: Sesuai file page-desa.php terbaru
-    if (function_exists('dw_render_page_desa')) dw_render_page_desa(); 
+    // Update: Sesuai file page-desa.php terbaru (dw_desa_page_render)
+    if (function_exists('dw_desa_page_render')) {
+        dw_desa_page_render(); 
+    } elseif (function_exists('dw_render_page_desa')) {
+        dw_render_page_desa(); // Fallback untuk kompatibilitas
+    }
 }
 
 function dw_render_pedagang() { 
@@ -106,17 +110,24 @@ function dw_render_ojek_management() {
     if (function_exists('dw_ojek_management_page_render')) dw_ojek_management_page_render();
 }
 
-// v3.6: Render Daftar Reward Referral
+// v3.6: Render Daftar Reward Referral (Jika filenya ada)
 function dw_render_referral_rewards() {
-    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-referral-rewards.php';
-    if (function_exists('dw_render_page_referral_rewards')) dw_render_page_referral_rewards();
+    $file_path = DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-referral-rewards.php';
+    if (file_exists($file_path)) {
+        require_once $file_path;
+        if (function_exists('dw_render_page_referral_rewards')) dw_render_page_referral_rewards();
+    } else {
+        echo '<div class="wrap"><h1>Log Reward Referral</h1><p>File halaman belum tersedia.</p></div>';
+    }
 }
 
-// Render Khusus Verifikator
+// Render Khusus Verifikator List
 function dw_render_verifikator_list_page() {
     require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-verifikator-list.php';
-    // Update: Sesuai file page-verifikator-list.php
-    if (function_exists('dw_render_page_verifikator_list')) dw_render_page_verifikator_list();
+    // Update: Memanggil fungsi jika ada, atau membiarkan require_once menampilkan konten jika file bersifat direct-execute
+    if (function_exists('dw_render_page_verifikator_list')) {
+        dw_render_page_verifikator_list();
+    }
 }
 
 function dw_render_verifikator_dashboard_page() {

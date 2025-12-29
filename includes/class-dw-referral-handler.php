@@ -1,9 +1,10 @@
 <?php
 /**
- * File Name:   includes/class-dw-referral-handler.php
- * Description: Class utama untuk menangani logika sistem referral global v3.9.
- * Menangani generate kode unik, validasi pemilik, dan pencatatan relasi jaringan.
- * @package DesaWisataCore
+ * File Name:       class-dw-referral-handler.php
+ * File Folder:     includes/
+ * Description:     Menangani logika referral pendaftaran pedagang dan atribusi komisi.
+ * Logic Update: Mendukung split ownership (Milik Desa vs Milik Verifikator).
+ * @package         DesaWisataCore
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -13,131 +14,129 @@ if ( ! defined( 'ABSPATH' ) ) {
 class DW_Referral_Handler {
 
     /**
-     * 1. GENERATE KODE REFERRAL UNIK
-     * Membuat kode acak dengan prefix tertentu dan memastikan belum dipakai.
-     * * @param string $type Jenis entitas ('desa', 'pedagang', 'verifikator', 'pembeli')
-     * @return string Kode unik (Contoh: VF-AB123)
+     * Cookie name for referral tracking
      */
-    public static function generate_code($type = 'pembeli') {
-        global $wpdb;
-        
-        $prefix_map = [
-            'desa'        => 'DS', // Desa
-            'pedagang'    => 'UM', // UMKM
-            'verifikator' => 'VF', // Verifikator
-            'pembeli'     => 'PB'  // Pembeli
-        ];
+    const COOKIE_NAME = 'dw_ref_code';
 
-        $prefix = isset($prefix_map[$type]) ? $prefix_map[$type] : 'USR';
-        $is_unique = false;
-        $code = '';
+    /**
+     * Duration of referral cookie (30 days)
+     */
+    const COOKIE_EXPIRY = 2592000; 
 
-        // Loop sampai menemukan kode yang belum ada di database manapun
-        while (!$is_unique) {
-            // Format: PREFIX + 5 Karakter Random (Angka/Huruf) -> Contoh: VF-9A2K1
-            $random = strtoupper(substr(md5(uniqid(rand(), true)), 0, 5));
-            $code = $prefix . '-' . $random;
+    public function __construct() {
+        // 1. Capture Referral Code dari URL
+        add_action( 'init', array( $this, 'capture_referral_code' ) );
 
-            // Cek ketersediaan di semua tabel
-            $exists_desa = $wpdb->get_var($wpdb->prepare("SELECT id FROM {$wpdb->prefix}dw_desa WHERE kode_referal = %s", $code));
-            $exists_umkm = $wpdb->get_var($wpdb->prepare("SELECT id FROM {$wpdb->prefix}dw_pedagang WHERE kode_referal = %s", $code));
-            $exists_verif = $wpdb->get_var($wpdb->prepare("SELECT id FROM {$wpdb->prefix}dw_verifikator WHERE kode_referal = %s", $code));
-            $exists_user = $wpdb->get_var($wpdb->prepare("SELECT id FROM {$wpdb->prefix}dw_pembeli WHERE kode_referal = %s", $code));
+        // 2. Hook saat Pedagang Baru Mendaftar/Dibuat
+        // Asumsi action hook ini dipanggil di form registrasi pedagang
+        add_action( 'dw_after_create_pedagang', array( $this, 'process_new_pedagang_referral' ), 10, 2 );
+    }
 
-            if (!$exists_desa && !$exists_umkm && !$exists_verif && !$exists_user) {
-                $is_unique = true;
+    /**
+     * Menangkap ?ref=KODE dari URL dan simpan ke Cookie
+     */
+    public function capture_referral_code() {
+        if ( isset( $_GET['ref'] ) && ! empty( $_GET['ref'] ) ) {
+            $ref_code = sanitize_text_field( $_GET['ref'] );
+            
+            // Validasi kode referral ada di database (bisa milik Desa atau Verifikator)
+            if ( $this->is_valid_referral_code( $ref_code ) ) {
+                setcookie( self::COOKIE_NAME, $ref_code, time() + self::COOKIE_EXPIRY, COOKIEPATH, COOKIE_DOMAIN );
             }
         }
-
-        return $code;
     }
 
     /**
-     * 2. CARI PEMILIK KODE (UPLINE)
-     * Mencari tahu kode referral ini milik siapa.
-     * * @param string $code Kode referral yang diinput
-     * @return array|false Data pemilik ['type', 'id', 'name'] atau false jika invalid
+     * Validasi apakah kode referral valid (milik Desa atau Verifikator aktif)
      */
-    public static function get_referral_owner($code) {
+    private function is_valid_referral_code( $code ) {
         global $wpdb;
-        $code = strtoupper(sanitize_text_field($code));
+        
+        // Cek di tabel Desa
+        $desa = $wpdb->get_row( $wpdb->prepare( "SELECT id FROM {$wpdb->prefix}dw_desa WHERE kode_referral = %s AND status = 'aktif'", $code ) );
+        if ( $desa ) return true;
 
-        // 1. Cek Verifikator (Prioritas)
-        $verif = $wpdb->get_row($wpdb->prepare("SELECT id, nama_lengkap FROM {$wpdb->prefix}dw_verifikator WHERE kode_referal = %s AND status = 'aktif'", $code));
-        if ($verif) return ['type' => 'verifikator', 'id' => $verif->id, 'name' => $verif->nama_lengkap];
-
-        // 2. Cek Desa
-        $desa = $wpdb->get_row($wpdb->prepare("SELECT id, nama_desa FROM {$wpdb->prefix}dw_desa WHERE kode_referal = %s", $code));
-        if ($desa) return ['type' => 'desa', 'id' => $desa->id, 'name' => $desa->nama_desa];
-
-        // 3. Cek Pedagang
-        $umkm = $wpdb->get_row($wpdb->prepare("SELECT id, nama_toko FROM {$wpdb->prefix}dw_pedagang WHERE kode_referal = %s", $code));
-        if ($umkm) return ['type' => 'pedagang', 'id' => $umkm->id, 'name' => $umkm->nama_toko];
-
-        // 4. Cek Pembeli
-        $pembeli = $wpdb->get_row($wpdb->prepare("SELECT id, nama_pembeli FROM {$wpdb->prefix}dw_pembeli WHERE kode_referal = %s", $code));
-        if ($pembeli) return ['type' => 'pembeli', 'id' => $pembeli->id, 'name' => $pembeli->nama_pembeli];
+        // Cek di tabel Verifikator
+        $verifikator = $wpdb->get_row( $wpdb->prepare( "SELECT id FROM {$wpdb->prefix}dw_verifikator WHERE kode_referral = %s AND status = 'aktif'", $code ) );
+        if ( $verifikator ) return true;
 
         return false;
     }
 
     /**
-     * 3. CATAT RELASI (SIAPA AJAK SIAPA)
-     * Menyimpan log permanen ke tabel dw_referral_relations
-     * * @param string $child_type Tipe yang mendaftar ('pedagang' / 'pembeli')
-     * @param int $child_id ID dari yang mendaftar (Primary Key tabel ybs)
-     * @param string $referral_code Kode yang digunakan
-     * @return bool True jika berhasil
+     * Proses Referral saat Pedagang Baru Mendaftar
+     * @param int $pedagang_id ID dari tabel dw_pedagang
+     * @param int $user_id ID dari tabel wp_users
      */
-    public static function log_relation($child_type, $child_id, $referral_code) {
+    public function process_new_pedagang_referral( $pedagang_id, $user_id ) {
         global $wpdb;
 
-        if (empty($referral_code)) return false;
+        $ref_code = '';
 
-        $owner = self::get_referral_owner($referral_code);
+        // Prioritas 1: Ambil dari Input Form (jika user manual input kode)
+        if ( isset( $_POST['kode_referral'] ) && ! empty( $_POST['kode_referral'] ) ) {
+            $ref_code = sanitize_text_field( $_POST['kode_referral'] );
+        } 
+        // Prioritas 2: Ambil dari Cookie
+        elseif ( isset( $_COOKIE[self::COOKIE_NAME] ) ) {
+            $ref_code = sanitize_text_field( $_COOKIE[self::COOKIE_NAME] );
+        }
 
-        if ($owner) {
-            // Simpan ke tabel relations
-            $wpdb->insert(
-                $wpdb->prefix . 'dw_referral_relations',
-                array(
-                    'referral_code' => $referral_code,
-                    'parent_type'   => $owner['type'],
-                    'parent_id'     => $owner['id'],
-                    'child_type'    => $child_type,
-                    'child_id'      => $child_id,
-                    'created_at'    => current_time('mysql')
-                ),
-                array('%s', '%s', '%d', '%s', '%d', '%s')
+        if ( empty( $ref_code ) ) {
+            return; // Tidak ada referral, skip
+        }
+
+        // --- LOGIKA UTAMA: Tentukan Pemilik Kode (Desa atau Verifikator) ---
+
+        // 1. Cek Apakah Milik Desa?
+        $desa = $wpdb->get_row( $wpdb->prepare( "SELECT id, id_user_desa FROM {$wpdb->prefix}dw_desa WHERE kode_referral = %s", $ref_code ) );
+        
+        if ( $desa ) {
+            // Update Pedagang: Set id_desa, id_verifikator = 0
+            $wpdb->update( 
+                "{$wpdb->prefix}dw_pedagang", 
+                array( 
+                    'id_desa' => $desa->id,
+                    'id_verifikator' => 0,
+                    'terdaftar_melalui_kode' => $ref_code
+                ), 
+                array( 'id' => $pedagang_id ) 
             );
 
-            // Update statistik Parent (Opsional, contoh logika reward)
-            // Misalnya: Menambah poin ke Verifikator/Desa
-            // self::add_reward_point($owner['type'], $owner['id']);
-
-            return true;
+            // Simpan Meta: Tujuan Komisi = Desa
+            update_user_meta( $user_id, 'dw_commission_dest_type', 'desa' );
+            update_user_meta( $user_id, 'dw_commission_dest_id', $desa->id );
+            
+            // Log
+            do_action( 'dw_log_activity', $user_id, "Mendaftar via Referral Desa: $ref_code" );
+            return;
         }
 
-        return false;
-    }
+        // 2. Cek Apakah Milik Verifikator?
+        $verifikator = $wpdb->get_row( $wpdb->prepare( "SELECT id, id_user FROM {$wpdb->prefix}dw_verifikator WHERE kode_referral = %s", $ref_code ) );
 
-    /**
-     * 4. SET KODE REFERRAL UNTUK USER LAMA (Utility)
-     * Bisa dijalankan via Cron atau tombol Admin untuk mengisi kode kosong.
-     */
-    public static function populate_missing_codes() {
-        global $wpdb;
+        if ( $verifikator ) {
+            // Update Pedagang: Set id_verifikator, id_desa bisa NULL atau ikut lokasi
+            // Note: id_desa mungkin perlu diisi berdasarkan lokasi geografis nanti, tapi ownership referral ada di verifikator
+            $wpdb->update( 
+                "{$wpdb->prefix}dw_pedagang", 
+                array( 
+                    'id_verifikator' => $verifikator->id,
+                    'terdaftar_melalui_kode' => $ref_code
+                    // 'id_desa' dibiarkan NULL atau diisi logic geolocation terpisah
+                ), 
+                array( 'id' => $pedagang_id ) 
+            );
 
-        // Populate Verifikator
-        $verifs = $wpdb->get_results("SELECT id FROM {$wpdb->prefix}dw_verifikator WHERE kode_referal IS NULL OR kode_referal = ''");
-        foreach($verifs as $v) {
-            $wpdb->update("{$wpdb->prefix}dw_verifikator", ['kode_referal' => self::generate_code('verifikator')], ['id' => $v->id]);
-        }
+            // Simpan Meta: Tujuan Komisi = Verifikator
+            update_user_meta( $user_id, 'dw_commission_dest_type', 'verifikator' );
+            update_user_meta( $user_id, 'dw_commission_dest_id', $verifikator->id );
 
-        // Populate Pedagang
-        $umkms = $wpdb->get_results("SELECT id FROM {$wpdb->prefix}dw_pedagang WHERE kode_referal IS NULL OR kode_referal = ''");
-        foreach($umkms as $u) {
-            $wpdb->update("{$wpdb->prefix}dw_pedagang", ['kode_referal' => self::generate_code('pedagang')], ['id' => $u->id]);
+            // Log
+            do_action( 'dw_log_activity', $user_id, "Mendaftar via Referral Verifikator: $ref_code" );
+            return;
         }
     }
 }
+
+new DW_Referral_Handler();
