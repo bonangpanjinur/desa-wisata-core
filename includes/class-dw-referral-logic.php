@@ -2,7 +2,7 @@
 /**
  * Class DW_Referral_Logic
  * Logic inti untuk melacak pemilik kode referral di database v3.7
- * Menangani pencarian pemilik kode di tabel Desa, Verifikator, dan Pedagang.
+ * UPDATE: Menambahkan kembali method generate_referral_code() untuk memperbaiki Fatal Error.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -10,6 +10,23 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 class DW_Referral_Logic {
+
+    /**
+     * Generate Kode Referral Unik
+     * Digunakan saat pembuatan Pedagang/Desa/Verifikator baru.
+     * Format: [PREFIX]-[USER_ID]-[RANDOM] (Contoh: PDG-102-X9A2)
+     */
+    public static function generate_referral_code( $user_id, $role ) {
+        $prefix = 'REF';
+        if ( $role === 'desa' ) $prefix = 'DESA';
+        elseif ( $role === 'verifikator' ) $prefix = 'VERIF';
+        elseif ( $role === 'pedagang' ) $prefix = 'PDG';
+        
+        // Buat string acak 4 karakter
+        $rand = strtoupper( substr( md5( time() . mt_rand() ), 0, 4 ) );
+        
+        return $prefix . '-' . $user_id . '-' . $rand;
+    }
 
     /**
      * Mencari pemilik kode referral.
@@ -43,7 +60,7 @@ class DW_Referral_Logic {
             ];
         }
 
-        // 3. Cek Tabel Pedagang (Untuk referral ke pembeli atau sesama pedagang jika ada logic MLM)
+        // 3. Cek Tabel Pedagang
         $pedagang = $wpdb->get_row( $wpdb->prepare( "SELECT id, id_user, nama_toko FROM {$wpdb->prefix}dw_pedagang WHERE kode_referral_saya = %s AND status_akun = 'aktif'", $code ) );
         if ( $pedagang ) {
             return [
@@ -80,7 +97,7 @@ class DW_Referral_Logic {
     }
 
     /**
-     * Mencatat Riwayat Komisi & Update Saldo (Untuk Desa / Verifikator)
+     * Mencatat Riwayat Komisi & Update Saldo
      */
     public static function distribute_commission( $purchase_id, $pedagang_id ) {
         global $wpdb;
@@ -88,7 +105,6 @@ class DW_Referral_Logic {
         // 1. Cek Pedagang daftar lewat siapa
         $pedagang = $wpdb->get_row( $wpdb->prepare( "SELECT terdaftar_melalui_kode, id_verifikator, id_desa FROM {$wpdb->prefix}dw_pedagang WHERE id = %d", $pedagang_id ) );
         
-        // Jika tidak ada kode referral, komisi masuk Admin (System default, tidak dicatat di tabel komisi referral)
         if ( ! $pedagang || empty( $pedagang->terdaftar_melalui_kode ) ) return; 
 
         // 2. Cari pemilik kode
@@ -123,7 +139,7 @@ class DW_Referral_Logic {
             $wpdb->query( $wpdb->prepare( "UPDATE {$wpdb->prefix}dw_verifikator SET total_pendapatan_komisi = total_pendapatan_komisi + %f, saldo_saat_ini = saldo_saat_ini + %f WHERE id = %d", $jumlah_komisi, $jumlah_komisi, $owner['id'] ) );
         }
         
-        // Update snapshot di pembelian
+        // Update snapshot
         $wpdb->update(
             "{$wpdb->prefix}dw_pembelian_paket",
             ['komisi_nominal_cair' => $jumlah_komisi],
