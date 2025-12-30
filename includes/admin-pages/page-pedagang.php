@@ -16,6 +16,7 @@ function dw_pedagang_page_render() {
     global $wpdb;
     $table_name = $wpdb->prefix . 'dw_pedagang';
     $table_desa = $wpdb->prefix . 'dw_desa';
+    $table_verifikator = $wpdb->prefix . 'dw_verifikator'; // Referensi tabel verifikator
     $table_users = $wpdb->users;
     
     $message = '';
@@ -46,13 +47,29 @@ function dw_pedagang_page_render() {
             $id_user = intval($_POST['id_user_pedagang']);
             $kelurahan_id = sanitize_text_field($_POST['pedagang_nama_id']); 
             
-            // Relasi Otomatis ke Desa berdasarkan Kelurahan
+            // 1. Relasi Daerah (Otomatis berdasarkan Kelurahan)
             $desa_terkait = $wpdb->get_row($wpdb->prepare(
                 "SELECT id, nama_desa FROM $table_desa WHERE api_kelurahan_id = %s LIMIT 1",
                 $kelurahan_id
             ));
             $id_desa = $desa_terkait ? $desa_terkait->id : 0;
             $is_independent = ($id_desa == 0) ? 1 : 0;
+
+            // 2. Relasi Referral / Verifikator (Update ID jika kode berubah)
+            // Input manual dari admin
+            $terdaftar_melalui_kode = sanitize_text_field($_POST['terdaftar_melalui_kode']);
+            $id_verifikator = 0; // Default 0
+
+            if (!empty($terdaftar_melalui_kode)) {
+                // Cari ID verifikator berdasarkan kode referral yang diinput manual
+                $verifikator = $wpdb->get_row($wpdb->prepare(
+                    "SELECT id FROM $table_verifikator WHERE kode_referral = %s LIMIT 1",
+                    $terdaftar_melalui_kode
+                ));
+                if ($verifikator) {
+                    $id_verifikator = $verifikator->id;
+                }
+            }
 
             // Status & Verifikasi
             $status_sekarang = sanitize_text_field($_POST['status_akun']);
@@ -112,7 +129,8 @@ function dw_pedagang_page_render() {
             // DATA UTAMA
             $data = [
                 'id_user'          => $id_user,
-                'id_desa'          => $id_desa,
+                'id_desa'          => $id_desa, // Set Relasi Wilayah
+                'id_verifikator'   => $id_verifikator, // Update Relasi Verifikator
                 'is_independent'   => $is_independent,
                 'nama_toko'        => $nama_toko,
                 'slug_toko'        => sanitize_title($nama_toko),
@@ -121,6 +139,9 @@ function dw_pedagang_page_render() {
                 'alamat_lengkap'   => sanitize_textarea_field($_POST['pedagang_detail']),
                 'url_gmaps'        => esc_url_raw($_POST['url_gmaps']),
                 
+                // REFERRAL (Simpan kode manual)
+                'terdaftar_melalui_kode' => $terdaftar_melalui_kode,
+
                 // LEGALITAS & PROFIL
                 'nik'              => sanitize_text_field($_POST['nik']),
                 'url_ktp'          => esc_url_raw($_POST['url_ktp']),
@@ -415,6 +436,7 @@ function dw_pedagang_page_render() {
         }
         .dw-status-verified { background: #e7f6e9; color: var(--dw-success); border: 1px solid #c3e6cb; }
         .dw-status-pending { background: #fff8e6; color: var(--dw-warning); border: 1px solid #ffeeba; }
+        .dw-status-info { background: #eef6fc; color: var(--dw-primary); border: 1px solid #cce5ff; }
         .dw-status-rejected { background: #fbeaea; color: var(--dw-danger); border: 1px solid #f5c6cb; }
         .dw-status-gray { background: #e2e3e5; color: #383d41; border: 1px solid #d6d8db; }
 
@@ -558,10 +580,12 @@ function dw_pedagang_page_render() {
                             $where_sql .= $wpdb->prepare(" AND (p.nama_toko LIKE %s OR p.kelurahan_nama LIKE %s)", "%$search%", "%$search%");
                         }
 
-                        $sql = "SELECT p.*, d.nama_desa, u.display_name as owner_name 
+                        // UPDATE SQL: JOIN ke tabel verifikator untuk mendapatkan nama verifikator
+                        $sql = "SELECT p.*, d.nama_desa, u.display_name as owner_name, v.nama_lengkap as nama_verifikator
                                 FROM $table_name p
                                 LEFT JOIN $table_desa d ON p.id_desa = d.id
                                 LEFT JOIN $table_users u ON p.id_user = u.ID
+                                LEFT JOIN $table_verifikator v ON p.id_verifikator = v.id
                                 $where_sql 
                                 ORDER BY p.created_at DESC 
                                 LIMIT $per_page OFFSET $offset";
@@ -584,7 +608,7 @@ function dw_pedagang_page_render() {
                             <tr>
                                 <th width="80">Foto</th>
                                 <th>Info Toko</th>
-                                <th>Lokasi</th>
+                                <th>Lokasi & Afiliasi</th>
                                 <th width="140">Status</th>
                                 <th width="100">Kuota</th>
                                 <th width="120" style="text-align:right;">Aksi</th>
@@ -610,15 +634,32 @@ function dw_pedagang_page_render() {
                                     <?php endif; ?>
                                 </td>
                                 <td>
-                                    <div class="dw-location-info" style="line-height: 1.4;">
+                                    <div class="dw-location-info" style="line-height: 1.4; margin-bottom: 5px;">
                                         <strong><?php echo esc_html($r->kelurahan_nama ? $r->kelurahan_nama : '-'); ?></strong><br>
                                         <span class="muted" style="color:var(--dw-text-gray); font-size:12px;"><?php echo esc_html($r->kecamatan_nama); ?></span>
                                     </div>
-                                    <?php if($r->id_desa > 0): ?>
-                                        <span class="dw-status-badge dw-status-verified" style="margin-top:6px; font-size: 10px;">Desa <?php echo esc_html($r->nama_desa); ?></span>
-                                    <?php else: ?>
-                                        <span class="dw-status-badge dw-status-pending" style="margin-top:6px; font-size: 10px;">Independen</span>
-                                    <?php endif; ?>
+                                    
+                                    <div style="display:flex; flex-direction:column; gap:3px;">
+                                        <!-- BADGE 1: Relasi Wilayah (Desa vs Area Bebas) -->
+                                        <?php if($r->id_desa > 0): ?>
+                                            <span class="dw-status-badge dw-status-verified" style="font-size: 10px;">Desa <?php echo esc_html($r->nama_desa); ?></span>
+                                        <?php else: ?>
+                                            <span class="dw-status-badge dw-status-gray" style="font-size: 10px;">Independen</span>
+                                        <?php endif; ?>
+
+                                        <!-- BADGE 2: Relasi Referral (Verifikator vs Code vs None) -->
+                                        <?php if($r->id_verifikator > 0): ?>
+                                            <span class="dw-status-badge dw-status-info" style="font-size: 10px;">
+                                                <span class="dashicons dashicons-groups" style="font-size:12px; vertical-align:middle;"></span>
+                                                Verifikator: <?php echo esc_html($r->nama_verifikator ? $r->nama_verifikator : 'ID:'.$r->id_verifikator); ?>
+                                            </span>
+                                        <?php elseif(!empty($r->terdaftar_melalui_kode)): ?>
+                                             <span class="dw-status-badge dw-status-pending" style="font-size: 10px;">
+                                                <span class="dashicons dashicons-ticket" style="font-size:12px; vertical-align:middle;"></span>
+                                                Ref: <?php echo esc_html($r->terdaftar_melalui_kode); ?>
+                                             </span>
+                                        <?php endif; ?>
+                                    </div>
                                 </td>
                                 <td>
                                     <?php 
@@ -791,8 +832,8 @@ function dw_pedagang_page_render() {
                                             </div>
                                             <div class="dw-col-4">
                                                 <div class="dw-form-group">
-                                                    <label>Terdaftar Melalui</label>
-                                                    <input type="text" value="<?php echo esc_attr($edit_data->terdaftar_melalui_kode ?? '-'); ?>" class="dw-form-control" readonly>
+                                                    <label>Terdaftar Melalui (Kode Referral)</label>
+                                                    <input name="terdaftar_melalui_kode" type="text" value="<?php echo esc_attr($edit_data->terdaftar_melalui_kode ?? ''); ?>" class="dw-form-control" placeholder="Masukkan Kode Referral">
                                                 </div>
                                             </div>
                                             <div class="dw-col-4">
