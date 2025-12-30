@@ -178,7 +178,7 @@ function dw_desa_page_render() {
     $is_edit = ($action_view === 'edit' || $action_view === 'add');
     $edit_data = null;
     
-    // Objek Default agar tidak error undefind property
+    // Objek Default agar tidak error undefined property
     $default_data = (object) [
         'id' => 0, 'id_user_desa' => 0, 'nama_desa' => '', 'deskripsi' => '',
         'kode_referral' => '', 'status' => 'aktif', 
@@ -202,9 +202,21 @@ function dw_desa_page_render() {
     // Counter untuk badge notifikasi
     $count_verify = $wpdb->get_var("SELECT COUNT(*) FROM $table_desa WHERE status_akses_verifikasi = 'pending'");
     
-    // Stats Keuangan Global
+    // Stats Keuangan Global (Pastikan variabel ini selalu terdefinisi)
     $total_pendapatan_all = $wpdb->get_var("SELECT SUM(total_pendapatan) FROM $table_desa") ?: 0;
     $total_saldo_komisi_all = $wpdb->get_var("SELECT SUM(saldo_komisi) FROM $table_desa") ?: 0;
+
+    // Define stats variables for list view to avoid undefined notices
+    $total_desa = 0;
+    $active_count = 0;
+    $total_pending = 0;
+    
+    if (!$is_edit) {
+        $total_desa = $wpdb->get_var("SELECT COUNT(id) FROM $table_desa");
+        $active_count = $wpdb->get_var("SELECT COUNT(id) FROM $table_desa WHERE status = 'aktif'");
+        $total_pending = $wpdb->get_var("SELECT COUNT(id) FROM $table_desa WHERE status_akses_verifikasi = 'pending'");
+        $total_premium = $wpdb->get_var("SELECT COUNT(id) FROM $table_desa WHERE status_akses_verifikasi = 'active'");
+    }
 
     /**
      * =========================================================================
