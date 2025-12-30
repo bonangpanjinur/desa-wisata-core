@@ -499,7 +499,8 @@ function dw_activate_plugin() {
     finished_tanggal DATETIME DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY  (id)
-) $charset_collate;
+) $charset_collate;";
+    dbDelta( $sql_chat );
 
     // 15. Ulasan
     $sql_ulasan = "CREATE TABLE {$table_prefix}ulasan (
