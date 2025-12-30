@@ -1,442 +1,402 @@
 <?php
 /**
  * File Name:   includes/admin-pages/page-verifikator-list.php
- * Description: Dashboard Manajemen Verifikator UMKM v3.7 (Premium UI & Database Connected).
- * Fitur: 
- * 1. UI Modern dengan Kartu Statistik Real-time.
- * 2. Tabel Data Verifikator yang terhubung ke tabel `dw_verifikator`.
- * 3. Modal AJAX untuk Tambah/Edit tanpa reload.
- * 4. Integrasi penuh dengan API Wilayah (Waterfall Loading).
+ * Description: Dashboard Manajemen Verifikator UMKM (Premium UI/UX).
+ * Version:     4.0 (Enhanced Stats: Total Connected vs Verified)
+ * * Fitur Utama:
+ * 1. CRUD Verifikator (Server-side Processing).
+ * 2. Modal Form dengan Sticky Header/Footer & Scrollable Body.
+ * 3. Integrasi API Wilayah (Waterfall Selection).
+ * 4. Generator Kode Referral Otomatis.
+ * 5. Statistik Lengkap (Total Terhubung vs Total ACC).
  */
 
-if (!defined('ABSPATH')) exit;
+if ( ! defined( 'ABSPATH' ) ) exit;
 
 global $wpdb;
-$verifikator_table = $wpdb->prefix . 'dw_verifikator';
+$table_v = $wpdb->prefix . 'dw_verifikator';
+$table_p = $wpdb->prefix . 'dw_pedagang';
 
-// Nonce untuk keamanan AJAX
-$nonce = wp_create_nonce('dw_admin_nonce');
-$region_nonce = wp_create_nonce('dw_region_nonce'); // Nonce khusus wilayah
+// --- 1. HANDLE FORM SUBMISSION (ADD/EDIT) VIA PHP ---
+// Kita gunakan PHP POST self-processing agar lebih stabil daripada AJAX untuk penyimpanan data kritis.
+if ( isset($_POST['dw_action']) && check_admin_referer('dw_save_verifikator_action', 'dw_verifikator_nonce') ) {
+    
+    $action_type = sanitize_text_field($_POST['dw_action']);
+    
+    // Persiapan Data (Sanitasi Lengkap)
+    $data = [
+        'id_user'           => intval($_POST['user_id']),
+        'nama_lengkap'      => sanitize_text_field($_POST['nama_lengkap']),
+        'nik'               => sanitize_text_field($_POST['nik']),
+        'kode_referral'     => strtoupper(sanitize_text_field($_POST['kode_referral'])),
+        'nomor_wa'          => sanitize_text_field($_POST['nomor_wa']),
+        'alamat_lengkap'    => sanitize_textarea_field($_POST['alamat_lengkap']),
+        
+        // Simpan ID Wilayah & Nama Teks (untuk kemudahan display)
+        'provinsi'          => sanitize_text_field($_POST['provinsi']),
+        'kabupaten'         => sanitize_text_field($_POST['kabupaten']),
+        'kecamatan'         => sanitize_text_field($_POST['kecamatan']),
+        'kelurahan'         => sanitize_text_field($_POST['kelurahan']),
+        
+        'api_provinsi_id'   => sanitize_text_field($_POST['api_provinsi_id']),
+        'api_kabupaten_id'  => sanitize_text_field($_POST['api_kabupaten_id']),
+        'api_kecamatan_id'  => sanitize_text_field($_POST['api_kecamatan_id']),
+        'api_kelurahan_id'  => sanitize_text_field($_POST['api_kelurahan_id']),
+        
+        'status'            => sanitize_text_field($_POST['status']),
+        'updated_at'        => current_time('mysql')
+    ];
 
-/**
- * Filter User: 
- * Ambil daftar user WordPress yang memiliki role 'verifikator_umkm'
- * untuk dihubungkan dengan profil verifikator.
- */
-$args = array(
-    'role'    => 'verifikator_umkm',
-    'fields'  => array('ID', 'display_name', 'user_email')
-);
-$wp_users = get_users($args);
+    // Validasi
+    if ( empty($data['nama_lengkap']) || empty($data['kode_referral']) || empty($data['nik']) ) {
+        echo '<div class="notice notice-error is-dismissible"><p><strong>Gagal:</strong> Nama Lengkap, NIK, dan Kode Referral wajib diisi.</p></div>';
+    } else {
+        if ( $action_type == 'add' ) {
+            $data['created_at'] = current_time('mysql');
+            
+            // Cek Duplikat
+            $exist_user = $wpdb->get_var($wpdb->prepare("SELECT id FROM $table_v WHERE id_user = %d", $data['id_user']));
+            $exist_ref  = $wpdb->get_var($wpdb->prepare("SELECT id FROM $table_v WHERE kode_referral = %s", $data['kode_referral']));
+
+            if($exist_user) {
+                echo '<div class="notice notice-error is-dismissible"><p>User ini sudah terdaftar sebagai verifikator.</p></div>';
+            } elseif($exist_ref) {
+                echo '<div class="notice notice-error is-dismissible"><p>Kode Referral sudah digunakan. Silakan generate yang baru.</p></div>';
+            } else {
+                $inserted = $wpdb->insert($table_v, $data);
+                if ( $inserted ) {
+                    echo '<div class="notice notice-success is-dismissible"><p>Verifikator baru berhasil ditambahkan.</p></div>';
+                } else {
+                    echo '<div class="notice notice-error is-dismissible"><p>Database Error: ' . esc_html($wpdb->last_error) . '</p></div>';
+                }
+            }
+        } elseif ( $action_type == 'edit' ) {
+            $id = intval($_POST['verifikator_id']);
+            // Cek kode referral milik orang lain
+            $exist_ref = $wpdb->get_var($wpdb->prepare("SELECT id FROM $table_v WHERE kode_referral = %s AND id != %d", $data['kode_referral'], $id));
+            
+            if($exist_ref) {
+                echo '<div class="notice notice-error is-dismissible"><p>Kode Referral bentrok dengan verifikator lain.</p></div>';
+            } else {
+                $updated = $wpdb->update($table_v, $data, ['id' => $id]);
+                echo '<div class="notice notice-success is-dismissible"><p>Data Verifikator berhasil diperbarui.</p></div>';
+            }
+        }
+    }
+}
+
+// --- 2. GET DATA (SERVER SIDE RENDER) ---
+// Global Stats
+$total_v = $wpdb->get_var("SELECT COUNT(id) FROM $table_v WHERE status = 'aktif'");
+$pending_v = $wpdb->get_var("SELECT COUNT(id) FROM $table_v WHERE status = 'pending'");
+$umkm_verified_global = $wpdb->get_var("SELECT SUM(total_verifikasi_sukses) FROM $table_v");
+$total_saldo = $wpdb->get_var("SELECT SUM(saldo_saat_ini) FROM $table_v");
+
+// Hitung total pedagang yang terhubung (menggunakan kode referral verifikator mana saja)
+// Kita hitung dari tabel pedagang yang memiliki id_verifikator != 0
+$total_linked_global = $wpdb->get_var("SELECT COUNT(id) FROM $table_p WHERE id_verifikator > 0");
+
+// Ambil Data Verifikator dengan JOIN Subquery untuk menghitung pedagang yang terhubung per orang
+// Logic: Kita hitung berapa pedagang di tabel dw_pedagang yang id_verifikator-nya = id verifikator ini.
+$verifikators = $wpdb->get_results("
+    SELECT v.*, 
+    (SELECT COUNT(p.id) FROM $table_p p WHERE p.id_verifikator = v.id) as linked_count
+    FROM $table_v v 
+    ORDER BY v.created_at DESC
+");
+
+$wp_users = get_users(['role' => 'verifikator_umkm']);
+$region_nonce = wp_create_nonce('dw_region_nonce'); 
 ?>
 
+<!-- STYLE CSS (SCOPED) -->
 <style>
-    /* Premium Layout & Variables */
     :root {
-        --dw-primary: #2563eb;
-        --dw-primary-dark: #1d4ed8;
-        --dw-success: #10b981;
-        --dw-bg: #f8fafc;
-        --dw-border: #e2e8f0;
-        --dw-text-main: #1e293b;
-        --dw-text-muted: #64748b;
+        --v-primary: #2563eb; --v-primary-dark: #1d4ed8;
+        --v-success: #10b981; --v-warning: #f59e0b; --v-danger: #ef4444;
+        --v-bg: #f8fafc; --v-border: #e2e8f0;
+        --v-text: #1e293b; --v-muted: #64748b;
     }
-
-    .v-container { 
-        margin: 20px 20px 0 0; 
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        color: var(--dw-text-main);
-    }
-
-    /* Header Styling */
-    .v-header { 
-        display: flex; 
-        justify-content: space-between; 
-        align-items: flex-end; 
-        margin-bottom: 30px; 
-    }
-
-    .v-header-title h1 { 
-        font-weight: 800; 
-        font-size: 28px; 
-        color: var(--dw-text-main); 
-        margin: 0;
-        letter-spacing: -0.02em;
-    }
-
-    .v-header-title p { 
-        color: var(--dw-text-muted); 
-        margin: 5px 0 0 0; 
-        font-size: 14px;
-    }
-
-    /* Stats Grid */
-    .v-card-stats { 
-        display: grid; 
-        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); 
-        gap: 20px; 
-        margin-bottom: 35px; 
-    }
-
-    .v-stat { 
-        background: #fff; 
-        padding: 24px; 
-        border-radius: 20px; 
-        box-shadow: 0 1px 3px rgba(0,0,0,0.02), 0 10px 15px -3px rgba(0,0,0,0.03); 
-        border: 1px solid var(--dw-border);
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        position: relative;
-        overflow: hidden;
-    }
-
-    .v-stat::before {
-        content: '';
-        position: absolute;
-        top: 0; left: 0; width: 4px; height: 100%;
-        background: var(--dw-border);
-    }
-
-    .v-stat.active-blue::before { background: var(--dw-primary); }
-    .v-stat.active-green::before { background: var(--dw-success); }
-
-    .v-stat h3 { 
-        margin: 0; 
-        color: var(--dw-text-muted); 
-        font-size: 12px; 
-        text-transform: uppercase; 
-        font-weight: 700; 
-        letter-spacing: 0.1em;
-    }
-
-    .v-stat p { 
-        margin: 8px 0 0 0; 
-        font-size: 32px; 
-        font-weight: 800; 
-        color: var(--dw-text-main);
-        line-height: 1;
-    }
-
-    /* Modern Table */
-    .v-table-card { 
-        background: #fff; 
-        border-radius: 20px; 
-        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); 
-        border: 1px solid var(--dw-border); 
-        overflow: hidden;
-    }
-
-    .v-table { width: 100%; border-collapse: collapse; text-align: left; }
-    .v-table th { 
-        background: #fcfdfe; 
-        padding: 18px 24px; 
-        font-size: 13px; 
-        font-weight: 600; 
-        color: var(--dw-text-muted); 
-        border-bottom: 1px solid var(--dw-border);
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-    }
-
-    .v-table td { 
-        padding: 20px 24px; 
-        border-bottom: 1px solid #f8fafc; 
-        vertical-align: middle; 
-        font-size: 14px;
-    }
-
-    .v-table tr:hover td { background: #fbfcfe; }
+    .v-wrap { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: var(--v-text); margin: 20px 20px 0 0; }
     
-    /* User Profile In Table */
-    .user-info { display: flex; align-items: center; gap: 14px; }
-    .user-avatar { 
-        width: 40px; height: 40px; 
-        border-radius: 12px; 
-        background: #eff6ff; 
-        display: flex; 
-        align-items: center; 
-        justify-content: center; 
-        color: var(--dw-primary); 
-        font-weight: 700;
-        border: 1px solid #dbeafe;
-    }
-
-    /* Badges */
-    .v-badge { 
-        padding: 6px 14px; 
-        border-radius: 10px; 
-        font-size: 11px; 
-        font-weight: 700; 
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-    }
-    .badge-aktif { background: #ecfdf5; color: #065f46; border: 1px solid #d1fae5; }
-    .badge-pending { background: #fffbeb; color: #92400e; border: 1px solid #fef3c7; }
-    .badge-nonaktif { background: #fef2f2; color: #991b1b; border: 1px solid #fee2e2; }
-
-    /* Referral Code Badge */
-    .ref-code-badge {
-        background: #f1f5f9;
-        color: #475569;
-        font-family: monospace;
-        padding: 4px 8px;
-        border-radius: 6px;
-        font-weight: 700;
-        border: 1px dashed #cbd5e1;
-        cursor: copy;
-    }
-
-    /* Button Styling */
-    .btn-premium {
-        background: var(--dw-primary);
-        color: white !important;
-        border: none;
-        padding: 12px 24px;
-        border-radius: 12px;
-        font-weight: 600;
-        cursor: pointer;
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        transition: all 0.2s;
-        box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);
-    }
-
-    .btn-premium:hover {
-        background: var(--dw-primary-dark);
-        transform: translateY(-2px);
-        box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3);
-    }
-
-    /* Modal Design */
-    .v-modal { 
-        display: none; position: fixed; z-index: 99999; left: 0; top: 0; width: 100%; height: 100%; 
-        background: rgba(15, 23, 42, 0.6); 
-        backdrop-filter: blur(8px); 
-    }
-
-    .v-modal-content { 
-        background: #fff; margin: 2% auto; border-radius: 24px; 
-        width: 600px; max-width: 95%; 
-        box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); 
-        overflow: hidden; 
-        animation: vSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-        display: flex;
-        flex-direction: column;
-        max-height: 90vh;
-    }
-
-    @keyframes vSlideUp { from {opacity: 0; transform: translateY(30px) scale(0.98);} to {opacity: 1; transform: translateY(0) scale(1);} }
+    /* Stats Cards */
+    .v-grid-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; margin-bottom: 25px; }
+    .v-card { background: #fff; border: 1px solid var(--v-border); border-radius: 12px; padding: 20px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); display: flex; flex-direction: column; }
+    .v-card h3 { margin: 0 0 5px 0; font-size: 11px; text-transform: uppercase; color: var(--v-muted); letter-spacing: 0.5px; }
+    .v-card .val { font-size: 24px; font-weight: 700; color: var(--v-text); }
+    .v-card.highlight { border-left: 4px solid var(--v-primary); }
     
-    .v-modal-header { 
-        padding: 24px 30px; 
-        background: #fff; 
-        border-bottom: 1px solid var(--dw-border); 
-        display: flex; justify-content: space-between; align-items: center; 
-        flex-shrink: 0;
-    }
-
-    .v-modal-header h2 { margin: 0; font-size: 20px; font-weight: 800; color: var(--dw-text-main); }
+    /* Header & Actions */
+    .v-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .v-title h1 { margin: 0; font-size: 24px; font-weight: 700; }
+    .v-search { padding: 8px 12px; border: 1px solid var(--v-border); border-radius: 8px; width: 300px; font-size: 14px; }
     
-    .v-modal-body { 
-        padding: 30px; 
-        overflow-y: auto; 
-        flex-grow: 1;
+    /* Button */
+    .v-btn { background: var(--v-primary); color: #fff; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; transition: 0.2s; }
+    .v-btn:hover { background: var(--v-primary-dark); color: #fff; }
+    .v-btn-sec { background: #fff; border: 1px solid var(--v-border); color: var(--v-muted); }
+    .v-btn-sec:hover { background: var(--v-bg); color: var(--v-text); }
+
+    /* Table */
+    .v-table-container { background: #fff; border-radius: 12px; border: 1px solid var(--v-border); overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    .v-table { width: 100%; border-collapse: collapse; }
+    .v-table th { background: #f8fafc; padding: 15px 20px; text-align: left; font-size: 12px; font-weight: 600; color: var(--v-muted); text-transform: uppercase; border-bottom: 1px solid var(--v-border); }
+    .v-table td { padding: 15px 20px; border-bottom: 1px solid var(--v-border); vertical-align: middle; font-size: 14px; }
+    .v-table tr:last-child td { border-bottom: none; }
+    
+    /* Badges & Counters */
+    .v-badge { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+    .vb-active { background: #dcfce7; color: #166534; }
+    .vb-pending { background: #fef3c7; color: #92400e; }
+    .vb-inactive { background: #fee2e2; color: #991b1b; }
+    
+    .v-code { font-family: monospace; background: var(--v-bg); padding: 4px 8px; border-radius: 4px; font-weight: 600; border: 1px solid var(--v-border); cursor: copy; }
+    
+    .v-stats-row { display: flex; align-items: center; gap: 15px; font-size: 13px; }
+    .stat-item strong { display: block; font-size: 16px; color: var(--v-text); }
+    .stat-item span { color: var(--v-muted); font-size: 11px; text-transform: uppercase; }
+    .text-success { color: var(--v-success) !important; }
+    .text-blue { color: var(--v-primary) !important; }
+
+    /* --- MODAL (Fixed UX) --- */
+    .v-modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15,23,42,0.6); z-index: 99999; backdrop-filter: blur(2px); align-items: center; justify-content: center; }
+    
+    /* Struktur Modal agar Scrollable tapi Header/Footer tetap */
+    .v-modal-box { 
+        background: #fff; width: 650px; max-width: 95%; height: auto; max-height: 90vh; 
+        border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); 
+        display: flex; flex-direction: column; overflow: hidden;
+        animation: vSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     }
     
-    .form-group { margin-bottom: 20px; }
-    .form-group label { display: block; margin-bottom: 8px; font-weight: 600; font-size: 13px; color: var(--dw-text-main); }
-    .form-group input, .form-group select, .form-group textarea { 
-        width: 100%; padding: 12px 16px; border: 1.5px solid var(--dw-border); 
-        border-radius: 12px; font-size: 14px; transition: all 0.2s; 
-        background-color: #fff;
-    }
-    .form-group input:focus, .form-group select:focus, .form-group textarea:focus { 
-        outline: none; border-color: var(--dw-primary); box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1); 
-    }
+    @keyframes vSlideUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+
+    .v-modal-header { padding: 20px 24px; border-bottom: 1px solid var(--v-border); display: flex; justify-content: space-between; align-items: center; background: #fff; flex-shrink: 0; }
+    .v-modal-header h2 { margin: 0; font-size: 18px; color: var(--v-text); }
+    .v-close { font-size: 20px; cursor: pointer; color: var(--v-muted); }
     
-    .form-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 15px;
-    }
+    /* Body Scrollable */
+    .v-modal-body { padding: 24px; overflow-y: auto; flex-grow: 1; background: #fff; }
+    
+    .v-modal-footer { padding: 16px 24px; border-top: 1px solid var(--v-border); background: var(--v-bg); display: flex; justify-content: flex-end; gap: 10px; flex-shrink: 0; }
 
-    .v-modal-footer { 
-        padding: 20px 30px; background: #f8fafc; border-top: 1px solid var(--dw-border); 
-        display: flex; justify-content: flex-end; gap: 12px; 
-        flex-shrink: 0;
-    }
-
-    .empty-state { padding: 80px 0; text-align: center; color: var(--dw-text-muted); }
-    .empty-state span { font-size: 48px; display: block; margin-bottom: 15px; opacity: 0.3; }
-
-    .btn-action-edit {
-        background: #f1f5f9;
-        color: #475569;
-        border: 1px solid var(--dw-border);
-        padding: 8px 12px;
-        border-radius: 8px;
-        font-weight: 600;
-        font-size: 12px;
-        cursor: pointer;
-        transition: all 0.2s;
-    }
-
-    .btn-action-edit:hover {
-        background: #e2e8f0;
-        color: var(--dw-text-main);
-    }
+    /* Form Styles */
+    .v-form-group { margin-bottom: 15px; }
+    .v-form-group label { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 600; color: var(--v-text); }
+    .v-input, .v-select, .v-textarea { width: 100%; padding: 10px; border: 1px solid var(--v-border); border-radius: 8px; font-size: 14px; box-sizing: border-box; transition: 0.2s; }
+    .v-input:focus { outline: none; border-color: var(--v-primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+    .v-row { display: flex; gap: 15px; }
+    .v-col { flex: 1; }
+    
+    /* Input Group */
+    .v-input-group { display: flex; }
+    .v-input-group input { border-top-right-radius: 0; border-bottom-right-radius: 0; border-right: none; font-weight: 700; color: var(--v-primary); text-transform: uppercase; }
+    .v-input-group button { border-top-left-radius: 0; border-bottom-left-radius: 0; background: var(--v-bg); border: 1px solid var(--v-border); padding: 0 15px; cursor: pointer; font-weight: 600; font-size: 13px; color: var(--v-muted); }
+    .v-input-group button:hover { background: #e2e8f0; color: var(--v-text); }
 </style>
 
-<div class="wrap v-container">
-    <!-- Header Premium -->
+<div class="wrap v-wrap">
+    
+    <!-- HEADER -->
     <div class="v-header">
-        <div class="v-header-title">
-            <h1>Verifikator Terdaftar</h1>
-            <p>Kelola profil agen verifikasi wilayah, pantau akumulasi komisi, dan kelola Kode Referral.</p>
+        <div class="v-title">
+            <h1>Verifikator & Petugas Lapangan</h1>
+            <p style="margin:5px 0 0; color:var(--v-muted);">Manajemen data, kode referral, dan monitoring UMKM terhubung.</p>
         </div>
-        <button class="btn-premium" id="btn-add-v">
-            <span class="dashicons dashicons-plus-alt2"></span> Tambah Verifikator
-        </button>
+        <div>
+            <input type="text" id="liveSearch" class="v-search" placeholder="Cari nama, NIK, atau kode...">
+            <button class="v-btn" onclick="openModal('add')"><span class="dashicons dashicons-plus-alt2"></span> Verifikator Baru</button>
+        </div>
     </div>
 
-    <!-- Stats Cards -->
-    <div class="v-card-stats">
-        <div class="v-stat">
+    <!-- STATS -->
+    <div class="v-grid-stats">
+        <div class="v-card highlight">
             <h3>Total Verifikator</h3>
-            <p id="v-total">0</p>
+            <span class="val"><?php echo number_format($total_v); ?></span>
         </div>
-        <div class="active-blue v-stat">
-            <h3>UMKM Terverifikasi</h3>
-            <p id="v-docs">0</p>
+        <div class="v-card">
+            <h3>Total UMKM Terhubung</h3>
+            <span class="val"><?php echo number_format($total_linked_global); ?></span>
         </div>
-        <div class="active-green v-stat">
-            <h3>Saldo Komisi Tersedia</h3>
-            <p id="v-money">Rp 0</p>
+        <div class="v-card" style="border-left: 4px solid var(--v-success);">
+            <h3>UMKM Terverifikasi (ACC)</h3>
+            <span class="val"><?php echo number_format($umkm_verified_global); ?></span>
+        </div>
+        <div class="v-card" style="border-left: 4px solid var(--v-warning);">
+            <h3>Total Komisi Cair</h3>
+            <span class="val">Rp <?php echo number_format($total_saldo, 0, ',', '.'); ?></span>
         </div>
     </div>
 
-    <!-- Main List Table -->
-    <div class="v-table-card">
-        <table class="v-table">
+    <!-- TABLE -->
+    <div class="v-table-container">
+        <table class="v-table" id="vTable">
             <thead>
                 <tr>
-                    <th>Informasi Verifikator</th>
-                    <th>Kode Referral</th>
-                    <th>Penugasan Wilayah</th>
-                    <th>Penyelesaian</th>
-                    <th>Akumulasi Saldo</th>
+                    <th>Verifikator</th>
+                    <th>Wilayah Kerja</th>
+                    <th>Statistik UMKM</th>
+                    <th>Komisi</th>
                     <th>Status</th>
-                    <th style="text-align: right;">Aksi</th>
+                    <th style="text-align:right;">Aksi</th>
                 </tr>
             </thead>
-            <tbody id="v-list-body">
-                <tr><td colspan="7" style="text-align:center; padding:80px; color: var(--dw-text-muted);">
-                    <div class="empty-state">
-                        <span class="dashicons dashicons-update spin"></span>
-                        <p>Sinkronisasi data verifikator...</p>
-                    </div>
-                </td></tr>
+            <tbody>
+                <?php if (empty($verifikators)): ?>
+                    <tr><td colspan="6" style="text-align:center; padding: 40px; color:var(--v-muted);">Belum ada data verifikator.</td></tr>
+                <?php else: foreach($verifikators as $v): 
+                    $json = htmlspecialchars(json_encode($v), ENT_QUOTES, 'UTF-8');
+                    $status_cls = ($v->status == 'aktif') ? 'vb-active' : (($v->status == 'pending') ? 'vb-pending' : 'vb-inactive');
+                    
+                    // Hitung rasio
+                    $acc_count = (int)$v->total_verifikasi_sukses;
+                    $link_count = (int)$v->linked_count;
+                ?>
+                <tr>
+                    <td style="width: 25%;">
+                        <div style="font-weight:600; color:var(--v-text); font-size:15px;"><?php echo esc_html($v->nama_lengkap); ?></div>
+                        <div style="font-size:12px; color:var(--v-muted); margin-bottom:4px;">NIK: <?php echo esc_html($v->nik); ?></div>
+                        <span class="v-code" onclick="copyCode('<?php echo esc_js($v->kode_referral); ?>')" title="Klik Salin Kode">
+                            <span class="dashicons dashicons-tag" style="font-size:12px;width:12px;height:12px;vertical-align:middle;"></span> <?php echo esc_html($v->kode_referral); ?>
+                        </span>
+                    </td>
+                    <td>
+                        <strong><?php echo esc_html($v->kabupaten); ?></strong><br>
+                        <small style="color:var(--v-muted);"><?php echo esc_html($v->kecamatan); ?>, <?php echo esc_html($v->kelurahan); ?></small>
+                    </td>
+                    <td>
+                        <div class="v-stats-row">
+                            <div class="stat-item">
+                                <span class="text-blue">Terhubung</span>
+                                <strong class="text-blue"><?php echo number_format($link_count); ?></strong>
+                            </div>
+                            <div style="height:25px; width:1px; background:var(--v-border);"></div>
+                            <div class="stat-item">
+                                <span class="text-success">ACC / Verif</span>
+                                <strong class="text-success"><?php echo number_format($acc_count); ?></strong>
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        <strong style="color:var(--v-warning);">Rp <?php echo number_format($v->saldo_saat_ini, 0, ',', '.'); ?></strong>
+                    </td>
+                    <td><span class="v-badge <?php echo $status_cls; ?>"><?php echo ucfirst($v->status); ?></span></td>
+                    <td style="text-align:right;">
+                        <button class="v-btn v-btn-sec" style="padding:6px 12px; font-size:12px;" onclick='openModal("edit", <?php echo $json; ?>)'>Edit</button>
+                        <?php if($v->nomor_wa): ?>
+                            <a href="https://wa.me/<?php echo preg_replace('/[^0-9]/', '', $v->nomor_wa); ?>" target="_blank" class="v-btn v-btn-sec" style="padding:6px 10px; border-color:#dcfce7; background:#f0fdf4; color:#166534;" title="Chat WA"><span class="dashicons dashicons-whatsapp"></span></a>
+                        <?php endif; ?>
+                    </td>
+                </tr>
+                <?php endforeach; endif; ?>
             </tbody>
         </table>
     </div>
+
 </div>
 
-<!-- Modal Form Terpadu (Tambah & Edit) -->
-<div id="modal-v" class="v-modal">
-    <div class="v-modal-content">
+<!-- MODAL FORM (Improved UX) -->
+<div id="vModal" class="v-modal-overlay">
+    <div class="v-modal-box">
         <div class="v-modal-header">
-            <h2 id="modal-title">Daftarkan Verifikator</h2>
-            <span class="dashicons dashicons-no-alt" id="close-modal-v" style="cursor:pointer; color: var(--dw-text-muted);"></span>
+            <h2 id="modalTitle">Tambah Verifikator</h2>
+            <span class="dashicons dashicons-no-alt v-close" onclick="closeModal()"></span>
         </div>
-        <form id="form-v" style="display: contents;">
-            <input type="hidden" name="id" id="v_id" value="">
-            <input type="hidden" name="method" id="v_method" value="add">
-            
+        
+        <form method="post" action="" id="vForm" style="display:flex; flex-direction:column; flex:1; overflow:hidden;">
+            <?php wp_nonce_field('dw_save_verifikator_action', 'dw_verifikator_nonce'); ?>
+            <input type="hidden" name="dw_action" id="vAction" value="add">
+            <input type="hidden" name="verifikator_id" id="vId" value="">
+
             <div class="v-modal-body">
-                <h4 style="margin: 0 0 15px 0; color: var(--dw-primary); font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em;">Informasi Akun & Personal</h4>
                 
-                <!-- Pilihan User WordPress -->
-                <div class="form-group" id="user-select-group">
-                    <label>Pilih Akun User WordPress (Role Verifikator Saja)</label>
-                    <select name="user_id" id="v_user_select" required>
-                        <option value="">-- Pilih User Verifikator --</option>
+                <h4 style="margin:0 0 15px; color:var(--v-primary); border-bottom:1px dashed #e2e8f0; padding-bottom:5px;">Data Akun & Pribadi</h4>
+                
+                <div class="v-form-group" id="userSelectBox">
+                    <label>Hubungkan Akun WordPress</label>
+                    <select name="user_id" id="vUser" class="v-select" required>
+                        <option value="">-- Pilih User (Role: Verifikator) --</option>
                         <?php foreach($wp_users as $u): ?>
                             <option value="<?php echo $u->ID; ?>"><?php echo esc_html($u->display_name); ?> (<?php echo esc_html($u->user_email); ?>)</option>
                         <?php endforeach; ?>
                     </select>
-                    <p class="description" style="font-size:12px; margin-top:5px;">User harus dibuat terlebih dahulu di menu Users > Add New.</p>
+                    <small style="color:var(--v-muted);">Hanya user dengan role <code>verifikator_umkm</code> yang muncul.</small>
                 </div>
-                
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label>Nama Lengkap (Identitas Resmi)</label>
-                        <input type="text" name="nama_lengkap" id="v_nama" placeholder="Budi Santoso, S.E." required>
+
+                <div class="v-row">
+                    <div class="v-col v-form-group">
+                        <label>Nama Lengkap (Sesuai KTP)</label>
+                        <input type="text" name="nama_lengkap" id="vNama" class="v-input" required>
                     </div>
-                    <div class="form-group">
-                        <label>Kode Referral (Unik)</label>
-                        <input type="text" name="kode_referral" id="v_referral" placeholder="Contoh: BANTUL01" required style="text-transform: uppercase;">
+                    <div class="v-col v-form-group">
+                        <label>Kode Referral</label>
+                        <div class="v-input-group">
+                            <input type="text" name="kode_referral" id="vRef" class="v-input" required>
+                            <button type="button" id="btnGenRef" title="Generate Random"><span class="dashicons dashicons-randomize"></span></button>
+                        </div>
                     </div>
                 </div>
 
-                <div class="form-grid">
-                    <div class="form-group">
+                <div class="v-row">
+                    <div class="v-col v-form-group">
                         <label>NIK (16 Digit)</label>
-                        <input type="text" name="nik" id="v_nik" placeholder="Contoh: 330101XXXXXXXXXX" maxlength="16" required>
+                        <input type="text" name="nik" id="vNik" class="v-input" maxlength="16" required>
                     </div>
-                    <div class="form-group">
-                        <label>WhatsApp Aktif</label>
-                        <input type="text" name="nomor_wa" id="v_wa" placeholder="Contoh: 08123456789" required>
+                    <div class="v-col v-form-group">
+                        <label>Nomor WhatsApp</label>
+                        <input type="text" name="nomor_wa" id="vWa" class="v-input" required>
                     </div>
                 </div>
 
-                <h4 style="margin: 25px 0 15px 0; color: var(--dw-primary); font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em;">Cakupan Wilayah Kerja</h4>
-                
-                <!-- Waterfall Location Selects (Sama dengan Page Pedagang) -->
-                <div class="form-grid">
-                    <div class="form-group">
+                <h4 style="margin:20px 0 15px; color:var(--v-primary); border-bottom:1px dashed #e2e8f0; padding-bottom:5px;">Wilayah Kerja</h4>
+
+                <!-- Waterfall Address -->
+                <div class="v-row">
+                    <div class="v-col v-form-group">
                         <label>Provinsi</label>
-                        <select name="api_provinsi_id" id="sel-prov" required>
-                            <option value="">Memuat...</option>
-                        </select>
-                        <input type="hidden" name="provinsi" id="txt-prov">
+                        <select name="api_provinsi_id" id="selProv" class="v-select" required><option value="">Memuat...</option></select>
+                        <input type="hidden" name="provinsi" id="txtProv">
                     </div>
-                    <div class="form-group">
+                    <div class="v-col v-form-group">
                         <label>Kabupaten/Kota</label>
-                        <select name="api_kabupaten_id" id="sel-kab" disabled required>
-                            <option value="">-- Pilih Provinsi Dulu --</option>
-                        </select>
-                        <input type="hidden" name="kabupaten" id="txt-kab">
+                        <select name="api_kabupaten_id" id="selKab" class="v-select" disabled required><option value="">-- Pilih Provinsi --</option></select>
+                        <input type="hidden" name="kabupaten" id="txtKab">
                     </div>
                 </div>
 
-                <div class="form-grid">
-                    <div class="form-group">
+                <div class="v-row">
+                    <div class="v-col v-form-group">
                         <label>Kecamatan</label>
-                        <select name="api_kecamatan_id" id="sel-kec" disabled required>
-                            <option value="">-- Pilih Kota Dulu --</option>
-                        </select>
-                        <input type="hidden" name="kecamatan" id="txt-kec">
+                        <select name="api_kecamatan_id" id="selKec" class="v-select" disabled required><option value="">-- Pilih Kota --</option></select>
+                        <input type="hidden" name="kecamatan" id="txtKec">
                     </div>
-                    <div class="form-group">
+                    <div class="v-col v-form-group">
                         <label>Kelurahan/Desa</label>
-                        <select name="api_kelurahan_id" id="sel-kel" disabled required>
-                            <option value="">-- Pilih Kecamatan Dulu --</option>
-                        </select>
-                        <input type="hidden" name="kelurahan" id="txt-kel">
+                        <select name="api_kelurahan_id" id="selKel" class="v-select" disabled required><option value="">-- Pilih Kecamatan --</option></select>
+                        <input type="hidden" name="kelurahan" id="txtKel">
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <label>Alamat Lengkap Domisili</label>
-                    <textarea name="alamat_lengkap" id="v_alamat" rows="3" placeholder="Jl. Mawar No. 123, RT 01/RW 02..." required></textarea>
+                <div class="v-form-group">
+                    <label>Alamat Lengkap</label>
+                    <textarea name="alamat_lengkap" id="vAlamat" class="v-textarea" rows="2" placeholder="Nama Jalan, RT/RW, No. Rumah..."></textarea>
                 </div>
+
+                <div class="v-form-group">
+                    <label>Status Akun</label>
+                    <select name="status" id="vStatus" class="v-select">
+                        <option value="aktif">Aktif</option>
+                        <option value="pending">Pending</option>
+                        <option value="nonaktif">Nonaktif</option>
+                    </select>
+                </div>
+
             </div>
+
             <div class="v-modal-footer">
-                <button type="button" class="button-link" id="btn-cancel-v" style="color: var(--dw-text-muted); text-decoration: none; font-weight: 600; cursor: pointer;">Batal</button>
-                <button type="submit" class="btn-premium" id="btn-submit-v">Simpan Perubahan</button>
+                <button type="button" class="v-btn v-btn-sec" onclick="closeModal()">Batal</button>
+                <button type="submit" class="v-btn">Simpan Data</button>
             </div>
         </form>
     </div>
@@ -444,269 +404,146 @@ $wp_users = get_users($args);
 
 <script>
 jQuery(document).ready(function($) {
-    const ajaxurl = '<?php echo admin_url('admin-ajax.php'); ?>';
-    const nonce = '<?php echo $nonce; ?>';
+    const ajaxUrl = '<?php echo admin_url("admin-ajax.php"); ?>';
     const regionNonce = '<?php echo $region_nonce; ?>';
-    let allVerifikators = [];
 
-    // 1. Inisialisasi Data Verifikator
-    function loadVerifikators() {
-        $.post(ajaxurl, { 
-            action: 'dw_get_verifikator_list', 
-            nonce: nonce 
-        }, function(res) {
-            if(res.success) {
-                allVerifikators = res.data;
-                let html = '';
-                let totalV = 0; 
-                let totalMoney = 0;
-                
-                if(res.data && res.data.length > 0) {
-                    res.data.forEach((v, index) => {
-                        totalV += parseInt(v.total || 0);
-                        let balanceRaw = 0;
-                        if(v.balance) {
-                            balanceRaw = parseInt(v.balance.replace(/[^0-9]/g, '')) || 0;
-                        }
-                        totalMoney += balanceRaw;
+    // --- 1. MODAL CONTROLS ---
+    window.openModal = function(mode, data = null) {
+        $('#vModal').css('display', 'flex').hide().fadeIn(200);
+        $('#vForm')[0].reset();
+        
+        if(mode == 'add') {
+            $('#modalTitle').text('Tambah Verifikator Baru');
+            $('#vAction').val('add');
+            $('#vId').val('');
+            $('#userSelectBox').show();
+            $('#vUser').prop('required', true);
+            // Reset region
+            resetRegion();
+        } else {
+            $('#modalTitle').text('Edit Verifikator');
+            $('#vAction').val('edit');
+            $('#vId').val(data.id);
+            
+            // Populate
+            $('#vNama').val(data.nama_lengkap);
+            $('#vRef').val(data.kode_referral);
+            $('#vNik').val(data.nik);
+            $('#vWa').val(data.nomor_wa);
+            $('#vAlamat').val(data.alamat_lengkap);
+            $('#vStatus').val(data.status);
+            
+            // User ID cannot be changed in edit to prevent mismatch
+            $('#userSelectBox').hide(); 
+            $('#vUser').prop('required', false);
 
-                        // Tentukan class badge status
-                        let statusClass = 'badge-aktif';
-                        if(v.status === 'pending') statusClass = 'badge-pending';
-                        if(v.status === 'nonaktif') statusClass = 'badge-nonaktif';
-
-                        html += `
-                        <tr>
-                            <td>
-                                <div class="user-info">
-                                    <div class="user-avatar">${v.name.charAt(0)}</div>
-                                    <div>
-                                        <div style="font-weight:700; color:var(--dw-text-main);">${v.name}</div>
-                                        <div style="font-size:12px; color:var(--dw-text-muted);">NIK: ${v.nik || '-'}</div>
-                                    </div>
-                                </div>
-                            </td>
-                            <td><span class="ref-code-badge" title="Klik untuk salin">${v.kode_referral || 'N/A'}</span></td>
-                            <td><span style="font-weight:500;">${v.location}</span></td>
-                            <td><span style="font-weight:700; color:var(--dw-primary);">${v.total} Dokumen</span></td>
-                            <td><span style="font-weight:700; color:var(--dw-success);">${v.balance}</span></td>
-                            <td><span class="v-badge ${statusClass}">${v.status ? v.status.toUpperCase() : 'AKTIF'}</span></td>
-                            <td style="text-align: right;">
-                                <div style="display:flex; justify-content:flex-end; gap:8px;">
-                                    <button class="btn-action-edit" data-index="${index}">Edit</button>
-                                    <a href="https://wa.me/${v.wa}" target="_blank" class="button" style="border-radius:8px;">Hubungi</a>
-                                </div>
-                            </td>
-                        </tr>`;
-                    });
-                } else {
-                    html = `<tr><td colspan="7">
-                        <div class="empty-state">
-                            <span class="dashicons dashicons-groups"></span>
-                            <p>Belum ada tim verifikator yang ditugaskan.</p>
-                        </div>
-                    </td></tr>`;
-                }
-
-                $('#v-list-body').html(html);
-                $('#v-total').text(res.data ? res.data.length : 0);
-                $('#v-docs').text(totalV);
-                $('#v-money').text('Rp ' + totalMoney.toLocaleString('id-ID'));
+            // Populate Region Manually
+            loadRegion('prov', null, $('#selProv'), data.api_provinsi_id);
+            $('#txtProv').val(data.provinsi);
+            
+            if(data.api_provinsi_id) {
+                loadRegion('kota', data.api_provinsi_id, $('#selKab'), data.api_kabupaten_id);
+                $('#txtKab').val(data.kabupaten);
             }
-        });
+            if(data.api_kabupaten_id) {
+                loadRegion('kec', data.api_kabupaten_id, $('#selKec'), data.api_kecamatan_id);
+                $('#txtKec').val(data.kecamatan);
+            }
+            if(data.api_kecamatan_id) {
+                loadRegion('desa', data.api_kecamatan_id, $('#selKel'), data.api_kelurahan_id);
+                $('#txtKel').val(data.kelurahan);
+            }
+        }
     }
 
-    // Copy to clipboard logic
-    $(document).on('click', '.ref-code-badge', function() {
-        const code = $(this).text();
-        const temp = $("<input>");
-        $("body").append(temp);
-        temp.val(code).select();
-        document.execCommand("copy");
-        temp.remove();
-        alert('Kode Referral ' + code + ' disalin!');
+    window.closeModal = function() {
+        $('#vModal').fadeOut(200);
+    }
+
+    // --- 2. LIVE SEARCH ---
+    $('#liveSearch').on('keyup', function() {
+        var value = $(this).val().toLowerCase();
+        $("#vTable tbody tr").filter(function() {
+            $(this).toggle($(this).text().toLowerCase().indexOf(value) > -1)
+        });
     });
 
-    // 2. Logika Wilayah Dinamis (Waterfall - Consistent with Page Pedagang)
-    function loadRegion(type, pid, target, selId) {
-        // Validasi ID Induk
-        if(type !== 'prov' && (!pid || pid === "")) return;
+    // --- 3. REFERRAL GENERATOR ---
+    $('#btnGenRef').on('click', function() {
+        let name = $('#vNama').val().replace(/[^a-zA-Z]/g, '').toUpperCase();
+        let prefix = name.length >= 3 ? name.substring(0, 3) : (name || 'VER');
+        let rand = Math.random().toString(36).substring(2, 7).toUpperCase();
+        $('#vRef').val(prefix + '-' + rand);
+    });
 
+    // --- 4. AUTO FILL NAME FROM USER ---
+    $('#vUser').on('change', function() {
+        if($(this).val()) {
+            let txt = $(this).find('option:selected').text();
+            let name = txt.split('(')[0].trim();
+            if($('#vNama').val() === '') $('#vNama').val(name);
+        }
+    });
+
+    // --- 5. WATERFALL REGION LOGIC ---
+    function resetRegion() {
+        $('#selKab, #selKec, #selKel').empty().prop('disabled', true).append('<option value="">-- Pilih --</option>');
+        loadRegion('prov', null, $('#selProv'), null);
+    }
+
+    function loadRegion(type, pid, target, selId) {
+        if(type !== 'prov' && (!pid || pid === "")) return;
+        
         var act = '';
         if(type === 'prov') act = 'dw_fetch_provinces';
         else if(type === 'kota') act = 'dw_fetch_regencies';
         else if(type === 'kec') act = 'dw_fetch_districts';
         else if(type === 'desa') act = 'dw_fetch_villages';
 
-        // Siapkan target
-        target.prop('disabled', true).html('<option>Memuat...</option>');
+        // Add loading indicator
+        var originalText = target.find('option:first').text();
+        target.find('option:first').text('Memuat...');
 
-        var data = { 
-            action: act, 
-            nonce: regionNonce 
-        };
-        if(type==='kota') data.province_id = pid;
-        if(type==='kec') data.regency_id = pid;
-        if(type==='desa') data.district_id = pid;
-
-        $.get(ajaxurl, data, function(res){
+        $.get(ajaxUrl, { action: act, nonce: regionNonce, province_id: pid, regency_id: pid, district_id: pid }, function(res){
+            target.find('option:first').text(originalText); // Restore
             if(res.success){
                 target.empty().append('<option value="">-- Pilih --</option>');
                 $.each(res.data, function(i,v){
-                    var isSelected = (String(v.id) === String(selId));
-                    target.append('<option value="'+v.id+'" data-nama="'+v.name+'" '+(isSelected?'selected':'')+'>'+v.name+'</option>');
+                    let isSel = (String(v.id) === String(selId));
+                    target.append(`<option value="${v.id}" data-nama="${v.name}" ${isSel?'selected':''}>${v.name}</option>`);
                 });
                 target.prop('disabled', false);
-                
-                // Trigger change jika ada pre-selected value (untuk load anak)
-                if(selId) {
-                    target.val(selId);
-                    target.trigger('change');
-                }
-            } else {
-                target.html('<option value="">Gagal memuat</option>');
+                if(selId) target.val(selId);
             }
         });
     }
 
-    // Reset Form
-    function resetForm() {
-        $('#v_method').val('add');
-        $('#v_id').val('');
-        $('#modal-title').text('Daftarkan Verifikator');
-        $('#user-select-group').show();
-        $('#v_user_select').prop('required', true).val('');
-        $('#form-v')[0].reset();
-        
-        // Reset wilayah
-        $('#sel-kab, #sel-kec, #sel-kel').prop('disabled', true).html('<option value="">-- Pilih --</option>');
-        
-        // Load ulang provinsi jika kosong
-        if($('#sel-prov option').length <= 1) {
-            loadRegion('prov', null, $('#sel-prov'), null);
-        }
-    }
-
-    // Open Modal Add
-    $('#btn-add-v').on('click', function() {
-        resetForm();
-        $('#modal-v').fadeIn(300);
+    // Change Handlers
+    $('#selProv').change(function(){
+        $('#txtProv').val($(this).find(':selected').data('nama'));
+        $('#selKab, #selKec, #selKel').empty().prop('disabled', true);
+        loadRegion('kota', $(this).val(), $('#selKab'), null);
+    });
+    $('#selKab').change(function(){
+        $('#txtKab').val($(this).find(':selected').data('nama'));
+        $('#selKec, #selKel').empty().prop('disabled', true);
+        loadRegion('kec', $(this).val(), $('#selKec'), null);
+    });
+    $('#selKec').change(function(){
+        $('#txtKec').val($(this).find(':selected').data('nama'));
+        $('#selKel').empty().prop('disabled', true);
+        loadRegion('desa', $(this).val(), $('#selKel'), null);
+    });
+    $('#selKel').change(function(){
+        $('#txtKel').val($(this).find(':selected').data('nama'));
     });
 
-    // Handle Edit Click
-    $(document).on('click', '.btn-action-edit', function() {
-        const idx = $(this).data('index');
-        const v = allVerifikators[idx];
-
-        $('#v_method').val('edit');
-        $('#v_id').val(v.id);
-        $('#modal-title').text('Edit Verifikator: ' + v.name);
-        $('#user-select-group').hide(); 
-        $('#v_user_select').prop('required', false);
-
-        // Populate Basic Data
-        $('#v_nama').val(v.name);
-        $('#v_referral').val(v.kode_referral || '');
-        $('#v_nik').val(v.nik || '');
-        $('#v_wa').val(v.wa || '');
-        $('#v_alamat').val(v.alamat_lengkap || '');
-
-        $('#modal-v').fadeIn(300);
-
-        // Populate Wilayah (Waterfall Trigger)
-        // Set Provinsi dulu, event on change akan handle sisanya jika kita passing selectId ke fungsi
-        // Namun karena event change kita custom, kita load manual berurutan
-        
-        // Reset dulu
-        $('#sel-kab, #sel-kec, #sel-kel').empty().prop('disabled', true);
-
-        // Load Prov
-        loadRegion('prov', null, $('#sel-prov'), v.api_provinsi_id);
-        $('#txt-prov').val(v.provinsi); // Set text hidden (asumsi v.provinsi ada di respon)
-
-        // Kita perlu timeout sedikit atau logika callback untuk load anak-anaknya
-        // Cara simpel: load semua level secara parallel karena kita punya ID induknya dari data verifikator
-        if(v.api_provinsi_id) {
-            loadRegion('kota', v.api_provinsi_id, $('#sel-kab'), v.api_kabupaten_id);
-            $('#txt-kab').val(v.kabupaten);
-        }
-        if(v.api_kabupaten_id) {
-            loadRegion('kec', v.api_kabupaten_id, $('#sel-kec'), v.api_kecamatan_id);
-            $('#txt-kec').val(v.kecamatan);
-        }
-        if(v.api_kecamatan_id) {
-            loadRegion('desa', v.api_kecamatan_id, $('#sel-kel'), v.api_kelurahan_id);
-            $('#txt-kel').val(v.kelurahan);
-        }
-    });
-
-    // Wilayah Change Handlers (Menyimpan Nama & Load Anak)
-    $('#sel-prov').on('change', function() {
-        const id = $(this).val();
-        $('#txt-prov').val($(this).find(':selected').data('nama'));
-        $('#sel-kab, #sel-kec, #sel-kel').prop('disabled', true).html('<option value="">-- Pilih --</option>');
-        if(id) loadRegion('kota', id, $('#sel-kab'), null);
-    });
-
-    $('#sel-kab').on('change', function() {
-        const id = $(this).val();
-        $('#txt-kab').val($(this).find(':selected').data('nama'));
-        $('#sel-kec, #sel-kel').prop('disabled', true).html('<option value="">-- Pilih --</option>');
-        if(id) loadRegion('kec', id, $('#sel-kec'), null);
-    });
-
-    $('#sel-kec').on('change', function() {
-        const id = $(this).val();
-        $('#txt-kec').val($(this).find(':selected').data('nama'));
-        $('#sel-kel').prop('disabled', true).html('<option value="">-- Pilih --</option>');
-        if(id) loadRegion('desa', id, $('#sel-kel'), null);
-    });
-
-    $('#sel-kel').on('change', function() {
-        $('#txt-kel').val($(this).find(':selected').data('nama'));
-    });
-
-    // Modal close
-    $('#close-modal-v, #btn-cancel-v').on('click', () => $('#modal-v').fadeOut(200));
-
-    // Auto-fill Nama dari Select User
-    $('#v_user_select').on('change', function() {
-        if($(this).val() !== "") {
-            const nameOnly = $(this).find('option:selected').text().split('(')[0].trim();
-            $('#v_nama').val(nameOnly);
-        }
-    });
-
-    // Handle AJAX Save (Add/Edit)
-    $('#form-v').submit(function(e) {
-        e.preventDefault();
-        const $btn = $('#btn-submit-v');
-        const method = $('#v_method').val();
-        const action = (method === 'add') ? 'dw_add_verifikator' : 'dw_update_verifikator';
-        
-        $btn.prop('disabled', true).html('<span class="dashicons dashicons-update spin"></span> Menyimpan...');
-
-        $.post(ajaxurl, $(this).serialize() + '&action=' + action + '&nonce=' + nonce, function(res) {
-            if(res.success) {
-                $('#modal-v').fadeOut(200);
-                alert(res.data || 'Berhasil disimpan!');
-                loadVerifikators();
-                if(method === 'add') {
-                    // Reset dan reload agar data fresh
-                    location.reload(); 
-                }
-                $btn.prop('disabled', false).text('Simpan Perubahan');
-            } else {
-                alert('Gagal: ' + (res.data || 'Terjadi kesalahan sistem'));
-                $btn.prop('disabled', false).text('Simpan Perubahan');
-            }
-        }).fail(function() {
-            alert('Terjadi kesalahan koneksi server.');
-            $btn.prop('disabled', false).text('Simpan Perubahan');
-        });
-    });
-
-    // Initial Load
-    loadVerifikators();
+    // Init Load
+    loadRegion('prov', null, $('#selProv'), null);
 });
+
+// Copy Helper
+function copyCode(txt) {
+    navigator.clipboard.writeText(txt).then(() => alert('Kode disalin: ' + txt));
+}
 </script>

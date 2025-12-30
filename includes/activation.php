@@ -2,15 +2,13 @@
 /**
  * File Name:   activation.php
  * File Folder: includes/
- * Description: File aktivasi plugin utuh terintegrasi v3.7.
+ * Description: File aktivasi plugin utuh terintegrasi v3.8.
  * Menangani pembuatan tabel database Desa Wisata Core.
  * * FIXES APPLIED:
- * 1. Menghapus komentar SQL inline (-- comment) yang membuat dbDelta gagal.
- * 2. Memperbaiki format spasi agar sesuai standar ketat dbDelta.
- * 3. Menambahkan error logging untuk debugging.
- * 4. UPDATE v3.8: Penyesuaian skema komisi Paket Transaksi (Generic Commission Fields).
- * 5. UPDATE v3.9: Menambahkan kolom 'referrer_id' & 'referrer_type' di tabel pembelian_paket 
- * untuk memastikan relasi komisi terhubung jelas ke Desa atau Verifikator.
+ * 1. UPDATE: Menambahkan tabel `dw_pembeli` untuk menyimpan profil wisatawan/member.
+ * 2. UPDATE v3.9: Menambahkan kolom 'referrer_id' & 'referrer_type' di tabel pembelian_paket.
+ * 3. General Cleanup & Error Logging.
+ * 4. UPDATE v4.0: Menambahkan kolom alamat lengkap & wilayah API ke tabel dw_pembeli.
  * * @package DesaWisataCore
  */
 
@@ -75,7 +73,6 @@ function dw_activate_plugin() {
         KEY idx_lokasi (api_kabupaten_id)
     ) $charset_collate;";
     
-    // Eksekusi dbDelta satu per satu untuk memastikan isolasi error
     dbDelta( $sql_desa );
 
     // 2. Tabel Pedagang
@@ -198,6 +195,36 @@ function dw_activate_plugin() {
         KEY idx_lokasi_v (api_kabupaten_id)
     ) $charset_collate;";
     dbDelta($sql_verifikator);
+
+    // 2D. Tabel Pembeli (Wisatawan/Member) [BARU & UPDATED]
+    // Untuk menyimpan data profil tambahan di luar wp_users
+    $sql_pembeli = "CREATE TABLE {$table_prefix}pembeli (
+        id BIGINT(20) NOT NULL AUTO_INCREMENT,
+        id_user BIGINT(20) UNSIGNED NOT NULL,
+        nama_lengkap VARCHAR(255) NOT NULL,
+        no_hp VARCHAR(20),
+        nik VARCHAR(50),
+        foto_profil VARCHAR(255),
+        tgl_lahir DATE DEFAULT NULL,
+        jenis_kelamin ENUM('L','P') DEFAULT NULL,
+        alamat_lengkap TEXT,
+        provinsi VARCHAR(100),
+        kabupaten VARCHAR(100),
+        kecamatan VARCHAR(100),
+        kelurahan VARCHAR(100),
+        api_provinsi_id VARCHAR(20),
+        api_kabupaten_id VARCHAR(20),
+        api_kecamatan_id VARCHAR(20),
+        api_kelurahan_id VARCHAR(20),
+        kode_pos VARCHAR(10) DEFAULT NULL,
+        poin_reward INT DEFAULT 0,
+        status_akun ENUM('aktif','suspend','banned') DEFAULT 'aktif',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY  (id),
+        UNIQUE KEY id_user (id_user)
+    ) $charset_collate;";
+    dbDelta($sql_pembeli);
 
     /* =========================================
        2. KONTEN (INVENTORY & WISATA)
@@ -461,19 +488,18 @@ function dw_activate_plugin() {
 
     // 14. Promosi
     $sql_promosi = "CREATE TABLE {$table_prefix}promosi (
-        id BIGINT(20) NOT NULL AUTO_INCREMENT,
-        tipe ENUM('produk','wisata') NOT NULL,
-        target_id BIGINT(20) NOT NULL,
-        pemohon_id BIGINT(20) UNSIGNED NOT NULL,
-        durasi_hari INT NOT NULL,
-        biaya DECIMAL(10,2) NOT NULL,
-        status ENUM('pending','aktif','selesai','ditolak') DEFAULT 'pending',
-        mulai_tanggal DATETIME DEFAULT NULL,
-        finished_tanggal DATETIME DEFAULT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY  (id)
-    ) $charset_collate;";
-    dbDelta( $sql_promosi );
+    id BIGINT(20) NOT NULL AUTO_INCREMENT,
+    tipe ENUM('produk','wisata') NOT NULL,
+    target_id BIGINT(20) NOT NULL,
+    pemohon_id BIGINT(20) UNSIGNED NOT NULL,
+    durasi_hari INT NOT NULL,
+    biaya DECIMAL(10,2) NOT NULL,
+    status ENUM('pending','aktif','selesai','ditolak') DEFAULT 'pending',
+    mulai_tanggal DATETIME DEFAULT NULL,
+    finished_tanggal DATETIME DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY  (id)
+) $charset_collate;
 
     // 15. Ulasan
     $sql_ulasan = "CREATE TABLE {$table_prefix}ulasan (
@@ -599,7 +625,7 @@ function dw_activate_plugin() {
         PRIMARY KEY  (id),
         KEY user_id (user_id)
     ) $charset_collate;";
-    dbDelta($sql_quota_logs);
+    dbDelta( $sql_quota_logs);
 
     // 24. Tabel Reward Referral
     $sql_referral_reward = "CREATE TABLE {$table_prefix}referral_reward (
