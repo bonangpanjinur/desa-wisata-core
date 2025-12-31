@@ -3,6 +3,7 @@
  * File Name: includes/admin-pages/page-desa.php
  * Description: CRUD Desa Wisata & Verifikasi dengan UI/UX Modern.
  * Matches DB Table: dw_desa
+ * Version: 5.1 (User Filter: Admin Desa & Unlinked)
  * @package DesaWisataCore
  */
 
@@ -106,28 +107,37 @@ function dw_desa_page_render() {
                 } else {
                     $id_desa_save = isset($_POST['desa_id']) ? intval($_POST['desa_id']) : 0;
                     
-                    // Logic Kode Referral: Jika kosong atau '(Otomatis)', generate baru
+                    // --- GENERATE REFERRAL CODE (BACKEND FALLBACK) ---
+                    // Jika kosong atau user membiarkan placeholder
                     $kode_referral = sanitize_text_field($_POST['kode_referral']);
-                    if (empty($kode_referral) || $kode_referral == '(Otomatis)') {
-                        if (class_exists('DW_Referral_Logic')) {
-                            $logic = new DW_Referral_Logic();
-                            $kode_referral = $logic->generate_referral_code('desa', sanitize_text_field($_POST['nama_desa']));
-                        } else {
-                            // Fallback manual jika class tidak ada
-                            $clean = strtoupper(substr(preg_replace('/[^A-Za-z0-9]/', '', $_POST['nama_desa']), 0, 3));
-                            $kode_referral = 'DESA-' . $clean . '-' . rand(1000,9999);
+                    $nama_desa_input = sanitize_text_field($_POST['nama_desa']);
+
+                    if (empty($kode_referral)) {
+                        // Generate: Ambil 3 huruf pertama nama desa + 4 angka acak
+                        $clean_name = preg_replace('/[^A-Za-z]/', '', $nama_desa_input);
+                        $prefix = strtoupper(substr($clean_name, 0, 3));
+                        if(strlen($prefix) < 3) $prefix = 'DES';
+                        $rand_num = rand(1000, 9999);
+                        $kode_referral = $prefix . $rand_num;
+                        
+                        // Cek unik sederhana (looping jika ada yg sama - simple check)
+                        $is_exist = $wpdb->get_var($wpdb->prepare("SELECT id FROM $table_desa WHERE kode_referral = %s AND id != %d", $kode_referral, $id_desa_save));
+                        if($is_exist) {
+                            $kode_referral = $prefix . rand(10000, 99999); // Coba lagi dengan 5 digit
                         }
+                    } else {
+                        $kode_referral = strtoupper($kode_referral);
                     }
 
                     $data = [
-                        'id_user_desa'            => intval($_POST['id_user_desa']),
-                        'nama_desa'               => sanitize_text_field($_POST['nama_desa']),
-                        'slug_desa'               => sanitize_title($_POST['nama_desa']),
-                        'kode_referral'           => $kode_referral,
-                        'deskripsi'               => wp_kses_post($_POST['deskripsi']),
-                        'foto'                    => esc_url_raw($_POST['foto_url']),
-                        'foto_sampul'             => esc_url_raw($_POST['foto_sampul_url']),
-                        'status'                  => sanitize_text_field($_POST['status']),
+                        'id_user_desa'        => intval($_POST['id_user_desa']),
+                        'nama_desa'           => $nama_desa_input,
+                        'slug_desa'           => sanitize_title($nama_desa_input),
+                        'kode_referral'       => $kode_referral,
+                        'deskripsi'           => wp_kses_post($_POST['deskripsi']),
+                        'foto'                => esc_url_raw($_POST['foto_url']),
+                        'foto_sampul'         => esc_url_raw($_POST['foto_sampul_url']),
+                        'status'              => sanitize_text_field($_POST['status']),
                         
                         // Bank Info
                         'no_rekening_desa'        => sanitize_text_field($_POST['no_rekening_desa']),
@@ -197,7 +207,18 @@ function dw_desa_page_render() {
     if (!$edit_data) $edit_data = $default_data;
 
     $link_daftar_pedagang = home_url( '/register/?ref=' . ($edit_data->kode_referral ?: 'DESA') );
-    $users = get_users(['orderby' => 'display_name', 'role__in' => ['subscriber', 'administrator', 'editor', 'author', 'admin_desa']]);
+    
+    // --- USER FILTER LOGIC ---
+    // 1. Ambil ID User yang SUDAH terpakai di tabel dw_desa
+    $used_user_ids = $wpdb->get_col("SELECT id_user_desa FROM $table_desa");
+    if (!$used_user_ids) $used_user_ids = [];
+
+    // 2. Ambil User WP dengan role 'admin_desa'
+    // Pastikan role 'admin_desa' ada. Jika tidak, gunakan subscriber atau role lain yang sesuai.
+    $users = get_users([
+        'orderby' => 'display_name', 
+        'role'    => 'admin_desa' // Filter hanya Admin Desa
+    ]);
 
     // Counter untuk badge notifikasi
     $count_verify = $wpdb->get_var("SELECT COUNT(*) FROM $table_desa WHERE status_akses_verifikasi = 'pending'");
@@ -260,6 +281,16 @@ function dw_desa_page_render() {
         .dw-input { width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 14px; }
         .dw-input:focus { border-color: var(--dw-primary); box-shadow: 0 0 0 1px var(--dw-primary); outline: none; }
         
+        /* Input Group for Generator */
+        .dw-input-group { display: flex; }
+        .dw-input-group input { border-top-right-radius: 0; border-bottom-right-radius: 0; border-right: none; }
+        .dw-input-group button { 
+            border-top-left-radius: 0; border-bottom-left-radius: 0; 
+            border: 1px solid #cbd5e1; background: #f1f5f9; color: var(--dw-gray-700); 
+            padding: 0 12px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+        }
+        .dw-input-group button:hover { background: #e2e8f0; }
+
         /* Buttons */
         .dw-btn { padding: 8px 16px; border-radius: 4px; font-weight: 500; font-size: 13px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 5px; border: 1px solid transparent; }
         .dw-btn-primary { background: var(--dw-primary); color: white; border-color: var(--dw-primary); }
@@ -494,16 +525,32 @@ function dw_desa_page_render() {
                                     <label>Admin Pengelola (User WP)</label>
                                     <select name="id_user_desa" class="dw-input select2" required>
                                         <option value="">-- Pilih User --</option>
-                                        <?php foreach($users as $u) echo '<option value="'.$u->ID.'" '.selected($edit_data->id_user_desa, $u->ID, false).'>'.$u->display_name.' ('.$u->user_email.')</option>'; ?>
+                                        <?php 
+                                        foreach($users as $u) {
+                                            $is_selected = ($edit_data->id_user_desa == $u->ID);
+                                            // Check if user is already used by another desa (unless it's the current one)
+                                            $is_used = in_array($u->ID, $used_user_ids) && !$is_selected;
+                                            
+                                            // Hide if used, or show if current or unused
+                                            if (!$is_used) {
+                                                echo '<option value="'.$u->ID.'" '.selected($edit_data->id_user_desa, $u->ID, false).'>'.$u->display_name.' ('.$u->user_email.')</option>';
+                                            }
+                                        }
+                                        ?>
                                     </select>
+                                    <div class="dw-text-muted" style="margin-top:5px;">Hanya menampilkan user dengan role 'Admin Desa' yang belum memiliki desa.</div>
                                 </div>
                                 <div class="dw-form-group">
                                     <label>Nama Desa Wisata</label>
-                                    <input type="text" name="nama_desa" class="dw-input" value="<?php echo esc_attr($edit_data->nama_desa); ?>" required>
+                                    <input type="text" name="nama_desa" id="inp_nama_desa" class="dw-input" value="<?php echo esc_attr($edit_data->nama_desa); ?>" required>
                                 </div>
                                 <div class="dw-form-group">
                                     <label>Kode Referral (Kosongkan untuk otomatis)</label>
-                                    <input type="text" name="kode_referral" class="dw-input" value="<?php echo esc_attr($edit_data->kode_referral); ?>" placeholder="(Otomatis)">
+                                    <div class="dw-input-group">
+                                        <input type="text" name="kode_referral" id="inp_kode_ref" class="dw-input" value="<?php echo esc_attr($edit_data->kode_referral); ?>" placeholder="Contoh: BANTUL-1234">
+                                        <button type="button" id="btnGenRef" title="Generate Otomatis"><span class="dashicons dashicons-randomize"></span></button>
+                                    </div>
+                                    <small class="dw-text-muted">Klik tombol dadu untuk generate otomatis berdasarkan nama desa.</small>
                                 </div>
                                 <div class="dw-form-group">
                                     <label>Deskripsi</label>
@@ -682,6 +729,23 @@ function dw_desa_page_render() {
                 var url = frame.state().get('selection').first().toJSON().url;
                 $(target).val(url); $(preview).attr('src', url).show();
             }).open();
+        });
+
+        // GENERATOR KODE REFERRAL (JS)
+        $('#btnGenRef').click(function(e){
+            e.preventDefault();
+            var namaDesa = $('#inp_nama_desa').val();
+            if(!namaDesa){
+                alert('Mohon isi Nama Desa terlebih dahulu.');
+                return;
+            }
+            // Logic: 3 huruf pertama uppercase + 4 angka random
+            var cleanName = namaDesa.replace(/[^a-zA-Z]/g, '').substring(0,3).toUpperCase();
+            if(cleanName.length < 3) cleanName = 'DES';
+            var randNum = Math.floor(1000 + Math.random() * 9000);
+            var kodeBaru = cleanName + '-' + randNum;
+            
+            $('#inp_kode_ref').val(kodeBaru);
         });
 
         // Region API
