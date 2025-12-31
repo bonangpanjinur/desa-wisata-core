@@ -1,16 +1,19 @@
 <?php
 /**
  * File Name:   includes/admin-pages/page-verifikator-list.php
- * Description: Dashboard Manajemen Verifikator UMKM
- * Version:     5.5 (Full Schema Sync & Financial Display)
+ * Description: Dashboard Manajemen Verifikator UMKM (Premium UI/UX).
+ * Version:     5.5 (Sync WP User Profile & Fix Access Denied)
+ * * Update Notes:
+ * - ADDED: Sinkronisasi update nama ke tabel wp_users (wp_update_user).
+ * - FIX: Form Action dinamis untuk mencegah error 'Access Denied'.
+ * - FILTER: Hanya menampilkan role 'verifikator_umkm' yang belum terikat.
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
 global $wpdb;
-// Sinkronisasi Nama Tabel dengan SQL: {$table_prefix}verifikator
-$table_v = $wpdb->prefix . 'verifikator'; 
-$table_p = $wpdb->prefix . 'pedagang'; 
+$table_v = $wpdb->prefix . 'dw_verifikator';
+$table_p = $wpdb->prefix . 'dw_pedagang';
 
 // --- 1. HANDLE FORM SUBMISSION (ADD/EDIT) ---
 if ( isset($_POST['dw_action']) ) {
@@ -25,9 +28,12 @@ if ( isset($_POST['dw_action']) ) {
     }
 
     $action_type = sanitize_text_field($_POST['dw_action']);
-    $redirect_url = admin_url('admin.php?page=dw-verifikator');
     
-    // B. Persiapan Data (Sesuai Schema Database)
+    // Redirect Page Clean URL
+    $current_page_slug = sanitize_text_field($_GET['page']);
+    $redirect_url = admin_url('admin.php?page=' . $current_page_slug);
+    
+    // B. Persiapan Data
     $data = [
         'id_user'           => intval($_POST['user_id']),
         'nama_lengkap'      => sanitize_text_field($_POST['nama_lengkap']),
@@ -36,7 +42,7 @@ if ( isset($_POST['dw_action']) ) {
         'nomor_wa'          => sanitize_text_field($_POST['nomor_wa']),
         'alamat_lengkap'    => sanitize_textarea_field($_POST['alamat_lengkap']),
         
-        // Data Wilayah (Nama Text)
+        // Data Wilayah (Nama)
         'provinsi'          => sanitize_text_field($_POST['provinsi']),
         'kabupaten'         => sanitize_text_field($_POST['kabupaten']),
         'kecamatan'         => sanitize_text_field($_POST['kecamatan']),
@@ -52,31 +58,18 @@ if ( isset($_POST['dw_action']) ) {
         'updated_at'        => current_time('mysql')
     ];
 
-    // C. Validasi Input Wajib
+    // Validasi Wajib
     if ( empty($data['nama_lengkap']) || empty($data['kode_referral']) || empty($data['id_user']) || empty($data['nik']) || empty($data['nomor_wa']) ) {
         wp_redirect(add_query_arg(['msg' => 'error_empty'], $redirect_url));
         exit;
     }
 
-    // D. VALIDASI ROLE (PENTING: Memastikan user WP yang dipilih punya role 'verifikator_umkm')
-    $check_user = get_userdata($data['id_user']);
-    if ( ! $check_user || ! in_array( 'verifikator_umkm', (array) $check_user->roles ) ) {
-        wp_redirect(add_query_arg(['msg' => 'error_role'], $redirect_url));
-        exit;
-    }
-
-    // E. LOGIKA SIMPAN (ADD)
+    // C. LOGIKA SIMPAN (ADD)
     if ( $action_type == 'add' ) {
         $data['created_at'] = current_time('mysql');
         
-        // Default value keuangan saat create (Sesuai Schema DEFAULT 0)
-        $data['total_verifikasi_sukses'] = 0;
-        $data['total_pendapatan_komisi'] = 0;
-        $data['saldo_saat_ini']          = 0;
-
-        // Cek Duplikat User ID
+        // Cek Duplikat
         $exist_user = $wpdb->get_var($wpdb->prepare("SELECT id FROM $table_v WHERE id_user = %d", $data['id_user']));
-        // Cek Duplikat Referral
         $exist_ref  = $wpdb->get_var($wpdb->prepare("SELECT id FROM $table_v WHERE kode_referral = %s", $data['kode_referral']));
 
         if($exist_user) {
@@ -88,10 +81,17 @@ if ( isset($_POST['dw_action']) ) {
             if($result === false) {
                 wp_die('Database Error (Insert): ' . $wpdb->last_error);
             }
+            
+            // --- SYNC WP USER DISPLAY NAME ---
+            wp_update_user([
+                'ID' => $data['id_user'],
+                'display_name' => $data['nama_lengkap']
+            ]);
+
             wp_redirect(add_query_arg(['msg' => 'success_add'], $redirect_url));
         }
     } 
-    // F. LOGIKA UPDATE (EDIT)
+    // D. LOGIKA UPDATE (EDIT)
     elseif ( $action_type == 'edit' ) {
         $id = intval($_POST['verifikator_id']);
         if ( ! $id ) wp_die('ID Invalid');
@@ -109,6 +109,13 @@ if ( isset($_POST['dw_action']) ) {
             if($result === false) {
                 wp_die('Database Error (Update): ' . $wpdb->last_error);
             }
+
+            // --- SYNC WP USER DISPLAY NAME ---
+            wp_update_user([
+                'ID' => $data['id_user'],
+                'display_name' => $data['nama_lengkap']
+            ]);
+
             wp_redirect(add_query_arg(['msg' => 'success_edit'], $redirect_url));
         }
     }
@@ -117,17 +124,14 @@ if ( isset($_POST['dw_action']) ) {
 
 // --- 2. QUERY DATA ---
 
-$table_exists = $wpdb->get_var("SHOW TABLES LIKE '$table_p'") === $table_p;
-
 $total_v = $wpdb->get_var("SELECT COUNT(id) FROM $table_v WHERE status = 'aktif'");
 $pending_v = $wpdb->get_var("SELECT COUNT(id) FROM $table_v WHERE status = 'pending'");
+$total_linked_global = $wpdb->get_var("SELECT COUNT(id) FROM $table_p WHERE id_verifikator > 0");
 $umkm_verified_global = $wpdb->get_var("SELECT SUM(total_verifikasi_sukses) FROM $table_v");
-$total_linked_global = $table_exists ? $wpdb->get_var("SELECT COUNT(id) FROM $table_p WHERE id_verifikator > 0") : 0;
-// Statistik Keuangan Global
-$total_saldo_global = $wpdb->get_var("SELECT SUM(saldo_saat_ini) FROM $table_v");
 
 $verifikators = $wpdb->get_results("
-    SELECT v.*
+    SELECT v.*, 
+    (SELECT COUNT(p.id) FROM $table_p p WHERE p.id_verifikator = v.id) as linked_count
     FROM $table_v v 
     ORDER BY v.created_at DESC
 ");
@@ -142,6 +146,9 @@ $used_user_ids = $wpdb->get_col("SELECT id_user FROM $table_v");
 if(!$used_user_ids) $used_user_ids = [];
 
 $region_nonce = wp_create_nonce('dw_region_nonce'); 
+
+// --- GET DYNAMIC PAGE SLUG ---
+$current_page_slug = isset($_GET['page']) ? sanitize_text_field($_GET['page']) : 'dw-verifikator';
 ?>
 
 <!-- STYLE CSS -->
@@ -150,10 +157,10 @@ $region_nonce = wp_create_nonce('dw_region_nonce');
     .v-wrap { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: var(--v-text); margin: 20px 20px 0 0; }
     
     /* Stats */
-    .v-grid-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 25px; }
+    .v-grid-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; margin-bottom: 25px; }
     .v-card { background: #fff; border: 1px solid var(--v-border); border-radius: 4px; padding: 20px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); display: flex; flex-direction: column; }
-    .v-card h3 { margin: 0 0 5px 0; font-size: 11px; text-transform: uppercase; color: var(--v-muted); font-weight: 600; }
-    .v-card .val { font-size: 22px; font-weight: 500; color: var(--v-text); line-height: 1.2; }
+    .v-card h3 { margin: 0 0 5px 0; font-size: 12px; text-transform: uppercase; color: var(--v-muted); font-weight: 600; }
+    .v-card .val { font-size: 24px; font-weight: 500; color: var(--v-text); line-height: 1.2; }
     .v-card.highlight { border-left: 4px solid var(--v-primary); }
     
     /* Header */
@@ -167,7 +174,7 @@ $region_nonce = wp_create_nonce('dw_region_nonce');
     /* Table */
     .v-table-container { background: #fff; border: 1px solid var(--v-border); box-shadow: 0 1px 1px rgba(0,0,0,0.04); }
     .v-table { width: 100%; border-collapse: collapse; }
-    .v-table th { background: #fff; padding: 15px; text-align: left; font-size: 13px; font-weight: 600; color: var(--v-text); border-bottom: 1px solid var(--v-border); white-space: nowrap; }
+    .v-table th { background: #fff; padding: 15px; text-align: left; font-size: 14px; font-weight: 600; color: var(--v-text); border-bottom: 1px solid var(--v-border); }
     .v-table td { padding: 12px 15px; border-bottom: 1px solid #f0f0f1; vertical-align: top; font-size: 13px; }
     .v-table tr:hover { background-color: #fcfcfc; }
     .v-badge { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; border: 1px solid transparent; }
@@ -211,8 +218,6 @@ $region_nonce = wp_create_nonce('dw_region_nonce');
             <div class="notice notice-success is-dismissible"><p><strong>Sukses:</strong> Data Verifikator berhasil diperbarui.</p></div>
         <?php elseif($_GET['msg'] == 'error_exist_user'): ?>
             <div class="notice notice-error is-dismissible"><p><strong>Gagal:</strong> User WordPress ini sudah terdaftar sebagai verifikator.</p></div>
-        <?php elseif($_GET['msg'] == 'error_role'): ?>
-            <div class="notice notice-error is-dismissible"><p><strong>Ditolak:</strong> User yang dipilih tidak memiliki role <code>verifikator_umkm</code>. Mohon periksa menu Users.</p></div>
         <?php elseif($_GET['msg'] == 'error_exist_ref'): ?>
             <div class="notice notice-error is-dismissible"><p><strong>Gagal:</strong> Kode Referral sudah digunakan.</p></div>
         <?php elseif($_GET['msg'] == 'error_empty'): ?>
@@ -238,16 +243,12 @@ $region_nonce = wp_create_nonce('dw_region_nonce');
             <span class="val"><?php echo number_format($total_v); ?></span>
         </div>
         <div class="v-card">
-            <h3>UMKM Terhubung</h3>
+            <h3>Total UMKM Terhubung</h3>
             <span class="val"><?php echo number_format($total_linked_global); ?></span>
         </div>
-        <div class="v-card">
+        <div class="v-card" style="border-left: 4px solid var(--v-success);">
             <h3>Verifikasi Sukses</h3>
             <span class="val"><?php echo number_format($umkm_verified_global); ?></span>
-        </div>
-        <div class="v-card" style="border-left: 4px solid var(--v-success);">
-            <h3>Total Saldo Member</h3>
-            <span class="val" style="font-size:18px;">Rp <?php echo number_format($total_saldo_global, 0, ',', '.'); ?></span>
         </div>
         <div class="v-card" style="border-left: 4px solid var(--v-warning);">
             <h3>Status Pending</h3>
@@ -262,7 +263,6 @@ $region_nonce = wp_create_nonce('dw_region_nonce');
                 <tr>
                     <th>Verifikator</th>
                     <th>Wilayah Kerja</th>
-                    <th>Keuangan (Dompet)</th>
                     <th>Statistik UMKM</th>
                     <th>Status</th>
                     <th style="text-align:right;">Aksi</th>
@@ -270,23 +270,13 @@ $region_nonce = wp_create_nonce('dw_region_nonce');
             </thead>
             <tbody>
                 <?php if (empty($verifikators)): ?>
-                    <tr><td colspan="6" style="text-align:center; padding: 40px; color:var(--v-muted);">Belum ada data verifikator.</td></tr>
+                    <tr><td colspan="5" style="text-align:center; padding: 40px; color:var(--v-muted);">Belum ada data verifikator.</td></tr>
                 <?php else: foreach($verifikators as $v): 
                     // Ambil Info User WP
                     $u_info = get_userdata($v->id_user);
-                    // Validasi Visual Role
-                    $has_role = $u_info && in_array('verifikator_umkm', (array)$u_info->roles);
-                    $role_warning = $has_role ? '' : '<span style="color:red; font-size:10px;">(Role User Hilang/Salah)</span>';
-                    
                     $u_name = $u_info ? $u_info->display_name : 'User Dihapus';
                     $u_login = $u_info ? $u_info->user_login : '-';
                     $u_email = $u_info ? $u_info->user_email : '-';
-
-                    // Hitung linked count manual jika tabel pedagang ada
-                    $linked_count = 0;
-                    if($table_exists) {
-                        $linked_count = $wpdb->get_var($wpdb->prepare("SELECT COUNT(id) FROM $table_p WHERE id_verifikator = %d", $v->id));
-                    }
 
                     // Prepare JSON for JS Edit
                     $data_js = [
@@ -313,16 +303,15 @@ $region_nonce = wp_create_nonce('dw_region_nonce');
                     $status_lbl = ucfirst($v->status);
                 ?>
                 <tr>
-                    <td style="width: 25%;">
+                    <td style="width: 30%;">
                         <div style="font-weight:600; color:var(--v-primary); font-size:14px;"><?php echo esc_html($v->nama_lengkap); ?></div>
                         
                         <!-- INFO USER WP -->
-                        <div style="font-size:11px; color:#50575e; margin:2px 0 4px; display:flex; align-items:center; gap:4px; flex-wrap:wrap;">
+                        <div style="font-size:11px; color:#50575e; margin:2px 0 4px; display:flex; align-items:center; gap:4px;">
                             <span class="dashicons dashicons-admin-users" style="font-size:12px;width:12px;height:12px;"></span>
                             <span title="Username WP"><?php echo esc_html($u_login); ?></span>
                             <span style="color:#ccc;">|</span>
                             <span title="Email WP"><?php echo esc_html($u_email); ?></span>
-                            <?php echo $role_warning; ?>
                         </div>
 
                         <div style="font-size:12px; color:var(--v-muted); margin-bottom:4px;">NIK: <?php echo esc_html($v->nik); ?></div>
@@ -335,17 +324,10 @@ $region_nonce = wp_create_nonce('dw_region_nonce');
                         <small style="color:var(--v-muted);"><?php echo esc_html($v->kecamatan); ?>, <?php echo esc_html($v->kelurahan); ?></small>
                     </td>
                     <td>
-                        <!-- FITUR BARU: Display Saldo sesuai Schema -->
-                        <div style="font-size:12px;">
-                            <div style="margin-bottom:3px;">Saldo: <span style="color:var(--v-success); font-weight:600;">Rp <?php echo number_format($v->saldo_saat_ini, 0, ',', '.'); ?></span></div>
-                            <div style="color:var(--v-muted); font-size:11px;">Total Komisi: Rp <?php echo number_format($v->total_pendapatan_komisi, 0, ',', '.'); ?></div>
-                        </div>
-                    </td>
-                    <td>
                         <div class="v-stats-row">
                             <div class="stat-item">
                                 <span style="color:var(--v-primary)">Terhubung</span>
-                                <strong style="color:var(--v-primary)"><?php echo number_format($linked_count); ?></strong>
+                                <strong style="color:var(--v-primary)"><?php echo number_format($v->linked_count); ?></strong>
                             </div>
                             <div style="height:25px; width:1px; background:var(--v-border);"></div>
                             <div class="stat-item">
@@ -377,8 +359,8 @@ $region_nonce = wp_create_nonce('dw_region_nonce');
             <div class="v-close" onclick="closeModal()"><span class="dashicons dashicons-no-alt"></span></div>
         </div>
         
-        <!-- Form Action ke URL Page untuk menghindari Access Denied -->
-        <form method="post" action="<?php echo admin_url('admin.php?page=dw-verifikator'); ?>" id="vForm" style="display:flex; flex-direction:column; flex:1; overflow:hidden;">
+        <!-- Form Action Dinamis Mengikuti Page Slug -->
+        <form method="post" action="<?php echo admin_url('admin.php?page=' . $current_page_slug); ?>" id="vForm" style="display:flex; flex-direction:column; flex:1; overflow:hidden;">
             <?php wp_nonce_field('dw_save_verifikator_action', 'dw_verifikator_nonce'); ?>
             <input type="hidden" name="dw_action" id="vAction" value="add">
             <input type="hidden" name="verifikator_id" id="vId" value="">
@@ -409,7 +391,7 @@ $region_nonce = wp_create_nonce('dw_region_nonce');
                             <option value="" disabled>Tidak ada user dengan role 'verifikator_umkm'</option>
                         <?php endif; ?>
                     </select>
-                    <small style="color:var(--v-muted); display:block; margin-top:5px;">Hanya user role <code>verifikator_umkm</code> yang muncul disini. Buat user baru di menu Users jika belum ada.</small>
+                    <small style="color:var(--v-muted); display:block; margin-top:5px;">Hanya user role <code>verifikator_umkm</code>. User yang sudah punya data tidak bisa dipilih (kecuali edit).</small>
                 </div>
 
                 <div class="v-row">
@@ -551,6 +533,7 @@ jQuery(document).ready(function($) {
             $('#txtKel').val(data.kelurahan);
 
             // Trigger Cascading Load by ID
+            // Load Prov, then check ID, then Load Kab...
             loadRegion('prov', null, $('#selProv'), data.api_provinsi_id, function(provId){
                 if(provId) {
                     loadRegion('kota', provId, $('#selKab'), data.api_kabupaten_id, function(kabId){
