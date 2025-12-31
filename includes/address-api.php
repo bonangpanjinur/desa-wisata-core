@@ -2,6 +2,7 @@
 /**
  * Lokasi: includes/address-api.php
  * Deskripsi: Handler API Wilayah.id dengan Caching dan Fallback.
+ * Version: 2.2 (Support Kode Pos via Village Data)
  */
 
 if (!defined('ABSPATH')) exit;
@@ -100,7 +101,14 @@ class DW_Address_API {
         $data = json_decode(wp_remote_retrieve_body($response), true);
         $res = [];
         foreach (($data['data'] ?? []) as $v) {
-            $res[] = ['id' => $v['code'], 'name' => ucwords(strtolower($v['name']))];
+            // Ambil postal_code jika tersedia
+            $pos = isset($v['postal_code']) ? $v['postal_code'] : '';
+            
+            $res[] = [
+                'id' => $v['code'], 
+                'name' => ucwords(strtolower($v['name'])),
+                'postal_code' => $pos // Data kode pos ditambahkan ke response
+            ];
         }
         set_transient($key, $res, 30 * DAY_IN_SECONDS);
         return $res;

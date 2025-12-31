@@ -3,7 +3,7 @@
  * File Name: includes/admin-pages/page-desa.php
  * Description: CRUD Desa Wisata & Verifikasi dengan UI/UX Modern.
  * Matches DB Table: dw_desa
- * Version: 5.1 (User Filter: Admin Desa & Unlinked)
+ * Version: 6.5 (Updated Referral Generator Format)
  * @package DesaWisataCore
  */
 
@@ -60,14 +60,14 @@ function dw_desa_page_render() {
             $message_type = 'success';
         }
 
-        // B. VERIFIKASI PREMIUM (APPROVE / REJECT)
+        // B. VERIFIKASI PREMIUM (APPROVE / REJECT VIA TAB VERIFIKASI)
         if (isset($_POST['action_verify_desa']) && check_admin_referer('dw_verify_desa')) {
             $desa_id = absint($_POST['desa_id']);
             $decision = sanitize_key($_POST['decision']); 
             
             if ($decision === 'approve') {
                 $wpdb->update($table_desa, ['status_akses_verifikasi' => 'active', 'alasan_penolakan' => null], ['id' => $desa_id]);
-                $message = 'Desa berhasil di-upgrade ke status PREMIUM.';
+                $message = 'Desa berhasil di-upgrade ke status PREMIUM (Active).';
                 $message_type = 'success';
             } else {
                 $reason = sanitize_textarea_field($_POST['alasan_penolakan']);
@@ -77,12 +77,9 @@ function dw_desa_page_render() {
             }
         }
 
-        // C. CRUD DESA UTAMA (SAVE & DELETE)
-        if (isset($_POST['action_desa']) && check_admin_referer('dw_desa_action')) {
-            $action = sanitize_text_field($_POST['action_desa']);
-
-            // DELETE LOGIC
-            if ($action === 'delete' && !empty($_POST['desa_id'])) {
+        // C. DELETE DESA (Action: delete)
+        if (isset($_POST['action_desa']) && $_POST['action_desa'] === 'delete' && check_admin_referer('dw_desa_action')) {
+            if (!empty($_POST['desa_id'])) {
                 $desa_id_to_delete = intval($_POST['desa_id']);
                 
                 // Cek apakah masih ada pedagang terdaftar
@@ -99,101 +96,135 @@ function dw_desa_page_render() {
                         $message = "Gagal menghapus desa."; $message_type = "error";
                     }
                 }
-            
-            // SAVE LOGIC
-            } elseif ($action === 'save') {
-                if (empty($_POST['nama_desa'])) {
-                    $message = 'Gagal: Nama Desa wajib diisi.'; $message_type = 'error';
-                } else {
-                    $id_desa_save = isset($_POST['desa_id']) ? intval($_POST['desa_id']) : 0;
-                    
-                    // --- GENERATE REFERRAL CODE (BACKEND FALLBACK) ---
-                    // Jika kosong atau user membiarkan placeholder
-                    $kode_referral = sanitize_text_field($_POST['kode_referral']);
+            }
+        }
+        
+        // D. SAVE DESA (INSERT / UPDATE)
+        if (isset($_POST['dw_action']) && $_POST['dw_action'] === 'save_desa' && check_admin_referer('dw_save_desa_nonce')) {
+            if (empty($_POST['nama_desa'])) {
+                $message = 'Gagal: Nama Desa wajib diisi.'; $message_type = 'error';
+            } else {
+                $id_desa_save = isset($_POST['desa_id']) ? intval($_POST['desa_id']) : 0;
+                
+                // --- GENERATE REFERRAL CODE (BACKEND FALLBACK) ---
+                $kode_referral = sanitize_text_field($_POST['kode_referral']);
+                
+                // Jika kosong, generate otomatis
+                if (empty($kode_referral)) {
+                    $prov_txt = sanitize_text_field($_POST['provinsi_text']);
+                    $kab_txt  = sanitize_text_field($_POST['kabupaten_text']);
+                    $kel_txt  = sanitize_text_field($_POST['kelurahan_text']);
                     $nama_desa_input = sanitize_text_field($_POST['nama_desa']);
 
-                    if (empty($kode_referral)) {
-                        // Generate: Ambil 3 huruf pertama nama desa + 4 angka acak
-                        $clean_name = preg_replace('/[^A-Za-z]/', '', $nama_desa_input);
-                        $prefix = strtoupper(substr($clean_name, 0, 3));
-                        if(strlen($prefix) < 3) $prefix = 'DES';
-                        $rand_num = rand(1000, 9999);
-                        $kode_referral = $prefix . $rand_num;
+                    // Logic Baru: PRO-KAB-DES-XXXX
+                    // Helper function internal
+                    $get_region_code = function($text, $type = '') {
+                        if (empty($text)) return 'XXX';
+                        $clean = trim(strtolower($text));
+                        $clean = preg_replace('/^(provinsi|kabupaten|kota|desa|kelurahan)\s+/', '', $clean);
                         
-                        // Cek unik sederhana (looping jika ada yg sama - simple check)
-                        $is_exist = $wpdb->get_var($wpdb->prepare("SELECT id FROM $table_desa WHERE kode_referral = %s AND id != %d", $kode_referral, $id_desa_save));
-                        if($is_exist) {
-                            $kode_referral = $prefix . rand(10000, 99999); // Coba lagi dengan 5 digit
+                        // Mapping Khusus
+                        if ($type === 'province') {
+                            if ($clean == 'jawa barat') return 'JAB';
+                            if ($clean == 'jawa tengah') return 'JTG';
+                            if ($clean == 'jawa timur') return 'JTM';
+                            if (strpos($clean, 'jakarta') !== false) return 'DKI';
+                            if (strpos($clean, 'yogyakarta') !== false) return 'DIY';
                         }
-                    } else {
-                        $kode_referral = strtoupper($kode_referral);
-                    }
+                        
+                        $clean_no_space = str_replace(' ', '', $clean);
+                        return strtoupper(substr($clean_no_space, 0, 3));
+                    };
 
-                    $data = [
-                        'id_user_desa'        => intval($_POST['id_user_desa']),
-                        'nama_desa'           => $nama_desa_input,
-                        'slug_desa'           => sanitize_title($nama_desa_input),
-                        'kode_referral'       => $kode_referral,
-                        'deskripsi'           => wp_kses_post($_POST['deskripsi']),
-                        'foto'                => esc_url_raw($_POST['foto_url']),
-                        'foto_sampul'         => esc_url_raw($_POST['foto_sampul_url']),
-                        'status'              => sanitize_text_field($_POST['status']),
-                        
-                        // Bank Info
-                        'no_rekening_desa'        => sanitize_text_field($_POST['no_rekening_desa']),
-                        'nama_bank_desa'          => sanitize_text_field($_POST['nama_bank_desa']),
-                        'atas_nama_rekening_desa' => sanitize_text_field($_POST['atas_nama_rekening_desa']),
-                        'qris_image_url_desa'     => esc_url_raw($_POST['qris_url']),
-                        
-                        // Wilayah & Alamat
-                        'api_provinsi_id'         => sanitize_text_field($_POST['api_provinsi_id']),
-                        'api_kabupaten_id'        => sanitize_text_field($_POST['api_kabupaten_id']),
-                        'api_kecamatan_id'        => sanitize_text_field($_POST['api_kecamatan_id']),
-                        'api_kelurahan_id'        => sanitize_text_field($_POST['api_kelurahan_id']),
-                        'provinsi'                => sanitize_text_field($_POST['provinsi_text']),
-                        'kabupaten'               => sanitize_text_field($_POST['kabupaten_text']),
-                        'kecamatan'               => sanitize_text_field($_POST['kecamatan_text']),
-                        'kelurahan'               => sanitize_text_field($_POST['kelurahan_text']),
-                        'alamat_lengkap'          => sanitize_textarea_field($_POST['alamat_lengkap']),
-                        'kode_pos'                => sanitize_text_field($_POST['kode_pos']),
-                        
-                        'updated_at'              => current_time('mysql')
-                    ];
-                    
-                    // Input Status Verifikasi (hanya jika admin mengubahnya manual di form)
-                    if(isset($_POST['status_akses_verifikasi'])) {
-                        $data['status_akses_verifikasi'] = sanitize_text_field($_POST['status_akses_verifikasi']);
-                    }
+                    $c_prov = $get_region_code($prov_txt, 'province');
+                    $c_kab  = $get_region_code($kab_txt);
+                    // Gunakan nama desa input jika kelurahan kosong
+                    $c_des  = $get_region_code(!empty($kel_txt) ? $kel_txt : $nama_desa_input);
+                    $rand   = rand(1000, 9999);
 
-                    if ($id_desa_save > 0) {
-                        $wpdb->update($table_desa, $data, ['id' => $id_desa_save]);
-                        $message = 'Data Desa berhasil diperbarui.'; 
-                    } else {
-                        $data['created_at'] = current_time('mysql');
-                        $data['total_pendapatan'] = 0;
-                        $data['saldo_komisi'] = 0;
-                        $wpdb->insert($table_desa, $data);
-                        $message = 'Desa baru berhasil ditambahkan.'; 
+                    $kode_referral = "$c_prov-$c_kab-$c_des-$rand";
+
+                    // Cek Unik
+                    $is_exist = $wpdb->get_var($wpdb->prepare("SELECT id FROM $table_desa WHERE kode_referral = %s AND id != %d", $kode_referral, $id_desa_save));
+                    while($is_exist) {
+                        $rand = rand(1000, 9999);
+                        $kode_referral = "$c_prov-$c_kab-$c_des-$rand";
+                        $is_exist = $wpdb->get_var($wpdb->prepare("SELECT id FROM $table_desa WHERE kode_referral = %s AND id != %d", $kode_referral, $id_desa_save));
                     }
-                    $message_type = 'success';
-                    
-                    // Jika sukses save, kembali ke list atau tetap di edit
-                    if ($id_desa_save == 0) $action_view = 'list';
+                } else {
+                    $kode_referral = strtoupper($kode_referral);
                 }
+
+                // MAPPING DATA SESUAI TABEL DATABASE
+                $data = [
+                    'id_user_desa'            => intval($_POST['id_user_desa']),
+                    'nama_desa'               => sanitize_text_field($_POST['nama_desa']),
+                    'slug_desa'               => sanitize_title($_POST['nama_desa']),
+                    'kode_referral'           => $kode_referral,
+                    'deskripsi'               => wp_kses_post($_POST['deskripsi']),
+                    'foto'                    => esc_url_raw($_POST['foto_url']),
+                    'foto_sampul'             => esc_url_raw($_POST['foto_sampul_url']),
+                    
+                    // Status Publikasi
+                    'status'                  => sanitize_text_field($_POST['status']), 
+                    
+                    // Bank Info
+                    'no_rekening_desa'        => sanitize_text_field($_POST['no_rekening_desa']),
+                    'nama_bank_desa'          => sanitize_text_field($_POST['nama_bank_desa']),
+                    'atas_nama_rekening_desa' => sanitize_text_field($_POST['atas_nama_rekening_desa']),
+                    'qris_image_url_desa'     => esc_url_raw($_POST['qris_url']),
+                    
+                    // Wilayah & Alamat (Simpan Nama & ID API)
+                    'api_provinsi_id'         => sanitize_text_field($_POST['api_provinsi_id']),
+                    'api_kabupaten_id'        => sanitize_text_field($_POST['api_kabupaten_id']),
+                    'api_kecamatan_id'        => sanitize_text_field($_POST['api_kecamatan_id']),
+                    'api_kelurahan_id'        => sanitize_text_field($_POST['api_kelurahan_id']),
+                    
+                    'provinsi'                => sanitize_text_field($_POST['provinsi_text']),
+                    'kabupaten'               => sanitize_text_field($_POST['kabupaten_text']),
+                    'kecamatan'               => sanitize_text_field($_POST['kecamatan_text']),
+                    'kelurahan'               => sanitize_text_field($_POST['kelurahan_text']),
+                    
+                    'alamat_lengkap'          => sanitize_textarea_field($_POST['alamat_lengkap']),
+                    'kode_pos'                => sanitize_text_field($_POST['kode_pos']),
+                    
+                    // Status Verifikasi Premium
+                    'status_akses_verifikasi' => sanitize_text_field($_POST['status_akses_verifikasi']),
+                    'bukti_bayar_akses'       => esc_url_raw($_POST['bukti_bayar_akses_url']),
+                    'alasan_penolakan'        => sanitize_textarea_field($_POST['alasan_penolakan']),
+
+                    'updated_at'              => current_time('mysql')
+                ];
+                
+                if ($id_desa_save > 0) {
+                    $wpdb->update($table_desa, $data, ['id' => $id_desa_save]);
+                    $message = 'Data Desa berhasil diperbarui.'; 
+                } else {
+                    $data['created_at'] = current_time('mysql');
+                    $data['total_pendapatan'] = 0;
+                    $data['saldo_komisi'] = 0;
+                    $wpdb->insert($table_desa, $data);
+                    $message = 'Desa baru berhasil ditambahkan.'; 
+                }
+                $message_type = 'success';
+                
+                if ($id_desa_save == 0) $action_view = 'list';
             }
         }
     }
     
-    // --- Data Preparation ---
+    // --- Data Preparation (Edit/Add) ---
     $is_edit = ($action_view === 'edit' || $action_view === 'add');
     $edit_data = null;
     
-    // Objek Default agar tidak error undefined property
+    // Objek Default
     $default_data = (object) [
         'id' => 0, 'id_user_desa' => 0, 'nama_desa' => '', 'deskripsi' => '',
-        'kode_referral' => '', 'status' => 'aktif', 
+        'kode_referral' => '', 
+        'status' => 'pending', // Default status publikasi
         'foto' => '', 'foto_sampul' => '',
-        'status_akses_verifikasi' => 'locked', 'bukti_bayar_akses' => '', 'alasan_penolakan' => '',
+        'status_akses_verifikasi' => 'locked', // Default status verifikasi
+        'bukti_bayar_akses' => '', 'alasan_penolakan' => '',
         'api_provinsi_id'=>'', 'api_kabupaten_id'=>'', 'api_kecamatan_id'=>'', 'api_kelurahan_id'=>'',
         'provinsi'=>'', 'kabupaten'=>'', 'kecamatan'=>'', 'kelurahan'=>'',
         'alamat_lengkap'=>'', 'kode_pos'=>'',
@@ -206,125 +237,77 @@ function dw_desa_page_render() {
     }
     if (!$edit_data) $edit_data = $default_data;
 
-    $link_daftar_pedagang = home_url( '/register/?ref=' . ($edit_data->kode_referral ?: 'DESA') );
-    
     // --- USER FILTER LOGIC ---
-    // 1. Ambil ID User yang SUDAH terpakai di tabel dw_desa
     $used_user_ids = $wpdb->get_col("SELECT id_user_desa FROM $table_desa");
     if (!$used_user_ids) $used_user_ids = [];
 
-    // 2. Ambil User WP dengan role 'admin_desa'
-    // Pastikan role 'admin_desa' ada. Jika tidak, gunakan subscriber atau role lain yang sesuai.
     $users = get_users([
         'orderby' => 'display_name', 
-        'role'    => 'admin_desa' // Filter hanya Admin Desa
+        'role'    => 'admin_desa'
     ]);
 
-    // Counter untuk badge notifikasi
+    // --- USED REGION LOGIC (PREVENT DUPLICATE VILLAGE) ---
+    $used_kelurahan_ids = $wpdb->get_col("SELECT api_kelurahan_id FROM $table_desa WHERE api_kelurahan_id != ''");
+    if ($action_view === 'edit' && !empty($edit_data->api_kelurahan_id)) {
+        $used_kelurahan_ids = array_diff($used_kelurahan_ids, [$edit_data->api_kelurahan_id]);
+    }
+    $used_kelurahan_ids = array_values($used_kelurahan_ids);
+
     $count_verify = $wpdb->get_var("SELECT COUNT(*) FROM $table_desa WHERE status_akses_verifikasi = 'pending'");
-    
-    // Stats Keuangan Global (Pastikan variabel ini selalu terdefinisi)
     $total_pendapatan_all = $wpdb->get_var("SELECT SUM(total_pendapatan) FROM $table_desa") ?: 0;
     $total_saldo_komisi_all = $wpdb->get_var("SELECT SUM(saldo_komisi) FROM $table_desa") ?: 0;
 
-    // Define stats variables for list view to avoid undefined notices
-    $total_desa = 0;
-    $active_count = 0;
-    $total_pending = 0;
-    
+    $total_desa = 0; $active_count = 0; $total_pending = 0;
     if (!$is_edit) {
         $total_desa = $wpdb->get_var("SELECT COUNT(id) FROM $table_desa");
         $active_count = $wpdb->get_var("SELECT COUNT(id) FROM $table_desa WHERE status = 'aktif'");
         $total_pending = $wpdb->get_var("SELECT COUNT(id) FROM $table_desa WHERE status_akses_verifikasi = 'pending'");
-        $total_premium = $wpdb->get_var("SELECT COUNT(id) FROM $table_desa WHERE status_akses_verifikasi = 'active'");
     }
 
-    /**
-     * =========================================================================
-     * 3. UI VIEW MODERN
-     * =========================================================================
-     */
     ?>
+    <!-- CSS Styles -->
     <style>
-        /* Modern Admin CSS Variables */
-        :root {
-            --dw-primary: #2271b1; --dw-primary-dark: #135e96;
-            --dw-success: #00a32a; --dw-warning: #dba617; --dw-danger: #d63638;
-            --dw-gray-50: #f8fafc; --dw-gray-200: #e2e8f0; --dw-gray-700: #334155;
-            --dw-radius: 6px; --dw-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
-
+        :root { --dw-primary: #2271b1; --dw-primary-dark: #135e96; --dw-success: #00a32a; --dw-warning: #dba617; --dw-danger: #d63638; --dw-gray-50: #f8fafc; --dw-gray-200: #e2e8f0; --dw-gray-700: #334155; --dw-radius: 6px; --dw-shadow: 0 2px 4px rgba(0,0,0,0.05); }
         .dw-container { margin: 20px 20px 0 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        
-        /* Modern Tabs */
         .dw-modern-tabs { display: flex; gap: 5px; border-bottom: 1px solid var(--dw-gray-200); margin-bottom: 20px; }
-        .dw-modern-tab { 
-            text-decoration: none; color: var(--dw-gray-700); padding: 10px 15px; font-weight: 500; font-size: 14px; 
-            border: 1px solid transparent; border-bottom: none; border-radius: var(--dw-radius) var(--dw-radius) 0 0;
-            display: flex; align-items: center; gap: 6px; background: #fff;
-        }
+        .dw-modern-tab { text-decoration: none; color: var(--dw-gray-700); padding: 10px 15px; font-weight: 500; font-size: 14px; border: 1px solid transparent; border-bottom: none; border-radius: var(--dw-radius) var(--dw-radius) 0 0; display: flex; align-items: center; gap: 6px; background: #fff; }
         .dw-modern-tab:hover { background: var(--dw-gray-50); }
         .dw-modern-tab.active { border-color: var(--dw-gray-200); border-bottom-color: #fff; color: var(--dw-primary); font-weight: 600; margin-bottom: -1px; }
-        .dw-modern-tab .dashicons { font-size: 16px; }
         .dw-badge-notify { background: var(--dw-danger); color: white; font-size: 10px; padding: 1px 6px; border-radius: 10px; }
-
-        /* Modern Cards */
         .dw-modern-card { background: white; border: 1px solid var(--dw-gray-200); border-radius: var(--dw-radius); box-shadow: var(--dw-shadow); padding: 0; margin-bottom: 20px; overflow: hidden; }
         .dw-card-header { padding: 15px 20px; border-bottom: 1px solid var(--dw-gray-200); background: #fff; display: flex; justify-content: space-between; align-items: center; }
         .dw-card-title { font-size: 16px; font-weight: 600; margin: 0; color: #1e293b; display: flex; align-items: center; gap: 8px; }
         .dw-card-body { padding: 20px; }
-
-        /* Form Grid */
         .dw-form-grid { display: grid; grid-template-columns: 280px 1fr; gap: 20px; align-items: start; }
         .dw-form-group { margin-bottom: 15px; }
         .dw-form-group label { display: block; margin-bottom: 5px; font-weight: 500; color: var(--dw-gray-700); font-size: 13px; }
         .dw-input { width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 14px; }
         .dw-input:focus { border-color: var(--dw-primary); box-shadow: 0 0 0 1px var(--dw-primary); outline: none; }
-        
-        /* Input Group for Generator */
         .dw-input-group { display: flex; }
         .dw-input-group input { border-top-right-radius: 0; border-bottom-right-radius: 0; border-right: none; }
-        .dw-input-group button { 
-            border-top-left-radius: 0; border-bottom-left-radius: 0; 
-            border: 1px solid #cbd5e1; background: #f1f5f9; color: var(--dw-gray-700); 
-            padding: 0 12px; cursor: pointer; display: flex; align-items: center; justify-content: center;
-        }
-        .dw-input-group button:hover { background: #e2e8f0; }
-
-        /* Buttons */
+        .dw-input-group button { border-top-left-radius: 0; border-bottom-left-radius: 0; border: 1px solid #cbd5e1; background: #f1f5f9; color: var(--dw-gray-700); padding: 0 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
         .dw-btn { padding: 8px 16px; border-radius: 4px; font-weight: 500; font-size: 13px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 5px; border: 1px solid transparent; }
         .dw-btn-primary { background: var(--dw-primary); color: white; border-color: var(--dw-primary); }
-        .dw-btn-primary:hover { background: var(--dw-primary-dark); color: white; }
         .dw-btn-outline { background: white; border-color: #cbd5e1; color: var(--dw-gray-700); }
-        .dw-btn-outline:hover { background: var(--dw-gray-50); border-color: #94a3b8; }
         .dw-btn-danger { background: #fff; border-color: #fca5a5; color: var(--dw-danger); }
-        .dw-btn-danger:hover { background: #fef2f2; border-color: var(--dw-danger); }
-        .dw-btn-sm { padding: 4px 10px; font-size: 12px; }
-
-        /* Stats & Table */
         .dw-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
         .dw-stat-box { background: white; padding: 15px; border-radius: var(--dw-radius); border: 1px solid var(--dw-gray-200); display: flex; align-items: center; gap: 12px; }
         .dw-stat-icon { width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
         .dw-stat-icon.blue { background: #e0f2fe; color: #0284c7; }
         .dw-stat-icon.green { background: #dcfce7; color: #16a34a; }
         .dw-stat-icon.yellow { background: #fef9c3; color: #ca8a04; }
-        .dw-stat-icon.purple { background: #f3e8ff; color: #9333ea; } /* Finance */
+        .dw-stat-icon.purple { background: #f3e8ff; color: #9333ea; }
         .dw-stat-content h4 { margin: 0; font-size: 18px; font-weight: 700; color: #1e293b; }
         .dw-stat-content span { font-size: 12px; color: #64748b; }
-
         .dw-table { width: 100%; border-collapse: collapse; }
         .dw-table th { text-align: left; padding: 12px 15px; background: var(--dw-gray-50); border-bottom: 1px solid var(--dw-gray-200); font-size: 12px; color: #64748b; text-transform: uppercase; font-weight: 600; }
         .dw-table td { padding: 12px 15px; border-bottom: 1px solid var(--dw-gray-200); vertical-align: middle; color: #334155; }
         .dw-table tr:hover { background: var(--dw-gray-50); }
-
-        /* Badges */
         .dw-pill { padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; display: inline-block; }
         .dw-pill.success { background: #dcfce7; color: #166534; }
         .dw-pill.warning { background: #fef9c3; color: #854d0e; }
         .dw-pill.gray { background: #f1f5f9; color: #475569; }
         .dw-pill.blue { background: #dbeafe; color: #1e40af; }
-
-        /* Helpers */
         .img-preview { width: 100%; height: 140px; background: var(--dw-gray-50); border: 2px dashed #cbd5e1; border-radius: 6px; object-fit: cover; margin-bottom: 10px; display: block; }
         .dw-text-muted { color: #64748b; font-size: 12px; }
         @media(max-width: 900px) { .dw-form-grid { grid-template-columns: 1fr; } }
@@ -371,7 +354,7 @@ function dw_desa_page_render() {
         <?php if($active_tab == 'data_desa'): ?>
             <?php if (!$is_edit): ?>
                 
-                <!-- STATS -->
+                <!-- STATS & TABLE -->
                 <div class="dw-stats-grid">
                     <div class="dw-stat-box">
                         <div class="dw-stat-icon blue"><span class="dashicons dashicons-admin-site-alt3"></span></div>
@@ -397,7 +380,6 @@ function dw_desa_page_render() {
                     </div>
                 </div>
 
-                <!-- TABLE -->
                 <div class="dw-modern-card">
                     <div class="dw-card-header">
                         <h3 class="dw-card-title">Daftar Desa Wisata</h3>
@@ -431,6 +413,7 @@ function dw_desa_page_render() {
                                     <th>Lokasi</th>
                                     <th>Admin</th>
                                     <th>Keuangan</th>
+                                    <th>Status Publikasi</th>
                                     <th>Status Akses</th>
                                     <th style="text-align:right;">Aksi</th>
                                 </tr>
@@ -448,6 +431,10 @@ function dw_desa_page_render() {
                                     <td>
                                         <div style="font-size:11px;">Total: <strong>Rp <?php echo number_format($r->total_pendapatan, 0, ',', '.'); ?></strong></div>
                                         <div style="font-size:11px; color:var(--dw-warning);">Sisa: <strong>Rp <?php echo number_format($r->saldo_komisi, 0, ',', '.'); ?></strong></div>
+                                    </td>
+                                    <td>
+                                        <?php if($r->status == 'aktif'): ?><span class="dw-pill success">Aktif</span>
+                                        <?php else: ?><span class="dw-pill warning">Pending</span><?php endif; ?>
                                     </td>
                                     <td>
                                         <?php if($r->status_akses_verifikasi == 'active'): ?><span class="dw-pill success">Premium</span>
@@ -496,13 +483,36 @@ function dw_desa_page_render() {
                                     <input type="hidden" name="foto_url" id="foto_url" value="<?php echo esc_attr($edit_data->foto); ?>">
                                     <button type="button" class="dw-btn dw-btn-outline dw-btn-sm btn_upload" data-target="#foto_url" data-preview="#preview_foto" style="width:100%; justify-content:center;">Upload Logo</button>
                                 </div>
+                                
                                 <div class="dw-form-group">
                                     <label>Status Publikasi</label>
                                     <select name="status" class="dw-input">
-                                        <option value="aktif" <?php selected($edit_data->status, 'aktif'); ?>>Aktif</option>
-                                        <option value="pending" <?php selected($edit_data->status, 'pending'); ?>>Pending</option>
+                                        <option value="aktif" <?php selected($edit_data->status, 'aktif'); ?>>Aktif (Publik)</option>
+                                        <option value="pending" <?php selected($edit_data->status, 'pending'); ?>>Pending (Menunggu)</option>
                                     </select>
                                 </div>
+
+                                <div class="dw-form-group">
+                                    <label>Status Premium (Verifikasi)</label>
+                                    <select name="status_akses_verifikasi" class="dw-input">
+                                        <option value="locked" <?php selected($edit_data->status_akses_verifikasi, 'locked'); ?>>Locked (Free)</option>
+                                        <option value="pending" <?php selected($edit_data->status_akses_verifikasi, 'pending'); ?>>Pending Review</option>
+                                        <option value="active" <?php selected($edit_data->status_akses_verifikasi, 'active'); ?>>Active (Premium)</option>
+                                    </select>
+                                </div>
+
+                                <div class="dw-form-group">
+                                    <label>Bukti Bayar Akses</label>
+                                    <img src="<?php echo !empty($edit_data->bukti_bayar_akses) ? esc_url($edit_data->bukti_bayar_akses) : ''; ?>" class="img-preview" id="preview_bukti" style="height:100px;">
+                                    <input type="hidden" name="bukti_bayar_akses_url" id="bukti_bayar_akses_url" value="<?php echo esc_attr($edit_data->bukti_bayar_akses); ?>">
+                                    <button type="button" class="dw-btn dw-btn-outline dw-btn-sm btn_upload" data-target="#bukti_bayar_akses_url" data-preview="#preview_bukti" style="width:100%; justify-content:center;">Upload Bukti</button>
+                                </div>
+
+                                <div class="dw-form-group">
+                                    <label>Alasan Penolakan (Jika ada)</label>
+                                    <textarea name="alasan_penolakan" class="dw-input" rows="2"><?php echo esc_textarea($edit_data->alasan_penolakan); ?></textarea>
+                                </div>
+
                                 <?php if($edit_data->id > 0): ?>
                                 <div class="dw-form-group" style="padding:10px; background:#f8fafc; border-radius:4px; border:1px solid #e2e8f0;">
                                     <label style="color:var(--dw-primary);">Info Keuangan (Read-only)</label>
@@ -545,12 +555,12 @@ function dw_desa_page_render() {
                                     <input type="text" name="nama_desa" id="inp_nama_desa" class="dw-input" value="<?php echo esc_attr($edit_data->nama_desa); ?>" required>
                                 </div>
                                 <div class="dw-form-group">
-                                    <label>Kode Referral (Kosongkan untuk otomatis)</label>
+                                    <label>Kode Referral (Otomatis)</label>
                                     <div class="dw-input-group">
-                                        <input type="text" name="kode_referral" id="inp_kode_ref" class="dw-input" value="<?php echo esc_attr($edit_data->kode_referral); ?>" placeholder="Contoh: BANTUL-1234">
+                                        <input type="text" name="kode_referral" id="inp_kode_ref" class="dw-input" value="<?php echo esc_attr($edit_data->kode_referral); ?>" placeholder="Otomatis (Isi Wilayah Terlebih Dahulu)" readonly>
                                         <button type="button" id="btnGenRef" title="Generate Otomatis"><span class="dashicons dashicons-randomize"></span></button>
                                     </div>
-                                    <small class="dw-text-muted">Klik tombol dadu untuk generate otomatis berdasarkan nama desa.</small>
+                                    <small class="dw-text-muted">Format: [3 PRO]-[3 KAB]-[3 DES]-[4 ACAK]. Klik tombol dadu setelah mengisi data wilayah.</small>
                                 </div>
                                 <div class="dw-form-group">
                                     <label>Deskripsi</label>
@@ -590,7 +600,7 @@ function dw_desa_page_render() {
                                 </div>
                                 <div class="dw-form-group" style="width: 50%;">
                                     <label>Kode Pos</label>
-                                    <input type="text" name="kode_pos" class="dw-input" value="<?php echo esc_attr($edit_data->kode_pos); ?>">
+                                    <input type="text" name="kode_pos" id="inp_kode_pos" class="dw-input" value="<?php echo esc_attr($edit_data->kode_pos); ?>">
                                 </div>
                             </div>
                         </div>
@@ -734,19 +744,58 @@ function dw_desa_page_render() {
         // GENERATOR KODE REFERRAL (JS)
         $('#btnGenRef').click(function(e){
             e.preventDefault();
-            var namaDesa = $('#inp_nama_desa').val();
-            if(!namaDesa){
-                alert('Mohon isi Nama Desa terlebih dahulu.');
+            
+            // Cek apakah input sudah terisi (Mode Edit) - Jika ada, minta konfirmasi
+            var currentVal = $('#inp_kode_ref').val();
+            if(currentVal && !confirm('Kode Referral sudah terisi: "' + currentVal + '". Apakah Anda yakin ingin membuat ulang? Kode lama akan hilang.')){
                 return;
             }
-            // Logic: 3 huruf pertama uppercase + 4 angka random
-            var cleanName = namaDesa.replace(/[^a-zA-Z]/g, '').substring(0,3).toUpperCase();
-            if(cleanName.length < 3) cleanName = 'DES';
-            var randNum = Math.floor(1000 + Math.random() * 9000);
-            var kodeBaru = cleanName + '-' + randNum;
+
+            var prov = $('.dw-text-prov').val() || '';
+            var kab  = $('.dw-text-kota').val() || '';
+            var kel  = $('.dw-text-desa').val() || '';
+            var namaDesa = $('#inp_nama_desa').val() || '';
             
-            $('#inp_kode_ref').val(kodeBaru);
+            if(!namaDesa && !kel){
+                alert('Gagal Generate: Harap isi Nama Desa atau pilih Wilayah (Kelurahan) terlebih dahulu.');
+                return;
+            }
+
+            // Helper Logic: 3 Huruf (Smart Mapping)
+            function getCode(text, type) {
+                if(!text) return 'XXX';
+                var clean = text.toLowerCase().trim();
+                // Hapus awalan umum
+                clean = clean.replace(/^(provinsi|kabupaten|kota|desa|kelurahan)\s+/g, '');
+                
+                // Mapping Khusus (sama dengan PHP)
+                if(type === 'prov') {
+                    if(clean === 'jawa barat') return 'JAB';
+                    if(clean === 'jawa tengah') return 'JTG';
+                    if(clean === 'jawa timur') return 'JTM';
+                    if(clean.includes('jakarta')) return 'DKI';
+                    if(clean.includes('yogyakarta')) return 'DIY';
+                }
+                
+                // Remove spaces and take first 3 chars
+                return clean.replace(/\s/g, '').substring(0,3).toUpperCase();
+            }
+            
+            // Prioritas: Wilayah -> Nama Desa
+            var cProv = getCode(prov, 'prov');
+            var cKab  = getCode(kab);
+            var cDes  = getCode(kel ? kel : namaDesa); // Fallback ke nama desa jika kelurahan blm dipilih
+            
+            // Generate 4 digit acak
+            var rand = Math.floor(1000 + Math.random() * 9000); // 1000-9999
+            
+            $('#inp_kode_ref').val(cProv + '-' + cKab + '-' + cDes + '-' + rand);
         });
+        
+        // Pass PHP array to JS
+        var usedKelurahan = <?php echo json_encode($used_kelurahan_ids); ?>;
+        // Ensure strings
+        usedKelurahan = usedKelurahan.map(String);
 
         // Region API
         function loadRegion(type, pid, target, selId) {
@@ -755,8 +804,21 @@ function dw_desa_page_render() {
             $.get(ajaxurl, { action:act, province_id:pid, regency_id:pid, district_id:pid, nonce:'<?php echo wp_create_nonce("dw_region_nonce"); ?>' }, function(res){
                 if(res.success) {
                     target.empty().append('<option value="">Pilih...</option>');
-                    $.each(res.data, function(i,v){ target.append('<option value="'+v.id+'" '+(String(v.id)===String(selId)?'selected':'')+'>'+v.name+'</option>'); });
-                    if(selId) target.trigger('change');
+                    $.each(res.data, function(i,v){ 
+                        // Tambahkan data-pos jika ada (untuk kelurahan)
+                        let pos = v.postal_code || '';
+                        
+                        let isDisabled = '';
+                        let suffix = '';
+                        
+                        // Check if duplicate village
+                        if (type === 'desa' && usedKelurahan.includes(String(v.id))) {
+                            isDisabled = 'disabled';
+                            suffix = ' (Sudah Terdaftar)';
+                        }
+                        
+                        target.append(`<option value="${v.id}" data-nama="${v.name}" data-pos="${pos}" ${(String(v.id)===String(selId)?'selected':'')} ${isDisabled}>${v.name}${suffix}</option>`); 
+                    });
                 }
             });
         }
@@ -764,11 +826,20 @@ function dw_desa_page_render() {
         $('.dw-region-prov').change(function(){ $('.dw-text-prov').val($(this).find('option:selected').text()); loadRegion('kota', $(this).val(), $('.dw-region-kota'), null); });
         $('.dw-region-kota').change(function(){ $('.dw-text-kota').val($(this).find('option:selected').text()); loadRegion('kec', $(this).val(), $('.dw-region-kec'), null); });
         $('.dw-region-kec').change(function(){ $('.dw-text-kec').val($(this).find('option:selected').text()); loadRegion('desa', $(this).val(), $('.dw-region-desa'), null); });
-        $('.dw-region-desa').change(function(){ $('.dw-text-desa').val($(this).find('option:selected').text()); });
+        
+        // Auto Fill Postal Code on Village Change
+        $('.dw-region-desa').change(function(){ 
+            $('.dw-text-desa').val($(this).find('option:selected').text()); 
+            // Use attribute to get correct postal code
+            let pos = $(this).find('option:selected').attr('data-pos');
+            if(pos) {
+                $('#inp_kode_pos').val(pos);
+            }
+        });
 
         // Init
         loadRegion('prov', null, $('.dw-region-prov'), $('.dw-region-prov').data('current'));
-        $('.dw-region-prov').trigger('change'); // Chain trigger if needed logic improvement
+        $('.dw-region-prov').trigger('change'); 
         
         // Manual trigger for edit mode waterfall (simple version)
         var p = $('.dw-region-prov').data('current'); if(p) loadRegion('kota', p, $('.dw-region-kota'), $('.dw-region-kota').data('current'));
