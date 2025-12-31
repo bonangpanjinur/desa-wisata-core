@@ -3,7 +3,7 @@
  * File Name:   includes/admin-pages/page-pembeli.php
  * Description: Dashboard Manajemen Pembeli (Premium UI).
  * Database:    wp_users, dw_pembeli, dw_transaksi.
- * Version:     5.3 (UX Fixed: Link Ganti Password & Auto Copy)
+ * Version:     5.4 (UX Fixed: Link Ganti Password & Auto Copy & CRUD)
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -41,10 +41,14 @@ if ( isset($_GET['dw_ajax']) ) {
     // B. Fetch Regions
     if ( in_array($action, ['get_prov','get_kab','get_kec','get_kel']) ) {
         $res = [];
-        if($action == 'get_prov' && function_exists('dw_get_provinces')) $res = dw_get_provinces();
-        elseif($action == 'get_kab' && function_exists('dw_get_regencies')) $res = dw_get_regencies($_GET['id']);
-        elseif($action == 'get_kec' && function_exists('dw_get_districts')) $res = dw_get_districts($_GET['id']);
-        elseif($action == 'get_kel' && function_exists('dw_get_villages')) $res = dw_get_villages($_GET['id']);
+        // Gunakan fungsi dari address-api.php jika tersedia
+        // Pastikan parameter ID dikirim dengan benar
+        $id = isset($_GET['id']) ? sanitize_text_field($_GET['id']) : '';
+
+        if($action == 'get_prov' && class_exists('DW_Address_API')) $res = DW_Address_API::get_provinces();
+        elseif($action == 'get_kab' && class_exists('DW_Address_API')) $res = DW_Address_API::get_cities($id);
+        elseif($action == 'get_kec' && class_exists('DW_Address_API')) $res = DW_Address_API::get_subdistricts($id);
+        elseif($action == 'get_kel' && class_exists('DW_Address_API')) $res = DW_Address_API::get_villages($id);
         
         echo json_encode(['success' => true, 'data' => $res]);
         exit;
@@ -113,7 +117,9 @@ if ( isset($_POST['dw_action']) && $_POST['dw_action'] == 'save_buyer' && check_
 
     update_user_meta($uid, 'billing_phone', $data['no_hp']);
 
-    echo "<script>window.location.href='" . add_query_arg('msg', 'saved') . "';</script>";
+    // Redirect to same page with success message
+    $redirect_url = add_query_arg('msg', 'saved', admin_url('admin.php?page=dw-pembeli'));
+    wp_redirect($redirect_url);
     exit;
 }
 
@@ -122,7 +128,10 @@ if ( isset($_GET['action']) && $_GET['action'] == 'reset_pass' && isset($_GET['u
     $u = get_userdata(intval($_GET['uid']));
     if($u) {
         retrieve_password($u->user_login);
-        echo "<script>alert('Email ganti password berhasil dikirim.'); window.location.href='" . remove_query_arg(['action','uid']) . "';</script>";
+        $redirect_url = remove_query_arg(['action','uid'], admin_url('admin.php?page=dw-pembeli'));
+        $redirect_url = add_query_arg('msg', 'email_sent', $redirect_url);
+        wp_redirect($redirect_url);
+        exit;
     }
 }
 
@@ -230,6 +239,9 @@ foreach($users as $u) {
     
     <?php if(isset($_GET['msg']) && $_GET['msg'] == 'saved'): ?>
         <div class="notice notice-success is-dismissible"><p><strong>Berhasil!</strong> Data pembeli telah disimpan.</p></div>
+    <?php endif; ?>
+    <?php if(isset($_GET['msg']) && $_GET['msg'] == 'email_sent'): ?>
+        <div class="notice notice-success is-dismissible"><p><strong>Berhasil!</strong> Email reset password telah dikirim ke user.</p></div>
     <?php endif; ?>
 
     <div class="dw-head">
@@ -395,7 +407,8 @@ foreach($users as $u) {
 <script>
 jQuery(document).ready(function($) {
     // Gunakan URL saat ini + parameter ajax
-    const selfAjax = window.location.href + '&dw_ajax=';
+    // Pastikan tidak menumpuk query string yang sudah ada jika page direfresh
+    const selfAjax = window.location.pathname + window.location.search + '&dw_ajax=';
 
     $('#liveSearch').on('keyup', function() {
         let val = $(this).val().toLowerCase();
@@ -505,7 +518,11 @@ jQuery(document).ready(function($) {
     // --- RESET ACTIONS ---
     window.doReset = function() {
         if(confirm('Kirim email ganti password ke user?')) {
-            window.location.href = window.location.href + '&action=reset_pass&uid=' + $('#f_uid').val();
+            // Bersihkan query string sebelumnya agar tidak dobel
+            let currentUrl = new URL(window.location.href);
+            currentUrl.searchParams.set('action', 'reset_pass');
+            currentUrl.searchParams.set('uid', $('#f_uid').val());
+            window.location.href = currentUrl.toString();
         }
     }
 
@@ -516,14 +533,16 @@ jQuery(document).ready(function($) {
         $.get(selfAjax + 'gen_reset_link&uid=' + uid, function(res) {
             if(res.success) {
                 let link = res.data;
-                // Auto Copy UX
-                if(navigator.clipboard) {
+                // Auto Copy UX dengan Fallback
+                if(navigator.clipboard && navigator.clipboard.writeText) {
                     navigator.clipboard.writeText(link).then(() => {
                         alert('Link Ganti Password BERHASIL DISALIN ke clipboard!');
-                    }).catch(() => {
-                        prompt("Link Ganti Password (Salin Manual):", link);
+                    }).catch(err => {
+                        // Fallback jika clipboard API gagal (misal tidak HTTPS)
+                        prompt("Gagal auto-copy. Silakan salin link di bawah ini:", link);
                     });
                 } else {
+                    // Fallback untuk browser lama
                     prompt("Link Ganti Password (Salin Manual):", link);
                 }
             } else {
