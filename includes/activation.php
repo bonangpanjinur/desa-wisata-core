@@ -35,6 +35,7 @@ function dw_activate_plugin() {
        ========================================= */
 
     // 1. Tabel Desa
+    // foto = Logo Desa (Entity), foto_admin = Foto Orang (Person)
     $sql_desa = "CREATE TABLE {$table_prefix}desa (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_user_desa BIGINT(20) UNSIGNED NOT NULL,
@@ -44,6 +45,7 @@ function dw_activate_plugin() {
         deskripsi TEXT,
         foto VARCHAR(255) DEFAULT NULL,
         foto_sampul VARCHAR(255) DEFAULT NULL,
+        foto_admin VARCHAR(255) DEFAULT NULL, 
         total_pendapatan DECIMAL(15,2) DEFAULT 0,
         saldo_komisi DECIMAL(15,2) DEFAULT 0,
         no_rekening_desa VARCHAR(50) DEFAULT NULL,
@@ -76,6 +78,7 @@ function dw_activate_plugin() {
     dbDelta( $sql_desa );
 
     // 2. Tabel Pedagang
+    // foto_profil = Logo Toko (Entity), foto_admin = Foto Pemilik (Person)
     $sql_pedagang = "CREATE TABLE {$table_prefix}pedagang (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_user BIGINT(20) UNSIGNED NOT NULL,
@@ -91,6 +94,7 @@ function dw_activate_plugin() {
         url_gmaps TEXT DEFAULT NULL,
         url_ktp VARCHAR(255),
         nik VARCHAR(50),
+        foto_admin VARCHAR(255) DEFAULT NULL,
         foto_profil VARCHAR(255),
         foto_sampul VARCHAR(255), 
         no_rekening VARCHAR(50) DEFAULT NULL,
@@ -171,6 +175,7 @@ function dw_activate_plugin() {
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_user BIGINT(20) UNSIGNED NOT NULL,
         nama_lengkap VARCHAR(255) NOT NULL,
+        foto_profil VARCHAR(255) DEFAULT NULL,
         nik VARCHAR(50) NOT NULL,
         kode_referral VARCHAR(50),
         nomor_wa VARCHAR(20) NOT NULL,
