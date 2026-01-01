@@ -550,23 +550,7 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_banner );
     
-    // 18. User Alamat
-    $sql_alamat = "CREATE TABLE {$table_prefix}user_alamat (
-        id BIGINT(20) NOT NULL AUTO_INCREMENT,
-        user_id BIGINT(20) UNSIGNED NOT NULL,
-        nama_penerima VARCHAR(255),
-        no_hp VARCHAR(20),
-        alamat_lengkap TEXT,
-        provinsi VARCHAR(100), kabupaten VARCHAR(100), kecamatan VARCHAR(100), kelurahan VARCHAR(100),
-        kode_pos VARCHAR(10), 
-        api_provinsi_id VARCHAR(20), api_kabupaten_id VARCHAR(20), api_kecamatan_id VARCHAR(20), api_kelurahan_id VARCHAR(20),
-        is_default TINYINT(1) DEFAULT 0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY  (id),
-        KEY user_id (user_id)
-    ) $charset_collate;";
-    dbDelta( $sql_alamat );
-
+  
     // 19. Revoked Tokens
     $sql_revoked = "CREATE TABLE {$table_prefix}revoked_tokens (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
