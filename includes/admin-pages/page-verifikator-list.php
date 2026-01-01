@@ -1,18 +1,18 @@
 <?php
 /**
  * File Name:   includes/admin-pages/page-verifikator-list.php
- * Description: Dashboard Manajemen Verifikator UMKM
- * Version:     5.5 (Full Schema Sync & Financial Display)
+ * Description: Dashboard Manajemen Verifikator UMKM (List View & Modal CRUD)
+ * Version:     5.6 (Fix Table Prefix & Add Kode Pos)
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
 global $wpdb;
-// Sinkronisasi Nama Tabel dengan SQL: {$table_prefix}verifikator
-$table_v = $wpdb->prefix . 'verifikator'; 
-$table_p = $wpdb->prefix . 'pedagang'; 
+// FIX: Sesuaikan nama tabel dengan activation.php (prefix 'dw_')
+$table_v = $wpdb->prefix . 'dw_verifikator'; 
+$table_p = $wpdb->prefix . 'dw_pedagang'; 
 
-// --- 1. HANDLE FORM SUBMISSION (ADD/EDIT) ---
+// --- 1. HANDLE FORM SUBMISSION (ADD/EDIT/DELETE) ---
 if ( isset($_POST['dw_action']) ) {
     
     // A. Security Check
@@ -27,6 +27,14 @@ if ( isset($_POST['dw_action']) ) {
     $action_type = sanitize_text_field($_POST['dw_action']);
     $redirect_url = admin_url('admin.php?page=dw-verifikator');
     
+    // DELETE LOGIC
+    if ($action_type == 'delete') {
+        $id_del = intval($_POST['id']);
+        $wpdb->delete($table_v, ['id' => $id_del]);
+        wp_redirect(add_query_arg(['msg' => 'success_delete'], $redirect_url));
+        exit;
+    }
+
     // B. Persiapan Data (Sesuai Schema Database)
     $data = [
         'id_user'           => intval($_POST['user_id']),
@@ -35,6 +43,7 @@ if ( isset($_POST['dw_action']) ) {
         'kode_referral'     => strtoupper(sanitize_text_field($_POST['kode_referral'])),
         'nomor_wa'          => sanitize_text_field($_POST['nomor_wa']),
         'alamat_lengkap'    => sanitize_textarea_field($_POST['alamat_lengkap']),
+        'kode_pos'          => sanitize_text_field($_POST['kode_pos']), // Added Kode Pos
         
         // Data Wilayah (Nama Text)
         'provinsi'          => sanitize_text_field($_POST['provinsi']),
@@ -122,6 +131,7 @@ $table_exists = $wpdb->get_var("SHOW TABLES LIKE '$table_p'") === $table_p;
 $total_v = $wpdb->get_var("SELECT COUNT(id) FROM $table_v WHERE status = 'aktif'");
 $pending_v = $wpdb->get_var("SELECT COUNT(id) FROM $table_v WHERE status = 'pending'");
 $umkm_verified_global = $wpdb->get_var("SELECT SUM(total_verifikasi_sukses) FROM $table_v");
+// Validasi jika tabel pedagang belum ada
 $total_linked_global = $table_exists ? $wpdb->get_var("SELECT COUNT(id) FROM $table_p WHERE id_verifikator > 0") : 0;
 // Statistik Keuangan Global
 $total_saldo_global = $wpdb->get_var("SELECT SUM(saldo_saat_ini) FROM $table_v");
@@ -133,6 +143,7 @@ $verifikators = $wpdb->get_results("
 ");
 
 // --- 3. FILTER USER ---
+// Ambil user yang role-nya verifikator_umkm
 $wp_users = get_users([
     'role'    => 'verifikator_umkm', 
     'orderby' => 'display_name'
@@ -209,6 +220,8 @@ $region_nonce = wp_create_nonce('dw_region_nonce');
             <div class="notice notice-success is-dismissible"><p><strong>Sukses:</strong> Verifikator berhasil ditambahkan.</p></div>
         <?php elseif($_GET['msg'] == 'success_edit'): ?>
             <div class="notice notice-success is-dismissible"><p><strong>Sukses:</strong> Data Verifikator berhasil diperbarui.</p></div>
+        <?php elseif($_GET['msg'] == 'success_delete'): ?>
+            <div class="notice notice-success is-dismissible"><p><strong>Sukses:</strong> Data Verifikator berhasil dihapus.</p></div>
         <?php elseif($_GET['msg'] == 'error_exist_user'): ?>
             <div class="notice notice-error is-dismissible"><p><strong>Gagal:</strong> User WordPress ini sudah terdaftar sebagai verifikator.</p></div>
         <?php elseif($_GET['msg'] == 'error_role'): ?>
@@ -297,6 +310,7 @@ $region_nonce = wp_create_nonce('dw_region_nonce');
                         'kode_referral' => $v->kode_referral,
                         'nomor_wa' => $v->nomor_wa,
                         'alamat_lengkap' => $v->alamat_lengkap,
+                        'kode_pos' => $v->kode_pos, // Added Kode Pos
                         'status' => $v->status,
                         'provinsi' => $v->provinsi,
                         'kabupaten' => $v->kabupaten,
@@ -333,9 +347,11 @@ $region_nonce = wp_create_nonce('dw_region_nonce');
                     <td>
                         <strong><?php echo esc_html($v->kabupaten); ?></strong><br>
                         <small style="color:var(--v-muted);"><?php echo esc_html($v->kecamatan); ?>, <?php echo esc_html($v->kelurahan); ?></small>
+                        <?php if($v->kode_pos): ?>
+                            <br><small style="color:var(--v-muted);">Kode Pos: <?php echo esc_html($v->kode_pos); ?></small>
+                        <?php endif; ?>
                     </td>
                     <td>
-                        <!-- FITUR BARU: Display Saldo sesuai Schema -->
                         <div style="font-size:12px;">
                             <div style="margin-bottom:3px;">Saldo: <span style="color:var(--v-success); font-weight:600;">Rp <?php echo number_format($v->saldo_saat_ini, 0, ',', '.'); ?></span></div>
                             <div style="color:var(--v-muted); font-size:11px;">Total Komisi: Rp <?php echo number_format($v->total_pendapatan_komisi, 0, ',', '.'); ?></div>
@@ -360,6 +376,14 @@ $region_nonce = wp_create_nonce('dw_region_nonce');
                         <?php if($v->nomor_wa): ?>
                             <a href="https://wa.me/<?php echo preg_replace('/[^0-9]/', '', $v->nomor_wa); ?>" target="_blank" class="v-btn v-btn-sec" style="padding:4px 8px; border-color:#dcfce7; background:#f0fdf4; color:#166534;" title="Chat WA"><span class="dashicons dashicons-whatsapp"></span></a>
                         <?php endif; ?>
+                        
+                        <!-- Delete Button -->
+                        <form method="post" action="<?php echo admin_url('admin.php?page=dw-verifikator'); ?>" style="display:inline-block; margin-left: 5px;" onsubmit="return confirm('Hapus Verifikator ini? Data user WP tidak akan terhapus.');">
+                            <?php wp_nonce_field('dw_save_verifikator_action', 'dw_verifikator_nonce'); ?>
+                            <input type="hidden" name="dw_action" value="delete">
+                            <input type="hidden" name="id" value="<?php echo $v->id; ?>">
+                            <button type="submit" class="v-btn v-btn-sec" style="padding:4px 8px; border-color:#f5c6cb; background:#fbeaea; color:#721c24;" title="Hapus"><span class="dashicons dashicons-trash"></span></button>
+                        </form>
                     </td>
                 </tr>
                 <?php endforeach; endif; ?>
@@ -448,7 +472,6 @@ $region_nonce = wp_create_nonce('dw_region_nonce');
                 <div class="v-row">
                     <div class="v-col v-form-group">
                         <label>Provinsi</label>
-                        <!-- Select saves ID (api_provinsi_id) -->
                         <select name="api_provinsi_id" id="selProv" class="v-select"><option value="">Memuat...</option></select>
                     </div>
                     <div class="v-col v-form-group">
@@ -468,9 +491,15 @@ $region_nonce = wp_create_nonce('dw_region_nonce');
                     </div>
                 </div>
 
-                <div class="v-form-group">
-                    <label>Alamat Lengkap</label>
-                    <textarea name="alamat_lengkap" id="vAlamat" class="v-textarea" rows="2" placeholder="Nama Jalan, RT/RW, No. Rumah..."></textarea>
+                <div class="v-row">
+                    <div class="v-col v-form-group" style="flex: 2;">
+                        <label>Alamat Lengkap</label>
+                        <textarea name="alamat_lengkap" id="vAlamat" class="v-textarea" rows="2" placeholder="Nama Jalan, RT/RW, No. Rumah..."></textarea>
+                    </div>
+                    <div class="v-col v-form-group" style="flex: 1;">
+                        <label>Kode Pos</label>
+                        <input type="text" name="kode_pos" id="vKodePos" class="v-input" placeholder="12345">
+                    </div>
                 </div>
 
                 <div class="v-form-group">
@@ -501,7 +530,7 @@ jQuery(document).ready(function($) {
     window.openModal = function(mode, data = null) {
         $('#vModal').css('display', 'flex').hide().fadeIn(200);
         $('#vForm')[0].reset();
-        $('#vUser option').prop('disabled', false).show(); // Reset options visibility
+        $('#vUser option').prop('disabled', false).show(); 
 
         if(mode == 'add') {
             $('#modalTitle').text('Tambah Verifikator Baru');
@@ -517,7 +546,6 @@ jQuery(document).ready(function($) {
                 $('#vUser').val($('#vUser option:not(:disabled):first').val());
             }
 
-            // Reset regions
             resetRegion();
         } else {
             $('#modalTitle').text('Edit Data Verifikator');
@@ -531,9 +559,10 @@ jQuery(document).ready(function($) {
             $('#vNik').val(data.nik);
             $('#vWa').val(data.nomor_wa);
             $('#vAlamat').val(data.alamat_lengkap);
+            $('#vKodePos').val(data.kode_pos); // Added Kode Pos
             $('#vStatus').val(data.status);
             
-            // Logic User Select (Edit): Disable others, keep self
+            // Logic User Select (Edit)
             var currentUserId = data.id_user;
             $('#vUser option').each(function(){
                 var uid = $(this).val();
@@ -609,7 +638,6 @@ jQuery(document).ready(function($) {
         var actionName = '';
         var dataParams = { nonce: regionNonce };
 
-        // Mapping Action & Parameter Name sesuai address-api.php
         if(type === 'prov') {
             actionName = 'dw_fetch_provinces';
         } else if(type === 'kota') {
@@ -628,7 +656,6 @@ jQuery(document).ready(function($) {
         var originalText = target.find('option:first').text();
         target.find('option:first').text('Memuat...');
 
-        // Gunakan $.get karena address-api.php menggunakan $_GET
         $.get(ajaxUrl, dataParams, function(res){
             target.find('option:first').text(originalText); 
             
@@ -637,7 +664,6 @@ jQuery(document).ready(function($) {
             if(data.success){
                 target.empty().append('<option value="">-- Pilih --</option>');
                 $.each(data.data, function(i,v){
-                    // Match by ID (String Comparison)
                     let isSel = (selectedId && String(v.id) === String(selectedId));
                     target.append(`<option value="${v.id}" data-nama="${v.name}" ${isSel?'selected':''}>${v.name}</option>`);
                 });
@@ -652,7 +678,7 @@ jQuery(document).ready(function($) {
         });
     }
 
-    // Change Handlers (Update Hidden Name Input & Load Child)
+    // Change Handlers
     $('#selProv').change(function(){
         $('#txtProv').val($(this).find(':selected').data('nama'));
         $('#selKab, #selKec, #selKel').empty().prop('disabled', true);
