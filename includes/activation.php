@@ -329,7 +329,6 @@ function dw_activate_plugin() {
         kode_pos VARCHAR(10),
         metode_pembayaran VARCHAR(50),
         status_transaksi ENUM('menunggu_pembayaran','pembayaran_dikonfirmasi','pembayaran_gagal','diproses','dikirim','selesai','dibatalkan','refunded','menunggu_driver','penawaran_driver','nego','menunggu_penjemputan','dalam_perjalanan') DEFAULT 'menunggu_pembayaran',
-        url_bukti_bayar VARCHAR(255) DEFAULT NULL,
         bukti_pembayaran VARCHAR(255) DEFAULT NULL,
         catatan_pembeli TEXT,
         tanggal_transaksi DATETIME DEFAULT CURRENT_TIMESTAMP,
