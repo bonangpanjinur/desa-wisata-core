@@ -10,20 +10,35 @@ defined('ABSPATH') || exit;
 
 /**
  * 1. HANDLER: SIMPAN & HAPUS
+ * Fungsi ini menangani logika database.
+ * NOTE: Dipanggil manual di awal fungsi render agar redirect berfungsi.
  */
 function dw_produk_form_handler() {
-    // 1. Cek Action Hapus
+    global $wpdb;
+    
+    // --- A. LOGIKA HAPUS (DELETE) ---
     if (isset($_GET['action']) && $_GET['action'] == 'delete' && isset($_GET['id'])) {
-        check_admin_referer('dw_del_prod_nonce'); 
+        // Validasi Nonce URL
+        if (!isset($_GET['_wpnonce']) || !wp_verify_nonce($_GET['_wpnonce'], 'dw_del_prod_nonce')) {
+            dw_add_notice('Security check failed (Nonce Error).', 'error');
+            return;
+        }
         dw_handle_delete_produk(intval($_GET['id']));
     }
 
-    // 2. Cek Action Simpan
+    // --- B. LOGIKA SIMPAN (SAVE/UPDATE) ---
+    // 1. Cek apakah tombol submit ditekan
     if (!isset($_POST['dw_submit_produk'])) return;
-    if (!wp_verify_nonce($_POST['_wpnonce'], 'dw_prod_save')) wp_die('Security check failed.');
+
+    // 2. Cek Nonce Form
+    if (!isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'dw_prod_save')) {
+        dw_add_notice('Security check failed. Silakan refresh halaman.', 'error');
+        return;
+    }
     
-    global $wpdb;
-    $table_produk   = $wpdb->prefix . 'dw_produk';
+    // Asumsi nama tabel menggunakan prefix 'dw_'. 
+    // Sesuaikan jika schema Anda menggunakan prefix WP standar saja (misal: wp_produk).
+    $table_produk   = $wpdb->prefix . 'dw_produk'; 
     $table_variasi  = $wpdb->prefix . 'dw_produk_variasi';
     $table_pedagang = $wpdb->prefix . 'dw_pedagang';
     
@@ -31,77 +46,112 @@ function dw_produk_form_handler() {
     $is_super_admin  = current_user_can('administrator') || current_user_can('admin_kabupaten');
     $my_pedagang_data = $wpdb->get_row($wpdb->prepare("SELECT id FROM $table_pedagang WHERE id_user = %d", $current_user_id));
 
-    // A. Validasi Pedagang
+    // 3. Validasi Pedagang
     $id_pedagang_input = 0;
     if ($is_super_admin) {
-        $id_pedagang_input = intval($_POST['id_pedagang']);
+        $id_pedagang_input = isset($_POST['id_pedagang']) ? intval($_POST['id_pedagang']) : 0;
     } else {
         if (!$my_pedagang_data) {
             dw_add_notice('Anda belum terdaftar sebagai pedagang.', 'error');
-            wp_redirect(admin_url('admin.php?page=dw-produk')); exit;
+            return;
         }
         $id_pedagang_input = intval($my_pedagang_data->id);
     }
 
-    // B. Proses Galeri (Array -> JSON)
+    // 4. Proses Galeri (Array -> JSON)
     $galeri_json = '[]';
     if (!empty($_POST['galeri_urls'])) {
-        $galeri_array = array_filter(explode(',', $_POST['galeri_urls']));
+        // wp_unslash penting sebelum sanitasi jika data post raw
+        $raw_urls = explode(',', wp_unslash($_POST['galeri_urls']));
+        $galeri_array = array_filter($raw_urls); // Hapus elemen kosong
         $galeri_json = json_encode(array_values($galeri_array));
     }
 
-    // C. Data Utama Produk
+    // Bersihkan format harga (hapus titik/koma jika ada, pastikan format DB friendly)
+    // Menggunakan string filter untuk DECIMAL agar presisi terjaga
+    $raw_harga = wp_unslash($_POST['harga']);
+    $harga_db = preg_replace('/[^0-9.]/', '', $raw_harga); 
+
+    // 5. Data Utama Produk (Sanitasi Lengkap Sesuai Schema)
     $data = [
         'id_pedagang'  => $id_pedagang_input,
-        'nama_produk'  => sanitize_text_field($_POST['nama_produk']),
-        'slug'         => sanitize_title($_POST['nama_produk']),
-        'deskripsi'    => wp_kses_post($_POST['deskripsi']),
-        'harga'        => floatval($_POST['harga']),
-        'stok'         => intval($_POST['stok']),
-        'berat_gram'   => intval($_POST['berat_gram']),
-        'kondisi'      => sanitize_key($_POST['kondisi']),
-        'kategori'     => sanitize_text_field($_POST['kategori']),
-        'foto_utama'   => esc_url_raw($_POST['foto_utama']),
-        'galeri'       => $galeri_json,
-        'status'       => sanitize_text_field($_POST['status']),
+        'nama_produk'  => sanitize_text_field(wp_unslash($_POST['nama_produk'])),
+        'slug'         => sanitize_title(wp_unslash($_POST['nama_produk'])),
+        'deskripsi'    => wp_kses_post(wp_unslash($_POST['deskripsi'])),
+        'harga'        => $harga_db, // DECIMAL(15,2)
+        'stok'         => intval(wp_unslash($_POST['stok'])),
+        'berat_gram'   => intval(wp_unslash($_POST['berat_gram'])),
+        'kondisi'      => sanitize_key(wp_unslash($_POST['kondisi'])), // ENUM('baru','bekas')
+        'kategori'     => sanitize_text_field(wp_unslash($_POST['kategori'])),
+        'foto_utama'   => esc_url_raw(wp_unslash($_POST['foto_utama'])),
+        'galeri'       => $galeri_json, // JSON
+        'status'       => sanitize_text_field(wp_unslash($_POST['status'])), // ENUM
         'updated_at'   => current_time('mysql')
     ];
 
     $produk_id = isset($_POST['produk_id']) ? intval($_POST['produk_id']) : 0;
     $notif_msg = '';
+    $success = false;
 
-    // D. Simpan Produk Utama
+    // 6. Eksekusi Simpan Produk Utama
     if ($produk_id > 0) {
-        // Cek kepemilikan
+        // Mode Edit: Cek kepemilikan jika bukan admin
         if (!$is_super_admin) {
             $check = $wpdb->get_var($wpdb->prepare("SELECT id FROM $table_produk WHERE id=%d AND id_pedagang=%d", $produk_id, $id_pedagang_input));
-            if (!$check) wp_die('Dilarang mengedit produk toko lain.');
+            if (!$check) {
+                dw_add_notice('Dilarang mengedit produk toko lain.', 'error');
+                return;
+            }
         }
-        $wpdb->update($table_produk, $data, ['id' => $produk_id]);
+        $result = $wpdb->update($table_produk, $data, ['id' => $produk_id]);
+        if ($result === false) {
+            dw_add_notice('Gagal update database: ' . $wpdb->last_error, 'error');
+            return;
+        }
         $notif_msg = 'Produk berhasil diperbarui.';
+        $success = true;
     } else {
+        // Mode Baru
         $data['created_at'] = current_time('mysql');
-        $wpdb->insert($table_produk, $data);
+        // Set default values untuk kolom lain jika perlu (terjual, rating_avg, dilihat default 0 di DB)
+        
+        $result = $wpdb->insert($table_produk, $data);
+        if ($result === false) {
+            dw_add_notice('Gagal menyimpan database: ' . $wpdb->last_error, 'error');
+            return;
+        }
         $produk_id = $wpdb->insert_id;
         $notif_msg = 'Produk baru berhasil ditambahkan.';
+        $success = true;
     }
 
-    // E. Simpan Variasi (Hapus Lama -> Insert Baru)
-    if ($produk_id) {
+    // 7. Simpan Variasi (Hapus Lama -> Insert Baru)
+    if ($success && $produk_id) {
+        // Hapus variasi lama
         $wpdb->delete($table_variasi, ['id_produk' => $produk_id]);
 
+        // Insert variasi baru
         if (!empty($_POST['var_nama']) && is_array($_POST['var_nama'])) {
-            $count = count($_POST['var_nama']);
+            $var_nama  = $_POST['var_nama'];
+            $var_harga = $_POST['var_harga'];
+            $var_stok  = $_POST['var_stok'];
+            $var_sku   = $_POST['var_sku'];
+            $var_foto  = $_POST['var_foto'];
+
+            $count = count($var_nama);
             for ($i = 0; $i < $count; $i++) {
-                if (empty($_POST['var_nama'][$i])) continue;
+                if (empty($var_nama[$i])) continue;
+
+                $raw_harga_var = $var_harga[$i];
+                $harga_var_db = preg_replace('/[^0-9.]/', '', $raw_harga_var);
 
                 $var_data = [
                     'id_produk'         => $produk_id,
-                    'deskripsi_variasi' => sanitize_text_field($_POST['var_nama'][$i]),
-                    'harga_variasi'     => floatval($_POST['var_harga'][$i]),
-                    'stok_variasi'      => intval($_POST['var_stok'][$i]),
-                    'sku'               => sanitize_text_field($_POST['var_sku'][$i]),
-                    'foto'              => esc_url_raw($_POST['var_foto'][$i]),
+                    'deskripsi_variasi' => sanitize_text_field(wp_unslash($var_nama[$i])),
+                    'harga_variasi'     => $harga_var_db,
+                    'stok_variasi'      => intval(wp_unslash($var_stok[$i])),
+                    'sku'               => sanitize_text_field(wp_unslash($var_sku[$i])),
+                    'foto'              => esc_url_raw(wp_unslash($var_foto[$i])),
                     'is_default'        => ($i === 0) ? 1 : 0
                 ];
                 $wpdb->insert($table_variasi, $var_data);
@@ -109,11 +159,17 @@ function dw_produk_form_handler() {
         }
     }
 
+    // 8. Redirect Sukses
     dw_add_notice($notif_msg, 'success');
-    wp_redirect(admin_url('admin.php?page=dw-produk'));
-    exit;
+    // Gunakan redirect Javascript jika headers sudah terkirim (fallback), atau wp_redirect standar
+    if (!headers_sent()) {
+        wp_redirect(add_query_arg(['page' => 'dw-produk', 'action' => 'edit', 'id' => $produk_id], admin_url('admin.php')));
+        exit;
+    } else {
+        echo '<script>window.location.href="' . add_query_arg(['page' => 'dw-produk', 'action' => 'edit', 'id' => $produk_id], admin_url('admin.php')) . '";</script>';
+        exit;
+    }
 }
-add_action('admin_init', 'dw_produk_form_handler');
 
 // Helper Delete
 function dw_handle_delete_produk($id) {
@@ -136,19 +192,36 @@ function dw_handle_delete_produk($id) {
 
 // Helper Notice
 function dw_add_notice($msg, $type) {
-    add_settings_error('dw_produk_msg', 'dw_msg', $msg, $type);
-    set_transient('settings_errors', get_settings_errors(), 30);
+    // Simpan notice ke transient agar muncul setelah redirect
+    $notices = get_transient('dw_produk_notices') ?: [];
+    $notices[] = ['msg' => $msg, 'type' => $type];
+    set_transient('dw_produk_notices', $notices, 45);
+}
+
+// Helper Display Notice (Panggil di render)
+function dw_display_notices() {
+    $notices = get_transient('dw_produk_notices');
+    if ($notices) {
+        foreach ($notices as $notice) {
+            $class = ($notice['type'] == 'success') ? 'updated' : 'error';
+            echo '<div class="notice ' . $class . ' is-dismissible"><p>' . esc_html($notice['msg']) . '</p></div>';
+        }
+        delete_transient('dw_produk_notices');
+    }
 }
 
 /**
  * 2. RENDER HALAMAN UTAMA (UI MODERN)
  */
 function dw_produk_page_info_render() {
+    // --- PENTING: Panggil Handler Di Sini Sebelum HTML Keluar ---
+    dw_produk_form_handler(); 
+    // -----------------------------------------------------------
+
     global $wpdb;
     $table_produk   = $wpdb->prefix . 'dw_produk';
     $table_variasi  = $wpdb->prefix . 'dw_produk_variasi';
     $table_pedagang = $wpdb->prefix . 'dw_pedagang';
-    $table_desa     = $wpdb->prefix . 'dw_desa';
     
     $current_user_id = get_current_user_id();
     $is_super_admin  = current_user_can('administrator') || current_user_can('admin_kabupaten');
@@ -179,13 +252,9 @@ function dw_produk_page_info_render() {
 
     // Ambil Kategori
     $kategori_terms = get_terms(['taxonomy' => 'kategori_produk', 'hide_empty' => false]);
-
-    // Handle Notices
-    $errors = get_transient('settings_errors');
-    if($errors) { settings_errors('dw_produk_msg'); delete_transient('settings_errors'); }
     ?>
 
-    <!-- STYLE CSS MODERN -->
+    <!-- STYLE CSS MODERN (TETAP SAMA) -->
     <style>
         :root {
             --dw-primary: #2563eb; 
@@ -298,9 +367,12 @@ function dw_produk_page_info_render() {
             <?php endif; ?>
         </div>
 
+        <?php dw_display_notices(); // Tampilkan Notif disini ?>
+
         <?php if($is_edit): ?>
             <!-- === VIEW: ADD / EDIT === -->
             <form method="post" action="">
+                <!-- HIDDEN INPUT TRIGGER -->
                 <input type="hidden" name="dw_submit_produk" value="1">
                 <?php wp_nonce_field('dw_prod_save'); ?>
                 <?php if($edit_data): ?><input type="hidden" name="produk_id" value="<?php echo $edit_data->id; ?>"><?php endif; ?>
