@@ -191,6 +191,7 @@ function dw_activate_plugin() {
         total_verifikasi_sukses INT DEFAULT 0,
         total_pendapatan_komisi DECIMAL(15,2) DEFAULT 0,
         saldo_saat_ini DECIMAL(15,2) DEFAULT 0,
+        kode_pos VARCHAR(10) DEFAULT NULL,
         status ENUM('aktif','pending','nonaktif') DEFAULT 'pending',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
