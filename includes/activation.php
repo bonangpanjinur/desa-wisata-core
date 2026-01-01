@@ -202,8 +202,8 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta($sql_verifikator);
 
-    // 2D. Tabel Pembeli (Wisatawan/Member) [BARU & UPDATED]
-    // Untuk menyimpan data profil tambahan di luar wp_users
+    // 2D. Tabel Pembeli (Wisatawan/Member) [UPDATED FIELDS]
+    // Menambahkan terdaftar_melalui_kode untuk tracking referral pedagang
     $sql_pembeli = "CREATE TABLE {$table_prefix}pembeli (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_user BIGINT(20) UNSIGNED NOT NULL,
@@ -214,24 +214,23 @@ function dw_activate_plugin() {
         tgl_lahir DATE DEFAULT NULL,
         jenis_kelamin ENUM('L','P') DEFAULT NULL,
         alamat_lengkap TEXT,
-        provinsi VARCHAR(100),
-        kabupaten VARCHAR(100),
-        kecamatan VARCHAR(100),
-        kelurahan VARCHAR(100),
-        api_provinsi_id VARCHAR(20),
-        api_kabupaten_id VARCHAR(20),
-        api_kecamatan_id VARCHAR(20),
-        api_kelurahan_id VARCHAR(20),
+        provinsi VARCHAR(100), kabupaten VARCHAR(100), kecamatan VARCHAR(100), kelurahan VARCHAR(100),
+        api_provinsi_id VARCHAR(20), api_kabupaten_id VARCHAR(20), api_kecamatan_id VARCHAR(20), api_kelurahan_id VARCHAR(20),
         kode_pos VARCHAR(10) DEFAULT NULL,
         poin_reward INT DEFAULT 0,
+        terdaftar_melalui_kode VARCHAR(50) DEFAULT NULL, 
+        referrer_id BIGINT(20) DEFAULT 0, 
+        referrer_type VARCHAR(50) DEFAULT NULL,
         status_akun ENUM('aktif','suspend','banned') DEFAULT 'aktif',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         PRIMARY KEY  (id),
-        UNIQUE KEY id_user (id_user)
+        UNIQUE KEY id_user (id_user),
+        KEY idx_referral (terdaftar_melalui_kode)
     ) $charset_collate;";
     dbDelta($sql_pembeli);
 
+    
     /* =========================================
        2. KONTEN (INVENTORY & WISATA)
        ========================================= */
