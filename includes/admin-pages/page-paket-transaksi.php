@@ -1,8 +1,8 @@
 <?php
 /**
  * File Name:   includes/admin-pages/page-paket-transaksi.php
- * Description: Manajemen Paket Transaksi & Setting Komisi.
- * UPDATE v3.8: Mendukung Komisi Nominal & Persentase Generic (Desa/Verifikator).
+ * Description: Manajemen Paket Transaksi & Setting Kuota Gratis Pendaftaran.
+ * UPDATE: Menambahkan pengaturan kuota gratis dinamis berdasarkan sumber pendaftaran.
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -11,7 +11,17 @@ function dw_render_paket_transaksi_page() {
     global $wpdb;
     $table_paket = $wpdb->prefix . 'dw_paket_transaksi';
 
-    // --- 1. HANDLE POST (SIMPAN / UPDATE) ---
+    // --- 1. HANDLE POST: SAVE SETTINGS (KUOTA GRATIS) ---
+    if ( isset($_POST['save_quota_settings']) && check_admin_referer('dw_save_quota_settings') ) {
+        // Simpan ke WP Options agar bisa diakses global
+        update_option('dw_quota_free_default', intval($_POST['quota_default']));
+        update_option('dw_quota_free_via_desa', intval($_POST['quota_desa']));
+        update_option('dw_quota_free_via_verif', intval($_POST['quota_verif']));
+        
+        echo '<div class="notice notice-success is-dismissible"><p>Pengaturan Kuota Gratis berhasil disimpan.</p></div>';
+    }
+
+    // --- 2. HANDLE POST: CRUD PAKET BERBAYAR ---
     if ( isset( $_POST['submit_paket'] ) && check_admin_referer( 'dw_save_paket' ) ) {
         // Validasi Input
         $nama_paket = sanitize_text_field( $_POST['nama_paket'] );
@@ -21,7 +31,7 @@ function dw_render_paket_transaksi_page() {
 
         // Logic Check: Prioritas Komisi
         if ($komisi_nominal > $harga) {
-            $komisi_nominal = $harga; // Safety: Komisi tidak boleh > harga
+            $komisi_nominal = $harga; // Safety
         }
 
         $data = [
@@ -30,8 +40,8 @@ function dw_render_paket_transaksi_page() {
             'harga'             => $harga,
             'jumlah_transaksi'  => intval( $_POST['jumlah_transaksi'] ),
             'target_role'       => sanitize_text_field( $_POST['target_role'] ),
-            'komisi_nominal'    => $komisi_nominal,     // v3.7 Logic
-            'persentase_komisi' => $persentase,         // v3.8 Logic (Renamed from persentase_komisi_desa)
+            'komisi_nominal'    => $komisi_nominal,     
+            'persentase_komisi' => $persentase,         
             'status'            => 'aktif'
         ];
         
@@ -48,30 +58,72 @@ function dw_render_paket_transaksi_page() {
         }
     }
 
-    // --- 2. HANDLE DELETE ---
+    // --- 3. HANDLE DELETE PAKET ---
     if ( isset( $_GET['action'] ) && $_GET['action'] == 'delete' && isset( $_GET['id'] ) ) {
         $id_del = intval( $_GET['id'] );
         $wpdb->delete( $table_paket, ['id' => $id_del] );
         echo '<div class="notice notice-success is-dismissible"><p>Paket dihapus.</p></div>';
     }
 
-    // --- 3. PREPARE EDIT DATA ---
+    // --- 4. PREPARE DATA ---
+    // Data Edit Paket
     $edit_data = null;
     if ( isset( $_GET['action'] ) && $_GET['action'] == 'edit' && isset( $_GET['id'] ) ) {
         $edit_data = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $table_paket WHERE id = %d", intval( $_GET['id'] ) ) );
     }
 
-    // --- 4. VIEW ---
+    // Data Settings Kuota (Default Value jika belum diset)
+    $q_default = get_option('dw_quota_free_default', 0);   // Default 0 jika tidak ada referral
+    $q_desa    = get_option('dw_quota_free_via_desa', 50); // Default 50 jika via Desa
+    $q_verif   = get_option('dw_quota_free_via_verif', 50); // Default 50 jika via Verifikator
+
+    // --- 5. VIEW ---
     ?>
     <div class="wrap">
-        <h1 class="wp-heading-inline">Manajemen Paket & Komisi</h1>
+        <h1 class="wp-heading-inline">Manajemen Paket & Insentif Pendaftaran</h1>
         <hr class="wp-header-end">
 
-        <div class="dw-grid-container" style="display: flex; gap: 20px; margin-top: 20px;">
+        <!-- SECTION 1: PENGATURAN KUOTA GRATIS (GLOBAL) -->
+        <div class="dw-card" style="background: #fff; padding: 20px; border: 1px solid #ccd0d4; box-shadow: 0 1px 1px rgba(0,0,0,.04); margin-top: 20px; border-left: 4px solid #2271b1;">
+            <h2 style="margin-top: 0;">🎁 Pengaturan Kuota Gratis (Insentif Pendaftaran Baru)</h2>
+            <p>Tentukan jumlah kuota transaksi gratis yang didapatkan Pedagang saat pertama kali mendaftar. Gunakan ini sebagai strategi marketing agar Desa/Verifikator semangat mengajak pedagang.</p>
             
-            <!-- FORM INPUT -->
+            <form method="post" style="margin-top: 15px;">
+                <?php wp_nonce_field('dw_save_quota_settings'); ?>
+                <input type="hidden" name="save_quota_settings" value="1">
+                
+                <div style="display: flex; gap: 30px; flex-wrap: wrap;">
+                    <div>
+                        <label style="font-weight: bold; display: block; margin-bottom: 5px; color: #666;">Daftar Mandiri (Tanpa Referral)</label>
+                        <input type="number" name="quota_default" value="<?php echo esc_attr($q_default); ?>" class="small-text" min="0">
+                        <span class="description"> Transaksi</span>
+                    </div>
+                    
+                    <div>
+                        <label style="font-weight: bold; display: block; margin-bottom: 5px; color: #d63638;">Via Link Verifikator</label>
+                        <input type="number" name="quota_verif" value="<?php echo esc_attr($q_verif); ?>" class="small-text" min="0">
+                        <span class="description"> Transaksi</span>
+                    </div>
+
+                    <div>
+                        <label style="font-weight: bold; display: block; margin-bottom: 5px; color: #00ba37;">Via Link Desa</label>
+                        <input type="number" name="quota_desa" value="<?php echo esc_attr($q_desa); ?>" class="small-text" min="0">
+                        <span class="description"> Transaksi</span>
+                    </div>
+                </div>
+                
+                <p class="submit">
+                    <button type="submit" class="button button-primary">Simpan Pengaturan Kuota</button>
+                </p>
+            </form>
+        </div>
+
+        <!-- SECTION 2: CRUD PAKET BERBAYAR -->
+        <div class="dw-grid-container" style="display: flex; gap: 20px; margin-top: 30px;">
+            
+            <!-- FORM INPUT PAKET -->
             <div class="dw-card" style="flex: 1; background: #fff; padding: 20px; border: 1px solid #ccd0d4; box-shadow: 0 1px 1px rgba(0,0,0,.04);">
-                <h2><?php echo $edit_data ? 'Edit Paket' : 'Buat Paket Baru'; ?></h2>
+                <h2 style="margin-top:0;"><?php echo $edit_data ? 'Edit Paket Berbayar' : 'Buat Paket Berbayar Baru'; ?></h2>
                 <form method="post">
                     <?php wp_nonce_field( 'dw_save_paket' ); ?>
                     <input type="hidden" name="paket_id" value="<?php echo $edit_data ? $edit_data->id : ''; ?>">
@@ -107,8 +159,7 @@ function dw_render_paket_transaksi_page() {
                             <th colspan="2" style="padding-top:20px; border-bottom:1px solid #eee;">
                                 <h3 style="margin:0;">Pengaturan Bagi Hasil (Referral)</h3>
                                 <p class="description" style="margin-top:5px;">
-                                    Komisi ini akan diberikan kepada <strong>Desa</strong> ATAU <strong>Verifikator</strong>,<br>
-                                    tergantung kepada siapa Pedagang tersebut terdaftar.
+                                    Komisi ini diberikan kepada <strong>Desa</strong> ATAU <strong>Verifikator</strong> saat pedagang membeli paket ini.
                                 </p>
                             </th>
                         </tr>
@@ -142,7 +193,7 @@ function dw_render_paket_transaksi_page() {
                 </form>
             </div>
 
-            <!-- TABEL LIST -->
+            <!-- TABEL LIST PAKET -->
             <div class="dw-list" style="flex: 2;">
                 <table class="wp-list-table widefat fixed striped">
                     <thead>

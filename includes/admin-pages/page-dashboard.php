@@ -4,7 +4,7 @@
  * File Folder: includes/admin-pages/
  * Description: Dashboard Admin Premium dengan Desain UI Modern (SaaS Style).
  * Disesuaikan dengan Database Schema v3.7+ (activation.php).
- * Update: UI/UX Refinement - Layout Grid, Modern Cards, Clean Typography, Responsive Tables.
+ * Update: Perbaikan Query Statistik Pembeli (Menghitung Total User Terdaftar) & Peningkatan UI/UX.
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -20,9 +20,10 @@ function dw_dashboard_page_render() {
     $t_produk      = $wpdb->prefix . 'dw_produk';
     $t_wisata      = $wpdb->prefix . 'dw_wisata';
     $t_transaksi   = $wpdb->prefix . 'dw_transaksi';     // Transaksi Induk
-    $t_sub         = $wpdb->prefix . 'dw_transaksi_sub'; // Transaksi Anak
+    $t_sub         = $wpdb->prefix . 'dw_transaksi_sub'; // Transaksi Anak (Per Toko)
     $t_verifikator = $wpdb->prefix . 'dw_verifikator';
     $t_ojek        = $wpdb->prefix . 'dw_ojek';
+    $t_pembeli     = $wpdb->prefix . 'dw_pembeli';       // [BARU] Tabel Pembeli
 
     // --- 2. IDENTIFIKASI ROLE & CONTEXT ---
     $role_context = 'guest';
@@ -60,7 +61,6 @@ function dw_dashboard_page_render() {
     ];
 
     // --- 4. HITUNG STATISTIK (Berdasarkan Role) ---
-    // Logika perhitungan tetap sama, hanya presentasi yang berubah
 
     if ( $role_context === 'super_admin' ) {
         // --- GLOBAL STATS ---
@@ -72,7 +72,14 @@ function dw_dashboard_page_render() {
         $stats['verifikator']  = $wpdb->get_var("SELECT COUNT(id) FROM $t_verifikator WHERE status = 'aktif'");
         $stats['produk']       = $wpdb->get_var("SELECT COUNT(id) FROM $t_produk WHERE status = 'aktif'");
         $stats['ojek']         = $wpdb->get_var("SELECT COUNT(id) FROM $t_ojek WHERE status_pendaftaran = 'disetujui'");
-        $stats['pembeli']      = $wpdb->get_var("SELECT COUNT(DISTINCT id_pembeli) FROM $t_transaksi");
+        
+        // [FIX] Hitung total user pembeli dari tabel dw_pembeli
+        if ($wpdb->get_var("SHOW TABLES LIKE '$t_pembeli'") == $t_pembeli) {
+            $stats['pembeli'] = $wpdb->get_var("SELECT COUNT(id) FROM $t_pembeli");
+        } else {
+            // Fallback: Hitung dari wp_users role subscriber jika tabel belum ada
+            $stats['pembeli'] = count(get_users(['role' => 'subscriber']));
+        }
 
         $recent_orders = $wpdb->get_results("SELECT id, kode_unik, nama_penerima, total_transaksi, status_transaksi, created_at FROM $t_transaksi ORDER BY created_at DESC LIMIT 5");
 
@@ -84,7 +91,15 @@ function dw_dashboard_page_render() {
         $stats['wisata']       = $wpdb->get_var( $wpdb->prepare("SELECT COUNT(id) FROM $t_wisata WHERE id_desa = %d AND status = 'aktif'", $context_id) );
         $stats['pedagang']     = $wpdb->get_var( $wpdb->prepare("SELECT COUNT(id) FROM $t_pedagang WHERE id_desa = %d AND status_akun = 'aktif'", $context_id) );
         $stats['produk']       = $wpdb->get_var( $wpdb->prepare("SELECT COUNT(prod.id) FROM $t_produk prod JOIN $t_pedagang ped ON prod.id_pedagang = ped.id WHERE ped.id_desa = %d AND prod.status = 'aktif'", $context_id) );
-        $stats['pembeli']      = $wpdb->get_var( $wpdb->prepare("SELECT COUNT(DISTINCT t.id_pembeli) FROM $t_transaksi_sub s JOIN $t_transaksi t ON s.id_transaksi = t.id JOIN $t_pedagang p ON s.id_pedagang = p.id WHERE p.id_desa = %d", $context_id) );
+        
+        // [FIX] Pembeli Desa
+        $stats['pembeli']      = $wpdb->get_var( $wpdb->prepare("
+            SELECT COUNT(DISTINCT t.id_pembeli) 
+            FROM $t_transaksi t 
+            JOIN $t_sub s ON s.id_transaksi = t.id 
+            JOIN $t_pedagang p ON s.id_pedagang = p.id 
+            WHERE p.id_desa = %d
+        ", $context_id) );
 
         $recent_orders = $wpdb->get_results( $wpdb->prepare("SELECT s.id, t.kode_unik, s.nama_toko, s.total_pesanan_toko as total_transaksi, s.status_pesanan as status_transaksi, s.created_at FROM $t_sub s JOIN $t_transaksi t ON s.id_transaksi = t.id JOIN $t_pedagang p ON s.id_pedagang = p.id WHERE p.id_desa = %d ORDER BY s.created_at DESC LIMIT 5", $context_id) );
 
@@ -93,7 +108,24 @@ function dw_dashboard_page_render() {
         $stats['income']       = $wpdb->get_var( $wpdb->prepare("SELECT SUM(total_pesanan_toko) FROM $t_sub WHERE id_pedagang = %d AND status_pesanan = 'selesai'", $context_id) );
         $stats['orders_count'] = $wpdb->get_var( $wpdb->prepare("SELECT COUNT(id) FROM $t_sub WHERE id_pedagang = %d", $context_id) );
         $stats['produk']       = $wpdb->get_var( $wpdb->prepare("SELECT COUNT(id) FROM $t_produk WHERE id_pedagang = %d AND status = 'aktif'", $context_id) );
-        $stats['pembeli']      = $wpdb->get_var( $wpdb->prepare("SELECT COUNT(DISTINCT t.id_pembeli) FROM $t_transaksi_sub s JOIN $t_transaksi t ON s.id_transaksi = t.id WHERE s.id_pedagang = %d", $context_id) );
+        
+        // [FIX] Pembeli Pedagang
+        if ($wpdb->get_var("SHOW TABLES LIKE '$t_pembeli'") == $t_pembeli) {
+             $stats['pembeli'] = $wpdb->get_var( $wpdb->prepare("
+                SELECT COUNT(DISTINCT user_id) FROM (
+                    SELECT id_user as user_id FROM $t_pembeli WHERE referrer_id = %d AND referrer_type = 'pedagang'
+                    UNION
+                    SELECT t.id_pembeli as user_id FROM $t_transaksi t JOIN $t_sub s ON s.id_transaksi = t.id WHERE s.id_pedagang = %d
+                ) as combined_users
+            ", $context_id, $context_id) );
+        } else {
+             $stats['pembeli'] = $wpdb->get_var( $wpdb->prepare("
+                SELECT COUNT(DISTINCT t.id_pembeli) 
+                FROM $t_transaksi t 
+                JOIN $t_sub s ON s.id_transaksi = t.id 
+                WHERE s.id_pedagang = %d
+            ", $context_id) );
+        }
 
         $recent_orders = $wpdb->get_results( $wpdb->prepare("SELECT s.id, t.kode_unik, t.nama_penerima, s.total_pesanan_toko as total_transaksi, s.status_pesanan as status_transaksi, s.created_at FROM $t_sub s JOIN $t_transaksi t ON s.id_transaksi = t.id WHERE s.id_pedagang = %d ORDER BY s.created_at DESC LIMIT 5", $context_id) );
     }
@@ -110,16 +142,29 @@ function dw_dashboard_page_render() {
 
     // Role Label
     $role_label = 'Pengunjung';
-    $role_badge_color = '#64748b'; // default grey
+    $role_bg_color = '#f1f5f9'; // default grey bg
+    $role_text_color = '#64748b'; // default grey text
     
-    if($role_context == 'super_admin') { $role_label = 'Administrator Pusat'; $role_badge_color = '#2563eb'; }
-    elseif($role_context == 'admin_desa') { $role_label = 'Admin Desa'; $role_badge_color = '#059669'; }
-    elseif($role_context == 'pedagang') { $role_label = 'Mitra Pedagang'; $role_badge_color = '#d97706'; }
+    if($role_context == 'super_admin') { 
+        $role_label = 'Administrator Pusat'; 
+        $role_bg_color = '#eff6ff'; // blue-50
+        $role_text_color = '#2563eb'; // blue-600
+    }
+    elseif($role_context == 'admin_desa') { 
+        $role_label = 'Admin Desa'; 
+        $role_bg_color = '#ecfdf5'; // green-50
+        $role_text_color = '#059669'; // green-600
+    }
+    elseif($role_context == 'pedagang') { 
+        $role_label = 'Mitra Pedagang'; 
+        $role_bg_color = '#fffbeb'; // amber-50
+        $role_text_color = '#d97706'; // amber-600
+    }
 
     ?>
     <div class="wrap dw-dashboard-wrap">
         
-        <!-- Header Section with Modern Gradient -->
+        <!-- Header Section with Clean Design -->
         <div class="dw-header-section">
             <div class="dw-header-content">
                 <div class="dw-user-avatar">
@@ -128,7 +173,7 @@ function dw_dashboard_page_render() {
                 <div class="dw-welcome-text">
                     <h1><?php echo $greeting . ', ' . esc_html($current_user->display_name); ?> 👋</h1>
                     <div class="dw-meta-info">
-                        <span class="dw-role-pill" style="background-color: <?php echo $role_badge_color; ?>15; color: <?php echo $role_badge_color; ?>;">
+                        <span class="dw-role-pill" style="background-color: <?php echo $role_bg_color; ?>; color: <?php echo $role_text_color; ?>;">
                             <?php echo $role_label; ?>
                         </span>
                         <span class="dw-date-pill">
@@ -141,93 +186,94 @@ function dw_dashboard_page_render() {
 
         <!-- 
             GRID STATISTIK UTAMA 
-            Desain Card Baru: Icon + Value + Label dengan layout yang lebih bersih
+            Desain Card Baru: Layout Grid, Card Bersih, Ikon dengan Background Warna
         -->
         <div class="dw-section-title">Ringkasan Statistik</div>
         <div class="dw-stats-grid">
             
             <!-- 1. PENDAPATAN -->
-            <div class="dw-stat-card card-income">
-                <div class="card-icon-wrapper">
+            <div class="dw-stat-card">
+                <div class="card-icon-wrapper income-bg">
                     <span class="dashicons dashicons-money-alt"></span>
                 </div>
                 <div class="card-data">
-                    <span class="data-value"><?php echo $income_formatted; ?></span>
                     <span class="data-label">Total Pendapatan</span>
+                    <span class="data-value"><?php echo $income_formatted; ?></span>
                 </div>
             </div>
 
             <!-- 2. TRANSAKSI -->
-            <div class="dw-stat-card card-order">
-                <div class="card-icon-wrapper">
+            <div class="dw-stat-card">
+                <div class="card-icon-wrapper order-bg">
                     <span class="dashicons dashicons-cart"></span>
                 </div>
                 <div class="card-data">
+                    <span class="data-label">Total Transaksi</span>
                     <span class="data-value"><?php echo number_format($stats['orders_count']); ?></span>
-                    <span class="data-label">Transaksi</span>
                 </div>
             </div>
 
             <!-- 3. PEMBELI -->
-            <div class="dw-stat-card card-buyer">
-                <div class="card-icon-wrapper">
+            <div class="dw-stat-card">
+                <div class="card-icon-wrapper buyer-bg">
                     <span class="dashicons dashicons-groups"></span>
                 </div>
                 <div class="card-data">
+                    <span class="data-label">Total Wisatawan</span>
                     <span class="data-value"><?php echo number_format($stats['pembeli']); ?></span>
-                    <span class="data-label">Pelanggan</span>
                 </div>
             </div>
 
             <!-- 4. PRODUK -->
-            <div class="dw-stat-card card-product">
-                <div class="card-icon-wrapper">
+            <div class="dw-stat-card">
+                <div class="card-icon-wrapper product-bg">
                     <span class="dashicons dashicons-products"></span>
                 </div>
                 <div class="card-data">
-                    <span class="data-value"><?php echo number_format($stats['produk']); ?></span>
                     <span class="data-label">Produk Aktif</span>
+                    <span class="data-value"><?php echo number_format($stats['produk']); ?></span>
                 </div>
             </div>
 
-            <!-- Kondisional Cards -->
+            <!-- Kondisional Cards untuk Super Admin -->
             <?php if ($role_context === 'super_admin'): ?>
-                <div class="dw-stat-card card-village">
-                    <div class="card-icon-wrapper"><span class="dashicons dashicons-building"></span></div>
+                <div class="dw-stat-card">
+                    <div class="card-icon-wrapper village-bg"><span class="dashicons dashicons-building"></span></div>
                     <div class="card-data">
-                        <span class="data-value"><?php echo number_format($stats['desa']); ?></span>
                         <span class="data-label">Desa Wisata</span>
+                        <span class="data-value"><?php echo number_format($stats['desa']); ?></span>
                     </div>
                 </div>
-                <div class="dw-stat-card card-verifier">
-                    <div class="card-icon-wrapper"><span class="dashicons dashicons-id-alt"></span></div>
+                <div class="dw-stat-card">
+                    <div class="card-icon-wrapper verifier-bg"><span class="dashicons dashicons-id-alt"></span></div>
                     <div class="card-data">
-                        <span class="data-value"><?php echo number_format($stats['verifikator']); ?></span>
                         <span class="data-label">Verifikator</span>
+                        <span class="data-value"><?php echo number_format($stats['verifikator']); ?></span>
                     </div>
                 </div>
-                <div class="dw-stat-card card-ojek">
-                    <div class="card-icon-wrapper"><span class="dashicons dashicons-buddicons-buddypress-logo"></span></div>
+                <div class="dw-stat-card">
+                    <div class="card-icon-wrapper ojek-bg"><span class="dashicons dashicons-location-alt"></span></div>
                     <div class="card-data">
-                        <span class="data-value"><?php echo number_format($stats['ojek']); ?></span>
                         <span class="data-label">Mitra Ojek</span>
+                        <span class="data-value"><?php echo number_format($stats['ojek']); ?></span>
                     </div>
                 </div>
             <?php endif; ?>
 
-            <?php if ($role_context !== 'pedagang'): ?>
-                <div class="dw-stat-card card-tourism">
-                    <div class="card-icon-wrapper"><span class="dashicons dashicons-location-alt"></span></div>
+            <!-- Kondisional Cards untuk Admin Desa -->
+            <?php if ($role_context !== 'pedagang' && $role_context !== 'super_admin'): ?>
+                <div class="dw-stat-card">
+                    <div class="card-icon-wrapper tourism-bg"><span class="dashicons dashicons-location"></span></div>
                     <div class="card-data">
-                        <span class="data-value"><?php echo number_format($stats['wisata']); ?></span>
                         <span class="data-label">Objek Wisata</span>
+                        <span class="data-value"><?php echo number_format($stats['wisata']); ?></span>
                     </div>
                 </div>
-                <div class="dw-stat-card card-merchant">
-                    <div class="card-icon-wrapper"><span class="dashicons dashicons-store"></span></div>
+                <div class="dw-stat-card">
+                    <div class="card-icon-wrapper merchant-bg"><span class="dashicons dashicons-store"></span></div>
                     <div class="card-data">
-                        <span class="data-value"><?php echo number_format($stats['pedagang']); ?></span>
                         <span class="data-label">Pedagang</span>
+                        <span class="data-value"><?php echo number_format($stats['pedagang']); ?></span>
                     </div>
                 </div>
             <?php endif; ?>
@@ -266,7 +312,7 @@ function dw_dashboard_page_render() {
                                 <thead>
                                     <tr>
                                         <th>ID Order</th>
-                                        <th><?php echo ($role_context == 'admin_desa') ? 'Toko' : 'Info Pelanggan'; ?></th>
+                                        <th><?php echo ($role_context == 'admin_desa') ? 'Toko' : 'Pelanggan'; ?></th>
                                         <th>Tanggal</th>
                                         <th class="text-right">Total</th>
                                         <th class="text-center">Status</th>
@@ -290,7 +336,7 @@ function dw_dashboard_page_render() {
                                                 </div>
                                             </td>
                                             <td class="col-date">
-                                                <?php echo date_i18n('d M, H:i', strtotime($order->created_at)); ?>
+                                                <?php echo date_i18n('d M', strtotime($order->created_at)); ?>
                                             </td>
                                             <td class="col-total text-right">
                                                 Rp <?php echo number_format($order->total_transaksi, 0, ',', '.'); ?>
@@ -396,9 +442,10 @@ function dw_dashboard_page_render() {
         /* Base Reset & Fonts */
         .dw-dashboard-wrap {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
-            max-width: 1280px;
-            margin: 20px auto 0;
-            padding-right: 20px;
+            max-width: 1200px;
+            margin: 20px auto 40px;
+            padding: 0 15px;
+            color: #3c434a;
         }
         .dw-dashboard-wrap * { box-sizing: border-box; }
 
@@ -408,16 +455,23 @@ function dw_dashboard_page_render() {
             border-radius: 12px;
             padding: 24px;
             margin-bottom: 30px;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
-            border: 1px solid #e2e8f0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            border: 1px solid #e2e4e7;
+            display: flex;
+            align-items: center;
         }
-        .dw-header-content { display: flex; align-items: center; gap: 20px; }
-        .dw-user-avatar img { border-radius: 50%; border: 3px solid #f1f5f9; }
+        .dw-header-content { display: flex; align-items: center; gap: 20px; width: 100%; }
+        .dw-user-avatar img { 
+            border-radius: 50%; 
+            border: 3px solid #fff; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .dw-welcome-text { flex: 1; }
         .dw-welcome-text h1 {
-            margin: 0 0 8px 0;
+            margin: 0 0 6px 0;
             font-size: 24px;
             font-weight: 700;
-            color: #1e293b;
+            color: #1d2327;
             line-height: 1.2;
         }
         .dw-meta-info { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -426,137 +480,142 @@ function dw_dashboard_page_render() {
             padding: 4px 12px;
             border-radius: 99px;
             font-size: 13px;
-            font-weight: 500;
+            font-weight: 600;
         }
-        .dw-date-pill { background: #f8fafc; color: #64748b; border: 1px solid #e2e8f0; }
-        .dw-date-pill .dashicons { font-size: 16px; width: 16px; height: 16px; }
+        .dw-date-pill { background: #f0f0f1; color: #646970; border: 1px solid #dcdcde; }
+        .dw-date-pill .dashicons { font-size: 16px; width: 16px; height: 16px; color: #8c8f94; }
 
         /* SECTION TITLE */
         .dw-section-title {
             font-size: 18px;
             font-weight: 600;
-            color: #334155;
+            color: #3c434a;
             margin-bottom: 16px;
         }
 
         /* STATS GRID */
         .dw-stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
             gap: 20px;
             margin-bottom: 30px;
         }
         .dw-stat-card {
             background: #fff;
-            border-radius: 12px;
-            padding: 20px;
+            border-radius: 10px;
+            padding: 24px;
             display: flex;
             align-items: center;
             gap: 16px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-            border: 1px solid #f1f5f9;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e2e4e7;
             transition: transform 0.2s, box-shadow 0.2s;
         }
-        .dw-stat-card:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08); }
+        .dw-stat-card:hover { 
+            transform: translateY(-2px); 
+            box-shadow: 0 8px 12px -3px rgba(0, 0, 0, 0.08); 
+        }
         
-        /* Card Icons with Gradients */
+        /* Card Icons */
         .card-icon-wrapper {
-            width: 56px; height: 56px;
+            width: 52px; height: 52px;
             border-radius: 12px;
             display: flex; align-items: center; justify-content: center;
             flex-shrink: 0;
+            font-size: 24px;
         }
-        .card-icon-wrapper .dashicons { font-size: 28px; width: 28px; height: 28px; color: #fff; }
+        .card-icon-wrapper .dashicons { font-size: 26px; width: 26px; height: 26px; color: #fff; }
 
         /* Card Colors */
-        .card-income .card-icon-wrapper { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
-        .card-order .card-icon-wrapper { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); }
-        .card-buyer .card-icon-wrapper { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); }
-        .card-product .card-icon-wrapper { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
-        .card-village .card-icon-wrapper { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
-        .card-tourism .card-icon-wrapper { background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%); }
-        .card-merchant .card-icon-wrapper { background: linear-gradient(135deg, #d946ef 0%, #c026d3 100%); }
-        .card-verifier .card-icon-wrapper { background: linear-gradient(135deg, #64748b 0%, #475569 100%); }
-        .card-ojek .card-icon-wrapper { background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); }
+        .income-bg { background: linear-gradient(135deg, #10b981 0%, #059669 100%); box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.2); }
+        .order-bg { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.2); }
+        .buyer-bg { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); box-shadow: 0 4px 6px -1px rgba(139, 92, 246, 0.2); }
+        .product-bg { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); box-shadow: 0 4px 6px -1px rgba(245, 158, 11, 0.2); }
+        .village-bg { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); box-shadow: 0 4px 6px -1px rgba(239, 68, 68, 0.2); }
+        .tourism-bg { background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%); box-shadow: 0 4px 6px -1px rgba(6, 182, 212, 0.2); }
+        .merchant-bg { background: linear-gradient(135deg, #d946ef 0%, #c026d3 100%); box-shadow: 0 4px 6px -1px rgba(217, 70, 239, 0.2); }
+        .verifier-bg { background: linear-gradient(135deg, #64748b 0%, #475569 100%); box-shadow: 0 4px 6px -1px rgba(100, 116, 139, 0.2); }
+        .ojek-bg { background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); box-shadow: 0 4px 6px -1px rgba(249, 115, 22, 0.2); }
 
-        .card-data { display: flex; flex-direction: column; }
-        .data-value { font-size: 20px; font-weight: 700; color: #0f172a; line-height: 1.2; margin-bottom: 2px; }
-        .data-label { font-size: 13px; color: #64748b; font-weight: 500; }
+        .card-data { display: flex; flex-direction: column; justify-content: center; }
+        .data-value { font-size: 22px; font-weight: 700; color: #1d2327; line-height: 1.2; margin-top: 2px; }
+        .data-label { font-size: 13px; color: #646970; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; }
 
         /* LAYOUT COLUMNS */
-        .dw-dashboard-layout { display: grid; grid-template-columns: 2.5fr 1fr; gap: 24px; }
+        .dw-dashboard-layout { display: grid; grid-template-columns: 3fr 1fr; gap: 24px; }
         @media(max-width: 1024px) { .dw-dashboard-layout { grid-template-columns: 1fr; } }
 
         /* CARDS GENERAL */
-        .dw-card { background: #fff; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.04); overflow: hidden; margin-bottom: 24px; }
+        .dw-card { background: #fff; border-radius: 10px; border: 1px solid #e2e4e7; box-shadow: 0 1px 3px rgba(0,0,0,0.05); overflow: hidden; margin-bottom: 24px; }
         .dw-card-header {
-            padding: 16px 24px;
-            border-bottom: 1px solid #f1f5f9;
+            padding: 16px 20px;
+            border-bottom: 1px solid #f0f0f1;
             display: flex; justify-content: space-between; align-items: center;
+            background: #fcfcfc;
         }
-        .card-heading { margin: 0; font-size: 16px; font-weight: 600; color: #334155; display: flex; align-items: center; gap: 8px; }
-        .dw-btn-link { font-size: 13px; font-weight: 500; color: #3b82f6; text-decoration: none; }
-        .dw-btn-link:hover { text-decoration: underline; }
+        .card-heading { margin: 0; font-size: 15px; font-weight: 600; color: #1d2327; display: flex; align-items: center; gap: 8px; }
+        .dw-btn-link { font-size: 13px; font-weight: 500; color: #2271b1; text-decoration: none; }
+        .dw-btn-link:hover { text-decoration: underline; color: #135e96; }
 
         /* TABLE STYLING */
         .dw-table-wrapper { width: 100%; overflow-x: auto; }
         .dw-modern-table { width: 100%; border-collapse: collapse; text-align: left; }
-        .dw-modern-table th { padding: 12px 24px; background: #f8fafc; color: #64748b; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #e2e8f0; }
-        .dw-modern-table td { padding: 16px 24px; border-bottom: 1px solid #f1f5f9; color: #334155; font-size: 14px; vertical-align: middle; }
+        .dw-modern-table th { padding: 12px 20px; background: #fff; color: #646970; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #e2e4e7; }
+        .dw-modern-table td { padding: 14px 20px; border-bottom: 1px solid #f0f0f1; color: #3c434a; font-size: 13px; vertical-align: middle; }
         .dw-modern-table tr:last-child td { border-bottom: none; }
-        .dw-modern-table tr:hover td { background: #fcfcfc; }
+        .dw-modern-table tr:hover td { background: #f8f9fa; }
         
-        .order-id { font-family: monospace; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; color: #475569; font-size: 13px; }
-        .info-primary { font-weight: 500; color: #0f172a; }
+        .order-id { font-family: monospace; background: #f0f0f1; padding: 3px 8px; border-radius: 4px; color: #50575e; font-size: 12px; font-weight: 600; }
+        .info-primary { font-weight: 600; color: #1d2327; font-size: 14px; margin-bottom: 2px; }
         .text-right { text-align: right; }
         .text-center { text-align: center; }
 
         /* BADGES */
-        .dw-badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
-        .status-neutral { background: #f1f5f9; color: #64748b; }
-        .status-warning { background: #fffbeb; color: #b45309; }
-        .status-processing { background: #eff6ff; color: #1d4ed8; }
-        .status-success { background: #f0fdf4; color: #15803d; }
-        .status-danger { background: #fef2f2; color: #b91c1c; }
+        .dw-badge { display: inline-block; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; border: 1px solid transparent; }
+        .status-neutral { background: #f0f0f1; color: #646970; border-color: #dcdcde; }
+        .status-warning { background: #fcf9e8; color: #996800; border-color: #f0c33c; }
+        .status-processing { background: #f0f6fc; color: #2271b1; border-color: #72aee6; }
+        .status-success { background: #edfaef; color: #008a20; border-color: #00ba37; }
+        .status-danger { background: #fcf0f1; color: #d63638; border-color: #d63638; }
 
         /* QUICK ACTIONS GRID */
-        .dw-quick-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; padding: 20px; }
+        .dw-quick-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; padding: 16px; }
         .quick-item {
             display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
-            background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
-            padding: 16px 10px; text-decoration: none; color: #475569; font-size: 13px; font-weight: 500;
+            background: #fff; border: 1px solid #e2e4e7; border-radius: 8px;
+            padding: 20px 10px; text-decoration: none; color: #50575e; font-size: 13px; font-weight: 500;
             transition: all 0.2s;
         }
-        .quick-item:hover { border-color: #3b82f6; color: #3b82f6; background: #eff6ff; transform: translateY(-2px); }
+        .quick-item:hover { border-color: #2271b1; color: #2271b1; background: #f0f6fc; transform: translateY(-2px); box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
         .quick-icon {
-            width: 36px; height: 36px; border-radius: 8px;
+            width: 40px; height: 40px; border-radius: 10px;
             display: flex; align-items: center; justify-content: center;
         }
         .quick-icon .dashicons { font-size: 20px; width: 20px; height: 20px; }
         
-        .icon-add { background: #dbeafe; color: #2563eb; }
-        .icon-settings { background: #f1f5f9; color: #475569; }
-        .icon-check { background: #dcfce7; color: #16a34a; }
-        .icon-blue { background: #e0f2fe; color: #0284c7; }
-        .icon-purple { background: #f3e8ff; color: #7e22ce; }
-        .icon-gray { background: #f3f4f6; color: #4b5563; }
+        .icon-add { background: #eef2ff; color: #4f46e5; }
+        .icon-settings { background: #f3f4f6; color: #4b5563; }
+        .icon-check { background: #ecfdf5; color: #059669; }
+        .icon-blue { background: #eff6ff; color: #2563eb; }
+        .icon-purple { background: #faf5ff; color: #9333ea; }
+        .icon-gray { background: #f8fafc; color: #64748b; }
 
         /* SYSTEM INFO */
         .dw-system-info { padding: 0; }
-        .sys-item { display: flex; justify-content: space-between; padding: 12px 24px; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
+        .sys-item { display: flex; justify-content: space-between; padding: 12px 20px; border-bottom: 1px solid #f0f0f1; font-size: 13px; }
         .sys-item:last-child { border-bottom: none; }
-        .sys-label { color: #64748b; }
-        .sys-val { font-weight: 600; color: #334155; }
+        .sys-label { color: #646970; }
+        .sys-val { font-weight: 600; color: #1d2327; font-family: monospace; }
 
         /* EMPTY STATE */
-        .dw-empty-state { padding: 40px 20px; text-align: center; color: #94a3b8; }
+        .dw-empty-state { padding: 50px 20px; text-align: center; color: #8c8f94; }
         .empty-icon-bg { 
-            width: 64px; height: 64px; background: #f8fafc; border-radius: 50%; 
-            display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;
+            width: 60px; height: 60px; background: #f0f0f1; border-radius: 50%; 
+            display: flex; align-items: center; justify-content: center; margin: 0 auto 15px;
         }
-        .empty-icon-bg .dashicons { font-size: 32px; width: 32px; height: 32px; color: #cbd5e1; }
-        .dw-empty-state h4 { margin: 0 0 6px 0; color: #334155; font-size: 16px; }
-        .dw-empty-state p { margin: 0; font-size: 13px; color: #64748b; }
+        .empty-icon-bg .dashicons { font-size: 28px; width: 28px; height: 28px; color: #a7aaad; }
+        .dw-empty-state h4 { margin: 0 0 6px 0; color: #3c434a; font-size: 15px; font-weight: 600; }
+        .dw-empty-state p { margin: 0; font-size: 13px; color: #646970; }
 
     </style>
     <?php

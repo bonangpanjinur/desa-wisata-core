@@ -2,7 +2,7 @@
 /**
  * File Name:   includes/admin-menus.php
  * Description: Mengatur menu admin dan meload halaman admin.
- * UPDATE: Memastikan 3 menu utama (Reward, Desa, Pedagang) muncul dan terhubung file yang benar.
+ * UPDATE: Penyesuaian pemanggilan fungsi render untuk halaman Pedagang.
  * @package DesaWisataCore
  */
 
@@ -38,9 +38,16 @@ function dw_render_desa_verifikasi() {
 }
 
 // MENU 3: TOKO ATAU PEDAGANG
+// UPDATE: Disesuaikan dengan nama fungsi di page-pedagang.php
 function dw_render_pedagang() { 
     require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-pedagang.php';
-    if (function_exists('dw_render_page_pedagang')) {
+    
+    // Prioritaskan nama fungsi baru sesuai kode page-pedagang.php Anda
+    if (function_exists('dw_pedagang_page_render')) {
+        dw_pedagang_page_render(); 
+    } 
+    // Fallback untuk kompatibilitas lama
+    elseif (function_exists('dw_render_page_pedagang')) {
         dw_render_page_pedagang(); 
     }
 }
@@ -197,15 +204,8 @@ function dw_register_admin_menus() {
         add_submenu_page('dw-dashboard', 'Log Reward Referral', 'Reward Referral', 'manage_options', 'dw-referral-reward', 'dw_render_referral_rewards');
     }
 
-    // --- VERIFIKASI AKUN ---
-    if (current_user_can('verifikator_umkm') || current_user_can('administrator')) {
-        add_submenu_page('dw-dashboard', 'Verifikasi Akun', 'Verifikasi Akun', 'read', 'dw-verifikator-dashboard', 'dw_render_verifikator_dashboard_page');
-    }
-    
-    // Verifikasi oleh Desa
-    if (current_user_can('dw_approve_pedagang') || current_user_can('manage_options')) {
-        add_submenu_page('dw-dashboard', 'Verifikasi Pedagang', 'Verifikasi Pedagang', 'read', 'dw-desa-verifikasi', 'dw_render_desa_verifikasi');
-    }
+
+
 
     // --- DATA MASTER ---
     // Menu 2 & 3: Desa & Pedagang
