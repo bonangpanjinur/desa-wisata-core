@@ -326,3 +326,40 @@ function dw_handle_toggle_product() {
     }
     wp_send_json_error(['message' => 'Gagal memperbarui produk.']);
 }
+
+/**
+ * =============================================================================
+ * 6. FITUR FAVORIT (WISHLIST)
+ * =============================================================================
+ */
+
+add_action('wp_ajax_dw_toggle_favorite', 'dw_ajax_toggle_favorite');
+function dw_ajax_toggle_favorite() {
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'Silakan login terlebih dahulu']);
+    }
+
+    $object_id = intval($_POST['object_id'] ?? 0);
+    $type      = sanitize_text_field($_POST['type'] ?? 'produk'); // 'produk' atau 'wisata'
+    $user_id   = get_current_user_id();
+
+    if (!$object_id) {
+        wp_send_json_error(['message' => 'ID Objek tidak valid']);
+    }
+
+    if (!class_exists('DW_Favorites')) {
+        require_once DW_CORE_PLUGIN_DIR . 'includes/class-dw-favorites.php';
+    }
+
+    $favorites = new DW_Favorites();
+    $result = $favorites->toggle_favorite($user_id, $object_id, $type);
+    
+    // Ambil jumlah like terbaru
+    $new_count = $favorites->count_likes($object_id, $type);
+
+    wp_send_json_success([
+        'action'  => $result['status'], // 'added' atau 'removed'
+        'message' => $result['message'],
+        'count'   => $new_count
+    ]);
+}
