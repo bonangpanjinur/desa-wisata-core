@@ -29,6 +29,7 @@ function dw_settings_save_handler() {
         update_option( 'dw_wa_api_url', esc_url_raw( $_POST['dw_wa_api_url'] ) );
         update_option( 'dw_wa_api_key', sanitize_text_field( $_POST['dw_wa_api_key'] ) );
         update_option( 'dw_wa_sender', sanitize_text_field( $_POST['dw_wa_sender'] ) );
+        update_option( 'dw_order_notification_youtube', esc_url_raw( $_POST['dw_order_notification_youtube'] ) );
     } elseif ( $tab === 'referral' ) {
         update_option( 'dw_bonus_quota_referral', absint( $_POST['dw_bonus_quota_referral'] ) );
         update_option( 'dw_prefix_referral_pedagang', strtoupper( sanitize_text_field( $_POST['dw_prefix_referral_pedagang'] ) ) );
@@ -207,6 +208,12 @@ function dw_admin_settings_page_handler() {
                             <div class="dw-input-group">
                                 <label>Sender Number / ID</label>
                                 <input type="text" name="dw_wa_sender" value="<?php echo esc_attr(get_option('dw_wa_sender')); ?>">
+                            </div>
+
+                            <div class="dw-input-group" style="margin-top: 30px; border-top: 1px solid #f1f5f9; padding-top: 25px;">
+                                <label>Link YouTube Nada Peringatan Pesanan</label>
+                                <input type="text" name="dw_order_notification_youtube" value="<?php echo esc_attr(get_option('dw_order_notification_youtube')); ?>" placeholder="https://www.youtube.com/watch?v=xxxx">
+                                <p class="dw-help-text">Masukkan link YouTube untuk nada peringatan saat ada pesanan masuk di dashboard toko.</p>
                             </div>
                         </div>
                     <?php endif; ?>
