@@ -34,6 +34,9 @@ function dw_settings_save_handler() {
         update_option( 'dw_bonus_quota_referral', absint( $_POST['dw_bonus_quota_referral'] ) );
         update_option( 'dw_prefix_referral_pedagang', strtoupper( sanitize_text_field( $_POST['dw_prefix_referral_pedagang'] ) ) );
         update_option( 'dw_ref_auto_verify', sanitize_key( $_POST['dw_ref_auto_verify'] ) );
+    } elseif ( $tab === 'notification' ) {
+        update_option( 'dw_default_order_sound_url', esc_url_raw( $_POST['dw_default_order_sound_url'] ) );
+        update_option( 'dw_default_order_sound_type', sanitize_text_field( $_POST['dw_default_order_sound_type'] ) );
     }
 
     add_settings_error( 'dw_settings_notices', 'saved', 'Pengaturan berhasil disimpan.', 'success' );
@@ -98,6 +101,9 @@ function dw_admin_settings_page_handler() {
                 </a>
                 <a href="?page=dw-settings&tab=whatsapp" class="dw-nav-item <?php echo $active_tab == 'whatsapp' ? 'active' : ''; ?>">
                     <span class="dashicons dashicons-whatsapp"></span> Notifikasi WA
+                </a>
+                <a href="?page=dw-settings&tab=notification" class="dw-nav-item <?php echo $active_tab == 'notification' ? 'active' : ''; ?>">
+                    <span class="dashicons dashicons-megaphone"></span> Nada Pesanan
                 </a>
             </div>
 
@@ -190,7 +196,6 @@ function dw_admin_settings_page_handler() {
                                     <option value="auto" <?php selected($current_verify, 'auto'); ?>>Berikan Kuota Otomatis (Instan)</option>
                                     <option value="manual" <?php selected($current_verify, 'manual'); ?>>Tinjau Manual Oleh Admin</option>
                                 </select>
-                                <p class="dw-help-text">Otomatis akan langsung menambah kuota pedagang. Manual mengharuskan Anda menyetujui di halaman Verifikasi Akun.</p>
                             </div>
                         </div>
 
@@ -211,11 +216,76 @@ function dw_admin_settings_page_handler() {
                             </div>
 
                             <div class="dw-input-group" style="margin-top: 30px; border-top: 1px solid #f1f5f9; padding-top: 25px;">
-                                <label>Link YouTube Nada Peringatan Pesanan</label>
+                                <label>Link YouTube Nada Peringatan Pesanan (Global)</label>
                                 <input type="text" name="dw_order_notification_youtube" value="<?php echo esc_attr(get_option('dw_order_notification_youtube')); ?>" placeholder="https://www.youtube.com/watch?v=xxxx">
-                                <p class="dw-help-text">Masukkan link YouTube untuk nada peringatan saat ada pesanan masuk di dashboard toko.</p>
+                                <p class="dw-help-text">Masukkan link YouTube untuk nada peringatan saat ada pesanan masuk di dashboard toko (Default jika pedagang tidak mengatur sendiri).</p>
                             </div>
                         </div>
+
+                    <?php elseif ($active_tab == 'notification'): ?>
+                        <div class="dw-form-section">
+                            <h3><span class="dashicons dashicons-megaphone"></span> Pengaturan Nada Pesanan Masuk (Default)</h3>
+                            <p class="dw-help-text">Atur nada default yang akan digunakan oleh semua toko jika mereka belum mengatur nada sendiri.</p>
+                            
+                            <div class="dw-input-group">
+                                <label>Tipe Nada Default</label>
+                                <select name="dw_default_order_sound_type" id="dw_sound_type">
+                                    <?php $current_type = get_option('dw_default_order_sound_type', 'default'); ?>
+                                    <option value="default" <?php selected($current_type, 'default'); ?>>Suara Default Sistem</option>
+                                    <option value="upload" <?php selected($current_type, 'upload'); ?>>Upload File (MP3/MP4)</option>
+                                    <option value="youtube" <?php selected($current_type, 'youtube'); ?>>Link YouTube</option>
+                                </select>
+                            </div>
+
+                            <div class="dw-input-group" id="group_sound_upload" style="<?php echo $current_type != 'upload' ? 'display:none;' : ''; ?>">
+                                <label>File Audio/Video</label>
+                                <div style="display:flex; gap:10px; align-items:center; margin-bottom: 15px;">
+                                    <input type="text" name="dw_default_order_sound_url" id="dw_sound_url_field" value="<?php echo esc_attr(get_option('dw_default_order_sound_url')); ?>" placeholder="URL File MP3/MP4">
+                                    <button type="button" class="button" id="btn_upl_sound_default">Pilih File</button>
+                                </div>
+                                <p class="dw-help-text">Upload file MP3 atau MP4 untuk digunakan sebagai nada pesanan.</p>
+                            </div>
+
+                            <div class="dw-input-group" id="group_sound_youtube" style="<?php echo $current_type != 'youtube' ? 'display:none;' : ''; ?>">
+                                <label>Link YouTube</label>
+                                <input type="text" name="dw_default_order_sound_url_yt" id="dw_sound_url_yt_field" value="<?php echo $current_type == 'youtube' ? esc_attr(get_option('dw_default_order_sound_url')) : ''; ?>" placeholder="https://www.youtube.com/watch?v=xxxx">
+                                <p class="dw-help-text">Masukkan link YouTube untuk nada peringatan.</p>
+                            </div>
+                        </div>
+                        <script>
+                        jQuery(document).ready(function($){
+                            $('#dw_sound_type').change(function(){
+                                var val = $(this).val();
+                                if(val == 'upload') {
+                                    $('#group_sound_upload').show();
+                                    $('#group_sound_youtube').hide();
+                                } else if(val == 'youtube') {
+                                    $('#group_sound_upload').hide();
+                                    $('#group_sound_youtube').show();
+                                } else {
+                                    $('#group_sound_upload').hide();
+                                    $('#group_sound_youtube').hide();
+                                }
+                            });
+
+                            $('#btn_upl_sound_default').click(function(e){
+                                e.preventDefault();
+                                var frame = wp.media({title:'Pilih Nada Pesanan', multiple:false, library:{type:['audio', 'video']}});
+                                frame.on('select', function(){ 
+                                    var url = frame.state().get('selection').first().toJSON().url; 
+                                    $('#dw_sound_url_field').val(url); 
+                                });
+                                frame.open();
+                            });
+
+                            // Sync YouTube field to main URL field on submit
+                            $('form').submit(function(){
+                                if($('#dw_sound_type').val() == 'youtube') {
+                                    $('#dw_sound_url_field').val($('#dw_sound_url_yt_field').val());
+                                }
+                            });
+                        });
+                        </script>
                     <?php endif; ?>
                     
                     <button type="submit" name="dw_settings_submit" class="dw-btn-save">Simpan Perubahan</button>

@@ -375,6 +375,7 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_sub );
 
+
     // 8. Tabel Item Transaksi (Detail Produk)
     $sql_items = "CREATE TABLE {$table_prefix}transaksi_items (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
