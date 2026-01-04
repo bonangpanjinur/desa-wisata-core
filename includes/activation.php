@@ -35,7 +35,7 @@ function dw_activate_plugin() {
        1. ENTITAS UTAMA (MASTER DATA)
        ========================================= */
 
-    // 1. Tabel Desa
+    // 1. Tabel Desa (Updated)
     $sql_desa = "CREATE TABLE {$table_prefix}desa (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_user_desa BIGINT(20) UNSIGNED NOT NULL,
@@ -43,6 +43,10 @@ function dw_activate_plugin() {
         slug_desa VARCHAR(255) NOT NULL,
         kode_referral VARCHAR(50) DEFAULT NULL,
         deskripsi TEXT,
+        
+        /* [NEW] Tambahkan kolom kontak */
+        nomor_wa VARCHAR(20) DEFAULT NULL, 
+        
         foto VARCHAR(255) DEFAULT NULL,
         foto_sampul VARCHAR(255) DEFAULT NULL,
         foto_admin VARCHAR(255) DEFAULT NULL, 

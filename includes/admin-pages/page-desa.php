@@ -3,7 +3,7 @@
  * File Name: includes/admin-pages/page-desa.php
  * Description: CRUD Desa Wisata & Verifikasi dengan UI/UX Modern.
  * Matches DB Table: dw_desa
- * Version: 6.5 (Updated Referral Generator Format)
+ * Version: 6.6 (Added WhatsApp Number Field)
  * @package DesaWisataCore
  */
 
@@ -162,6 +162,10 @@ function dw_desa_page_render() {
                     'slug_desa'               => sanitize_title($_POST['nama_desa']),
                     'kode_referral'           => $kode_referral,
                     'deskripsi'               => wp_kses_post($_POST['deskripsi']),
+                    
+                    // [NEW] Nomor WA / Kontak
+                    'nomor_wa'                => sanitize_text_field($_POST['nomor_wa']), 
+
                     'foto'                    => esc_url_raw($_POST['foto_url']),
                     'foto_sampul'             => esc_url_raw($_POST['foto_sampul_url']),
                     
@@ -221,6 +225,7 @@ function dw_desa_page_render() {
     $default_data = (object) [
         'id' => 0, 'id_user_desa' => 0, 'nama_desa' => '', 'deskripsi' => '',
         'kode_referral' => '', 
+        'nomor_wa' => '', // Default empty WA
         'status' => 'pending', // Default status publikasi
         'foto' => '', 'foto_sampul' => '',
         'status_akses_verifikasi' => 'locked', // Default status verifikasi
@@ -553,6 +558,10 @@ function dw_desa_page_render() {
                                 <div class="dw-form-group">
                                     <label>Nama Desa Wisata</label>
                                     <input type="text" name="nama_desa" id="inp_nama_desa" class="dw-input" value="<?php echo esc_attr($edit_data->nama_desa); ?>" required>
+                                </div>
+                                <div class="dw-form-group">
+                                    <label>Nomor WhatsApp (Kontak Desa)</label>
+                                    <input type="text" name="nomor_wa" class="dw-input" value="<?php echo esc_attr($edit_data->nomor_wa); ?>" placeholder="Contoh: 628123456789">
                                 </div>
                                 <div class="dw-form-group">
                                     <label>Kode Referral (Otomatis)</label>
