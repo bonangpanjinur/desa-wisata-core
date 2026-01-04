@@ -9,6 +9,7 @@
  * 3. [Finance] Menambahkan fitur diskon granular & refund parsial.
  * 4. [Driver] Menambahkan heartbeat & token notifikasi untuk driver ojek.
  * 5. [Payment] Menambahkan slot untuk Payment Gateway Token (Midtrans/Xendit).
+ * 6. [Favorites] Integrasi tabel Favorit untuk Produk & Wisata.
  * * @package DesaWisataCore
  */
 
@@ -608,19 +609,19 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_wa );
 
-    // 22. Wishlist
-    $sql_wishlist = "CREATE TABLE {$table_prefix}wishlist (
+    // 22. Favorites (Wishlist) - INTEGRATED
+    $sql_favorites = "CREATE TABLE {$table_prefix}favorites (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         user_id BIGINT(20) UNSIGNED NOT NULL,
-        item_id BIGINT(20) UNSIGNED NOT NULL,
-        item_type VARCHAR(20) NOT NULL DEFAULT 'wisata', 
+        object_id BIGINT(20) UNSIGNED NOT NULL,
+        object_type VARCHAR(20) NOT NULL DEFAULT 'produk', -- 'produk' atau 'wisata'
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY  (id),
         KEY user_id (user_id),
-        KEY item_lookup (item_id, item_type),
-        UNIQUE KEY unique_like (user_id, item_id, item_type) 
+        KEY object_lookup (object_id, object_type),
+        UNIQUE KEY user_object (user_id, object_id, object_type)
     ) $charset_collate;";
-    dbDelta( $sql_wishlist );
+    dbDelta( $sql_favorites );
 
     // 23. Quota Logs
     $sql_quota_logs = "CREATE TABLE {$table_prefix}quota_logs (
