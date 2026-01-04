@@ -340,7 +340,12 @@ function dw_ajax_toggle_favorite() {
     }
 
     $object_id = intval($_POST['object_id'] ?? 0);
-    $type      = sanitize_text_field($_POST['type'] ?? 'produk'); // 'produk' atau 'wisata'
+    $type      = sanitize_text_field($_POST['type'] ?? ''); // 'produk' atau 'wisata'
+    
+    if (empty($type)) {
+        // Fallback jika type tidak terkirim dari JS
+        $type = 'produk';
+    }
     $user_id   = get_current_user_id();
 
     if (!$object_id) {
