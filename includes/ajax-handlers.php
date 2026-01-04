@@ -281,7 +281,7 @@ function dw_ajax_process_umkm_verification() {
 // Verifikasi Pembayaran Paket Transaksi
 add_action('wp_ajax_dw_verify_package_payment', 'dw_handle_package_verification');
 function dw_handle_package_verification() {
-    check_ajax_referer('dw_admin_nonce', 'security');
+    check_ajax_referer('dw_admin_nonce', 'nonce');
     
     if (!current_user_can('manage_options') && !current_user_can('admin_desa')) {
         wp_send_json_error(['message' => 'Akses ditolak.']);
@@ -311,7 +311,7 @@ function dw_handle_package_verification() {
 // Toggle Status Produk (Aktif/Nonaktif)
 add_action('wp_ajax_dw_toggle_product_status', 'dw_handle_toggle_product');
 function dw_handle_toggle_product() {
-    check_ajax_referer('dw_nonce', 'security');
+    check_ajax_referer('dw_nonce', 'nonce');
     
     $product_id = intval($_POST['product_id']);
     $new_status = sanitize_text_field($_POST['status']);

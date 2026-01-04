@@ -72,10 +72,10 @@ class DW_Ojek_Handler {
         update_user_meta($user_id, 'dw_ojek_quota', $current + $amount);
 
         $wpdb->insert($wpdb->prefix . 'dw_quota_logs', [
-            'user_id' => $user_id,
+            'user_id' => absint($user_id),
             'quota_change' => $amount,
-            'type' => $type,
-            'description' => $description,
+            'type' => sanitize_text_field($type),
+            'description' => sanitize_text_field($description),
             'created_at' => current_time('mysql')
         ]);
     }
@@ -91,16 +91,16 @@ class DW_Ojek_Handler {
         update_user_meta($user_id, 'dw_ojek_quota', $new);
 
         $wpdb->insert($wpdb->prefix . 'dw_quota_logs', [
-            'user_id' => $user_id,
+            'user_id' => absint($user_id),
             'quota_change' => -1 * $amount,
             'type' => 'usage_ojek',
-            'description' => $description,
+            'description' => sanitize_text_field($description),
             'created_at' => current_time('mysql')
         ]);
 
         if ($new <= 0) {
             // Update status di tabel ojek juga
-            $wpdb->update($wpdb->prefix . 'dw_ojek', ['status_kerja' => 'offline'], ['id_user' => $user_id]);
+            $wpdb->update($wpdb->prefix . 'dw_ojek', ['status_kerja' => 'offline'], ['id_user' => absint($user_id)]);
             update_user_meta($user_id, 'dw_ojek_status_kerja', 'offline');
         }
 
@@ -140,9 +140,9 @@ class DW_Ojek_Handler {
         $exists = $wpdb->get_var($wpdb->prepare("SELECT id FROM $table WHERE id_user = %d", $user_id));
 
         if ($exists) {
-            $wpdb->update($table, $data, ['id_user' => $user_id]);
+            $wpdb->update($table, $data, ['id_user' => absint($user_id)]);
         } else {
-            $data['id_user'] = $user_id;
+            $data['id_user'] = absint($user_id);
             $data['status_pendaftaran'] = 'menunggu'; // Default pending
             $data['created_at'] = current_time('mysql');
             $wpdb->insert($table, $data);
@@ -170,7 +170,7 @@ class DW_Ojek_Handler {
         global $wpdb;
         $wpdb->update($wpdb->prefix . 'dw_ojek', 
             ['status_kerja' => $status], 
-            ['id_user' => $user_id]
+            ['id_user' => absint($user_id)]
         );
         update_user_meta($user_id, 'dw_ojek_status_kerja', $status);
 
@@ -195,11 +195,11 @@ class DW_Ojek_Handler {
 
         $insert_data = [
             'kode_unik' => 'OJK-' . strtoupper(wp_generate_password(6, false)),
-            'id_pembeli' => $user_id,
+            'id_pembeli' => absint($user_id),
             'status_transaksi' => 'menunggu_driver',
             'ojek_data' => json_encode($ojek_data),
-            'alamat_lengkap' => $data['pickup']['address'], // Untuk display simple
-            'kecamatan' => $data['pickup']['kecamatan_id'] ?? '', // Penting untuk broadcast driver
+            'alamat_lengkap' => sanitize_textarea_field($data['pickup']['address']), // Untuk display simple
+            'kecamatan' => sanitize_text_field($data['pickup']['kecamatan_id'] ?? ''), // Penting untuk broadcast driver
             'created_at' => current_time('mysql')
         ];
 
@@ -235,7 +235,7 @@ class DW_Ojek_Handler {
             'status_transaksi' => 'penawaran_driver', // Status berubah, User harus respon
             'ojek_data' => json_encode($ojek_data),
             'total_transaksi' => $price // Update nominal sementara
-        ], ['id' => $trx_id]);
+        ], ['id' => absint($trx_id)]);
 
         wp_send_json_success(['message' => 'Penawaran dikirim ke penumpang']);
     }
@@ -249,6 +249,7 @@ class DW_Ojek_Handler {
         $price = absint($_POST['price']);
 
         $trx = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$wpdb->prefix}dw_transaksi WHERE id = %d", $trx_id));
+        if (!$trx) wp_send_json_error(['message' => 'Order tidak ditemukan']);
         $ojek_data = json_decode($trx->ojek_data, true);
 
         $ojek_data['nego_history'][] = [
@@ -261,7 +262,7 @@ class DW_Ojek_Handler {
             'status_transaksi' => 'nego', // Balik ke driver untuk konfirmasi/nego lagi
             'ojek_data' => json_encode($ojek_data),
             'total_transaksi' => $price
-        ], ['id' => $trx_id]);
+        ], ['id' => absint($trx_id)]);
 
         wp_send_json_success(['message' => 'Nego dikirim ke driver']);
     }
@@ -274,37 +275,34 @@ class DW_Ojek_Handler {
         $trx_id = absint($_POST['transaction_id']);
         
         $trx = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$wpdb->prefix}dw_transaksi WHERE id = %d", $trx_id));
+        if (!$trx) wp_send_json_error(['message' => 'Order tidak ditemukan']);
         $ojek_data = json_decode($trx->ojek_data, true);
         
         // Driver yang terakhir bidding/deal
-        $driver_id = $ojek_data['driver_candidate_id'];
-
-        // KURANGI KUOTA DRIVER DISINI (SAAT DEAL)
-        if (!self::deduct_quota($driver_id, 1, 'Order #' . $trx->kode_unik)) {
-            wp_send_json_error(['message' => 'Driver sedang sibuk/kehabisan kuota']);
-        }
-
-        $ojek_data['driver_fixed_id'] = $driver_id; // Kunci driver
+        $driver_id = $ojek_data['driver_candidate_id'] ?? 0;
+        if (!$driver_id) wp_send_json_error(['message' => 'Driver tidak valid']);
 
         $wpdb->update($wpdb->prefix . 'dw_transaksi', [
-            'status_transaksi' => 'menunggu_penjemputan', // Trigger tombol "Jemput Sekarang" di HP Driver
-            'ojek_data' => json_encode($ojek_data)
-        ], ['id' => $trx_id]);
+            'id_ojek' => absint($driver_id),
+            'status_transaksi' => 'menunggu_penjemputan',
+            'updated_at' => current_time('mysql')
+        ], ['id' => absint($trx_id)]);
 
-        wp_send_json_success(['message' => 'Driver akan segera menjemput']);
+        wp_send_json_success(['message' => 'Deal! Driver akan segera menjemput']);
     }
 
-    // 5. Driver Jemput (Status: dalam_perjalanan)
+    // 5. Driver Pickup (Status: dalam_perjalanan)
     public static function ajax_driver_pickup() {
         check_ajax_referer('dw_nonce', 'nonce');
         global $wpdb;
         $trx_id = absint($_POST['transaction_id']);
 
         $wpdb->update($wpdb->prefix . 'dw_transaksi', [
-            'status_transaksi' => 'dalam_perjalanan'
-        ], ['id' => $trx_id]);
+            'status_transaksi' => 'dalam_perjalanan',
+            'updated_at' => current_time('mysql')
+        ], ['id' => absint($trx_id)]);
 
-        wp_send_json_success(['message' => 'Perjalanan dimulai']);
+        wp_send_json_success(['message' => 'Trip dimulai']);
     }
 
     // 6. Driver Selesai (Status: selesai)
@@ -312,31 +310,30 @@ class DW_Ojek_Handler {
         check_ajax_referer('dw_nonce', 'nonce');
         global $wpdb;
         $trx_id = absint($_POST['transaction_id']);
+        $driver_id = get_current_user_id();
 
+        // Potong Kuota Driver
+        $deducted = self::deduct_quota($driver_id, 1, 'Selesaikan Order Ojek');
+        
         $wpdb->update($wpdb->prefix . 'dw_transaksi', [
-            'status_transaksi' => 'selesai'
-        ], ['id' => $trx_id]);
+            'status_transaksi' => 'selesai',
+            'status_pembayaran' => 'lunas', // Asumsi cash/berhasil
+            'updated_at' => current_time('mysql')
+        ], ['id' => absint($trx_id)]);
 
-        wp_send_json_success(['message' => 'Order selesai']);
+        wp_send_json_success(['message' => 'Trip selesai. Kuota Anda terpotong 1.']);
     }
 
     /**
-     * Get Driver Tersedia (Query Tabel dw_ojek)
+     * Helper: Ambil Order Aktif di Sekitar (Kecamatan)
      */
-    public static function get_available_ojek($kecamatan_id) {
+    public static function get_nearby_requests($kecamatan_id) {
         global $wpdb;
-        $table = $wpdb->prefix . 'dw_ojek';
+        $sql = "SELECT * FROM {$wpdb->prefix}dw_transaksi 
+                WHERE status_transaksi = 'menunggu_driver' 
+                AND kecamatan = %s 
+                ORDER BY created_at DESC";
         
-        // Cari driver online di kecamatan yang sama
-        // Pastikan juga join ke usermeta untuk cek kuota > 0
-        $sql = "SELECT o.*, u.display_name 
-                FROM $table o
-                JOIN {$wpdb->users} u ON o.id_user = u.ID
-                JOIN {$wpdb->usermeta} um ON o.id_user = um.user_id AND um.meta_key = 'dw_ojek_quota'
-                WHERE o.api_kecamatan_id = %s 
-                AND o.status_kerja = 'online'
-                AND um.meta_value > 0";
-        
-        return $wpdb->get_results($wpdb->prepare($sql, $kecamatan_id));
+        return $wpdb->get_results($wpdb->prepare($sql, sanitize_text_field($kecamatan_id)));
     }
 }

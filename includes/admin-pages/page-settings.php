@@ -30,14 +30,14 @@ function dw_settings_save_handler() {
         update_option( 'dw_wa_api_key', sanitize_text_field( $_POST['dw_wa_api_key'] ) );
         update_option( 'dw_wa_sender', sanitize_text_field( $_POST['dw_wa_sender'] ) );
     } elseif ( $tab === 'referral' ) {
-        update_option( 'dw_bonus_quota_referral', intval( $_POST['dw_bonus_quota_referral'] ) );
+        update_option( 'dw_bonus_quota_referral', absint( $_POST['dw_bonus_quota_referral'] ) );
         update_option( 'dw_prefix_referral_pedagang', strtoupper( sanitize_text_field( $_POST['dw_prefix_referral_pedagang'] ) ) );
-        update_option( 'dw_ref_auto_verify', sanitize_text_field( $_POST['dw_ref_auto_verify'] ) );
+        update_option( 'dw_ref_auto_verify', sanitize_key( $_POST['dw_ref_auto_verify'] ) );
     }
 
     add_settings_error( 'dw_settings_notices', 'saved', 'Pengaturan berhasil disimpan.', 'success' );
     set_transient('settings_errors', get_settings_errors(), 30);
-    wp_redirect( admin_url( 'admin.php?page=dw-settings&tab=' . $tab ) ); exit;
+    wp_redirect( admin_url( 'admin.php?page=dw-settings&tab=' . sanitize_key($tab) ) ); exit;
 }
 add_action( 'admin_init', 'dw_settings_save_handler' );
 
@@ -45,9 +45,15 @@ add_action( 'admin_init', 'dw_settings_save_handler' );
  * Render Halaman Pengaturan
  */
 function dw_admin_settings_page_handler() {
-    $active_tab = $_GET['tab'] ?? 'general';
+    $active_tab = isset($_GET['tab']) ? sanitize_key($_GET['tab']) : 'general';
     $errors = get_transient('settings_errors'); 
-    if($errors) { settings_errors('dw_settings_notices'); delete_transient('settings_errors'); }
+    if($errors) { 
+        foreach($errors as $error) {
+            add_settings_error($error['setting'], $error['code'], $error['message'], $error['type']);
+        }
+        settings_errors('dw_settings_notices'); 
+        delete_transient('settings_errors'); 
+    }
     ?>
     <div class="wrap dw-wrap">
         <h1 class="wp-heading-inline" style="font-weight: 800;">Pengaturan Sistem Desa Wisata</h1>
