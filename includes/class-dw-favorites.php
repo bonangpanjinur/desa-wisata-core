@@ -27,6 +27,8 @@ class DW_Favorites {
      */
     public function toggle_favorite( $user_id, $object_id, $type = 'produk' ) {
         global $wpdb;
+        
+        if (empty($type)) $type = 'produk';
 
         // Cek apakah sudah ada (Wajib cek Type juga!)
         $exists = $wpdb->get_var( $wpdb->prepare(
