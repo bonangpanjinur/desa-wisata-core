@@ -28,10 +28,10 @@ class DW_Favorites {
     public function toggle_favorite( $user_id, $object_id, $type = 'produk' ) {
         global $wpdb;
 
-        // Cek apakah sudah ada
+        // Cek apakah sudah ada (Wajib cek Type juga!)
         $exists = $wpdb->get_var( $wpdb->prepare(
-            "SELECT id FROM $this->table_name WHERE user_id = %d AND object_id = %d",
-            $user_id, $object_id
+            "SELECT id FROM $this->table_name WHERE user_id = %d AND object_id = %d AND object_type = %s",
+            $user_id, $object_id, $type
         ) );
 
         if ( $exists ) {
@@ -60,12 +60,13 @@ class DW_Favorites {
 
     /**
      * Cek status apakah user menyukai item ini
+     * [UPDATED] Menambahkan parameter $type agar ID Produk dan ID Wisata tidak bentrok
      */
-    public function is_favorited( $user_id, $object_id ) {
+    public function is_favorited( $user_id, $object_id, $type = 'produk' ) {
         global $wpdb;
         $id = $wpdb->get_var( $wpdb->prepare(
-            "SELECT id FROM $this->table_name WHERE user_id = %d AND object_id = %d",
-            $user_id, $object_id
+            "SELECT id FROM $this->table_name WHERE user_id = %d AND object_id = %d AND object_type = %s",
+            $user_id, $object_id, $type
         ) );
         return ! empty( $id );
     }
@@ -91,11 +92,11 @@ class DW_Favorites {
     /**
      * Hitung total like untuk sebuah item
      */
-    public function count_likes( $object_id ) {
+    public function count_likes( $object_id, $type = 'produk' ) {
         global $wpdb;
         return $wpdb->get_var( $wpdb->prepare(
-            "SELECT COUNT(*) FROM $this->table_name WHERE object_id = %d",
-            $object_id
+            "SELECT COUNT(*) FROM $this->table_name WHERE object_id = %d AND object_type = %s",
+            $object_id, $type
         ) );
     }
 }
