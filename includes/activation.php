@@ -75,7 +75,8 @@ function dw_activate_plugin() {
     ) $charset_collate;";
     dbDelta( $sql_desa );
 
-    // 2. Tabel Pedagang
+    
+// 2. Tabel Pedagang (Updated)
     $sql_pedagang = "CREATE TABLE {$table_prefix}pedagang (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         id_user BIGINT(20) UNSIGNED NOT NULL,
@@ -98,6 +99,11 @@ function dw_activate_plugin() {
         nama_bank VARCHAR(100) DEFAULT NULL,
         atas_nama_rekening VARCHAR(100) DEFAULT NULL,
         qris_image_url VARCHAR(255) DEFAULT NULL,
+        
+        /* Kolom Baru ditambahkan di sini */
+        order_notification_sound VARCHAR(255) DEFAULT NULL,
+        order_notification_type ENUM('upload', 'youtube', 'default') DEFAULT 'default',
+        
         rating_toko DECIMAL(3,2) DEFAULT 0,
         total_ulasan_toko INT DEFAULT 0,
         status_pendaftaran ENUM('menunggu','disetujui','ditolak','menunggu_desa') DEFAULT 'menunggu_desa',
@@ -127,6 +133,7 @@ function dw_activate_plugin() {
         KEY id_verifikator (id_verifikator),
         KEY slug_toko (slug_toko)
     ) $charset_collate;";
+    
     dbDelta($sql_pedagang);
 
     // 2B. Tabel Ojek (Driver)

@@ -65,7 +65,6 @@ function dw_core_load_dependencies() {
     
     // --- Access Control ---
     require_once DW_CORE_PLUGIN_DIR . 'includes/access-control.php';
-    require_once DW_CORE_PLUGIN_DIR . 'includes/migration-v4.1.php';
 }
 dw_core_load_dependencies();
 
