@@ -19,6 +19,7 @@ function dw_activate_plugin() {
 
     global $wpdb;
     $charset_collate = $wpdb->get_charset_collate();
+    // Prefix 'dw_' ditambahkan ke prefix WP (misal: wp_dw_desa)
     $table_prefix = $wpdb->prefix . 'dw_';
 
     // Wajib ada untuk fungsi dbDelta()
