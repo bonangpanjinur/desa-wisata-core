@@ -285,4 +285,15 @@ function dw_api_confirm_payment(WP_REST_Request $request) {
     $payment_proof_url = $params['payment_proof_url'];
     $notes = $params['notes'] ?? ''; // Default ke string kosong
 
-    // ... (sisanya tetap sama)
+    $result = dw_confirm_payment_upload($order_id, $user_id, $payment_proof_url, $notes);
+
+    if (is_wp_error($result)) {
+        return $result;
+    }
+
+    return new WP_REST_Response([
+        'success' => true,
+        'message' => 'Konfirmasi pembayaran berhasil dikirim.',
+        'data'    => $result
+    ], 200);
+}

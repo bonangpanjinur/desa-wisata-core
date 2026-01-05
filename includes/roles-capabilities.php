@@ -195,7 +195,7 @@ add_action( 'admin_init', 'dw_fix_duplicate_roles' );
 // --- FILTER RESTRIKSI AKSES (Access Control List) ---
 function dw_map_meta_cap_filter( $caps, $cap, $user_id, $args ) {
     global $wpdb;
-    $post_id = isset($args[0]) ? absint($args[0]) : 0;
+    $post_id = (isset($args[0]) && !is_object($args[0])) ? absint($args[0]) : 0;
     $post = $post_id ? get_post($post_id) : null;
     $user = get_userdata($user_id);
     if (!$user || in_array('administrator', $user->roles)) return $caps; 
