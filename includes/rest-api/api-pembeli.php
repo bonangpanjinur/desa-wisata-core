@@ -288,7 +288,7 @@ function dw_api_confirm_payment(WP_REST_Request $request) {
     $result = dw_confirm_payment_upload($order_id, $user_id, $payment_proof_url, $notes);
 
     if (is_wp_error($result)) {
-        return new WP_REST_Response(['message' => $result->get_error_message()], 400);
+        return $result;
     }
 
     return new WP_REST_Response([
