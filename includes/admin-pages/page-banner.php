@@ -78,8 +78,9 @@ dw_handle_banner_actions();
 
 /**
  * Render Halaman Manajemen Banner
+ * Fungsi ini dinamakan 'dw_banner_page_render' agar sesuai dengan pemanggilan di admin menus.
  */
-function dw_render_page_banner() {
+function dw_banner_page_render() {
     global $wpdb;
     $table_name = $wpdb->prefix . 'banner';
     
