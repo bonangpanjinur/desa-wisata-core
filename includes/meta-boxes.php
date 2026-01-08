@@ -207,7 +207,7 @@ function dw_render_wisata_meta_box( $post ) {
  * 4. SAVE HANDLER (PENYIMPANAN DATA)
  * Menyimpan input dari Meta Box ke Custom Table Database.
  */
-function dw_save_custom_meta_box_data( $post_id ) {
+function dw_save_meta_data( $post_id ) {
     global $wpdb;
 
     // 1. Cek Nonce & Permission
@@ -276,7 +276,11 @@ function dw_save_custom_meta_box_data( $post_id ) {
             $data['created_at'] = current_time( 'mysql' );
             $wpdb->insert( $table, $data );
         }
+
+        // Juga simpan ke post meta untuk kompatibilitas
+        update_post_meta( $post_id, 'dw_jam_buka', $data['jam_buka'] );
+        update_post_meta( $post_id, 'dw_jam_tutup', $data['jam_tutup'] );
     }
 }
-add_action( 'save_post', 'dw_save_custom_meta_box_data' );
+add_action( 'save_post', 'dw_save_meta_data' );
 ?>
