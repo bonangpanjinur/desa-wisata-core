@@ -177,14 +177,14 @@ function dw_render_wisata_meta_box( $post ) {
                 <input type="number" name="dw_harga_tiket" id="dw_harga_tiket" value="<?php echo esc_attr( $harga_tiket ); ?>" class="widefat" placeholder="0 jika gratis">
             </p>
 
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                <p>
-                    <label for="dw_jam_buka" style="font-weight: 600; display: block; margin-bottom: 5px;">Jam Buka</label>
-                    <input type="time" name="dw_jam_buka" id="dw_jam_buka" value="<?php echo esc_attr( $jam_buka ); ?>" class="widefat">
+            <div style="display: flex; gap: 20px; background: #f9f9f9; padding: 10px; border: 1px solid #ddd; margin-bottom: 15px;">
+                <p style="flex: 1; margin: 0;">
+                    <label for="dw_jam_buka"><strong>Jam Buka:</strong></label>
+                    <input type="time" class="widefat" name="dw_jam_buka" id="dw_jam_buka" value="<?php echo esc_attr($jam_buka); ?>">
                 </p>
-                <p>
-                    <label for="dw_jam_tutup" style="font-weight: 600; display: block; margin-bottom: 5px;">Jam Tutup</label>
-                    <input type="time" name="dw_jam_tutup" id="dw_jam_tutup" value="<?php echo esc_attr( $jam_tutup ); ?>" class="widefat">
+                <p style="flex: 1; margin: 0;">
+                    <label for="dw_jam_tutup"><strong>Jam Tutup:</strong></label>
+                    <input type="time" class="widefat" name="dw_jam_tutup" id="dw_jam_tutup" value="<?php echo esc_attr($jam_tutup); ?>">
                 </p>
             </div>
         </div>
