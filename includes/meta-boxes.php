@@ -150,6 +150,7 @@ function dw_render_wisata_meta_box( $post ) {
     $id_desa     = isset($data['id_desa']) ? $data['id_desa'] : '';
     $harga_tiket = isset($data['harga_tiket']) ? $data['harga_tiket'] : '';
     $jam_buka    = isset($data['jam_buka']) ? $data['jam_buka'] : '';
+    $jam_tutup   = isset($data['jam_tutup']) ? $data['jam_tutup'] : '';
     $kontak      = isset($data['kontak_pengelola']) ? $data['kontak_pengelola'] : '';
     $maps        = isset($data['lokasi_maps']) ? $data['lokasi_maps'] : '';
 
@@ -176,10 +177,16 @@ function dw_render_wisata_meta_box( $post ) {
                 <input type="number" name="dw_harga_tiket" id="dw_harga_tiket" value="<?php echo esc_attr( $harga_tiket ); ?>" class="widefat" placeholder="0 jika gratis">
             </p>
 
-            <p>
-                <label for="dw_jam_buka" style="font-weight: 600; display: block; margin-bottom: 5px;">Jam Operasional</label>
-                <input type="text" name="dw_jam_buka" id="dw_jam_buka" value="<?php echo esc_attr( $jam_buka ); ?>" class="widefat" placeholder="08:00 - 17:00">
-            </p>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <p>
+                    <label for="dw_jam_buka" style="font-weight: 600; display: block; margin-bottom: 5px;">Jam Buka</label>
+                    <input type="time" name="dw_jam_buka" id="dw_jam_buka" value="<?php echo esc_attr( $jam_buka ); ?>" class="widefat">
+                </p>
+                <p>
+                    <label for="dw_jam_tutup" style="font-weight: 600; display: block; margin-bottom: 5px;">Jam Tutup</label>
+                    <input type="time" name="dw_jam_tutup" id="dw_jam_tutup" value="<?php echo esc_attr( $jam_tutup ); ?>" class="widefat">
+                </p>
+            </div>
         </div>
 
         <p>
@@ -254,7 +261,8 @@ function dw_save_custom_meta_box_data( $post_id ) {
             'deskripsi'   => $post->post_content,
             'id_desa'     => isset($_POST['dw_id_desa']) ? absint($_POST['dw_id_desa']) : 0,
             'harga_tiket' => isset($_POST['dw_harga_tiket']) ? floatval($_POST['dw_harga_tiket']) : 0,
-            'jam_buka'    => isset($_POST['dw_jam_buka']) ? sanitize_text_field($_POST['dw_jam_buka']) : '',
+            'jam_buka'    => isset($_POST['dw_jam_buka']) ? sanitize_text_field($_POST['dw_jam_buka']) : null,
+            'jam_tutup'   => isset($_POST['dw_jam_tutup']) ? sanitize_text_field($_POST['dw_jam_tutup']) : null,
             'kontak_pengelola' => isset($_POST['dw_kontak']) ? sanitize_text_field($_POST['dw_kontak']) : '',
             'lokasi_maps' => isset($_POST['dw_maps']) ? esc_url_raw($_POST['dw_maps']) : '',
             'updated_at'  => current_time( 'mysql' )
