@@ -99,11 +99,14 @@ function dw_wisata_page_render() {
                 // ============================================================
 
                 if ($should_save) {
-                    // Proses Galeri JSON
+                    // Proses Galeri JSON (Mixed Media: Photo & Video)
                     $galeri_json = '[]';
-                    if (!empty($_POST['galeri_urls'])) {
-                        $galeri_array = array_filter(explode(',', $_POST['galeri_urls']));
-                        $galeri_json = json_encode(array_values($galeri_array));
+                    if (!empty($_POST['galeri_data'])) {
+                        $galeri_raw = stripslashes($_POST['galeri_data']);
+                        $galeri_decoded = json_decode($galeri_raw, true);
+                        if (is_array($galeri_decoded)) {
+                            $galeri_json = json_encode($galeri_decoded);
+                        }
                     }
 
                     $nama = sanitize_text_field($_POST['nama_wisata']);
@@ -209,7 +212,7 @@ function dw_wisata_page_render() {
             $val_kontak   = $use_post ? $_POST['kontak_pengelola'] : ($edit_data->kontak_pengelola ?? '');
             $val_maps     = $use_post ? $_POST['lokasi_maps'] : ($edit_data->lokasi_maps ?? '');
             $val_status   = $use_post ? $_POST['status'] : ($edit_data->status ?? 'aktif');
-            $val_galeri   = $use_post ? $_POST['galeri_urls'] : ($edit_data->galeri ?? '');
+            $val_galeri   = $use_post ? $_POST['galeri_data'] : ($edit_data->galeri ?? '[]');
             $val_iddesa   = $use_post ? $_POST['id_desa'] : ($edit_data->id_desa ?? '');
             ?>
 
@@ -252,29 +255,50 @@ function dw_wisata_page_render() {
                                 </div>
                             </div>
 
-                            <!-- Galeri Foto -->
+                            <!-- Galeri Media (Foto & Video) -->
                             <div class="postbox">
-                                <div class="postbox-header"><h2 class="hndle">Galeri Foto</h2></div>
+                                <div class="postbox-header"><h2 class="hndle">Galeri Media (Foto & Video)</h2></div>
                                 <div class="inside">
                                     <div id="galeri-preview-container" style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:15px;">
                                         <?php 
-                                        if (!empty($val_galeri)) {
-                                            $galeri_decoded = json_decode(stripslashes($val_galeri), true);
-                                            if (is_array($galeri_decoded)) {
-                                                foreach($galeri_decoded as $url) {
-                                                    echo '<div class="galeri-item" style="position:relative;width:100px;height:100px;">
-                                                            <img src="'.esc_url($url).'" style="width:100%;height:100%;object-fit:cover;border-radius:4px;border:1px solid #ddd;">
-                                                            <span class="remove-galeri" data-url="'.esc_attr($url).'" style="position:absolute;top:-5px;right:-5px;background:#d63638;color:white;border-radius:50%;width:20px;height:20px;text-align:center;line-height:20px;cursor:pointer;font-size:14px;">&times;</span>
-                                                          </div>';
-                                                }
+                                        $galeri_items = json_decode(stripslashes($val_galeri), true);
+                                        if (is_array($galeri_items)) {
+                                            foreach($galeri_items as $index => $item) {
+                                                $type = $item['type'] ?? 'image';
+                                                $url = $item['url'] ?? '';
+                                                $thumb = ($type === 'video') ? 'https://img.youtube.com/vi/'.dw_get_youtube_id($url).'/0.jpg' : $url;
+                                                
+                                                echo '<div class="galeri-item" data-index="'.$index.'" style="position:relative;width:100px;height:100px;border:1px solid #ddd;border-radius:4px;overflow:hidden;">';
+                                                echo '<img src="'.esc_url($thumb).'" style="width:100%;height:100%;object-fit:cover;">';
+                                                if($type === 'video') echo '<span class="dashicons dashicons-video-alt3" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:white;text-shadow:0 0 5px rgba(0,0,0,0.5);font-size:30px;width:30px;height:30px;"></span>';
+                                                echo '<span class="remove-galeri" style="position:absolute;top:2px;right:2px;background:rgba(214,54,56,0.8);color:white;border-radius:50%;width:18px;height:18px;text-align:center;line-height:18px;cursor:pointer;font-size:12px;">&times;</span>';
+                                                echo '</div>';
                                             }
                                         }
                                         ?>
                                     </div>
-                                    <input type="hidden" name="galeri_urls" id="galeri_urls" value="<?php echo esc_attr(stripslashes($val_galeri)); ?>">
-                                    <button type="button" class="button" id="btn_upload_galeri"><span class="dashicons dashicons-images-alt2"></span> Tambah Foto Galeri</button>
+                                    
+                                    <div style="display:flex; gap:10px; align-items:center; background:#f9f9f9; padding:15px; border-radius:8px; border:1px dashed #ccc;">
+                                        <button type="button" class="button" id="btn_upload_galeri"><span class="dashicons dashicons-images-alt2"></span> + Foto</button>
+                                        <div style="flex:1; display:flex; gap:5px;">
+                                            <input type="text" id="yt_url_input" class="regular-text" placeholder="Link YouTube (https://youtube.com/watch?v=...)" style="flex:1; margin:0;">
+                                            <button type="button" class="button" id="btn_add_video"><span class="dashicons dashicons-video-alt3"></span> + Video</button>
+                                        </div>
+                                    </div>
+                                    
+                                    <input type="hidden" name="galeri_data" id="galeri_data" value="<?php echo esc_attr(stripslashes($val_galeri)); ?>">
                                 </div>
                             </div>
+
+                            <?php
+                            // Helper to get YouTube ID
+                            if(!function_exists('dw_get_youtube_id')) {
+                                function dw_get_youtube_id($url) {
+                                    preg_match('%(?:youtube(?:-nocookie)?\.com/(?:[^/]+/.+/|(?:v|e(?:mbed)?)/|.*[?&]v=)|youtu\.be/)([^"&?/ ]{11})%i', $url, $match);
+                                    return $match[1] ?? '';
+                                }
+                            }
+                            ?>
                         </div>
 
                         <!-- KOLOM KANAN (SIDEBAR) -->
@@ -388,15 +412,86 @@ function dw_wisata_page_render() {
                 </div>
             </form>
 
-            <!-- JS Uploader -->
+            <!-- JS Uploader & Gallery Logic -->
             <script>
             jQuery(document).ready(function($){
-                // Single Image
-                $('#btn_upload_utama').click(function(e){ e.preventDefault(); var frame = wp.media({title:'Foto Utama', multiple:false, library:{type:'image'}}); frame.on('select', function(){ var u = frame.state().get('selection').first().toJSON().url; $('#foto_utama').val(u); $('#preview_foto_utama').attr('src', u); }); frame.open(); });
-                // Gallery
+                // 1. Single Image (Foto Utama)
+                $('#btn_upload_utama').click(function(e){ 
+                    e.preventDefault(); 
+                    var frame = wp.media({title:'Foto Utama', multiple:false, library:{type:'image'}}); 
+                    frame.on('select', function(){ 
+                        var u = frame.state().get('selection').first().toJSON().url; 
+                        $('#foto_utama').val(u); 
+                        $('#preview_foto_utama').attr('src', u); 
+                    }); 
+                    frame.open(); 
+                });
+
+                // 2. Gallery Logic (Mixed Media)
+                let galeriData = [];
+                try {
+                    let raw = $('#galeri_data').val();
+                    galeriData = raw ? JSON.parse(raw) : [];
+                } catch(e) { galeriData = []; }
+
+                function renderGaleri() {
+                    let container = $('#galeri-preview-container');
+                    container.empty();
+                    galeriData.forEach((item, index) => {
+                        let thumb = item.type === 'video' ? `https://img.youtube.com/vi/${getYtId(item.url)}/0.jpg` : item.url;
+                        let html = `
+                            <div class="galeri-item" data-index="${index}" style="position:relative;width:100px;height:100px;border:1px solid #ddd;border-radius:4px;overflow:hidden;">
+                                <img src="${thumb}" style="width:100%;height:100%;object-fit:cover;">
+                                ${item.type === 'video' ? '<span class="dashicons dashicons-video-alt3" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:white;text-shadow:0 0 5px rgba(0,0,0,0.5);font-size:30px;width:30px;height:30px;"></span>' : ''}
+                                <span class="remove-galeri" style="position:absolute;top:2px;right:2px;background:rgba(214,54,56,0.8);color:white;border-radius:50%;width:18px;height:18px;text-align:center;line-height:18px;cursor:pointer;font-size:12px;">&times;</span>
+                            </div>
+                        `;
+                        container.append(html);
+                    });
+                    $('#galeri_data').val(JSON.stringify(galeriData));
+                }
+
+                function getYtId(url) {
+                    let regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+                    let match = url.match(regExp);
+                    return (match && match[2].length == 11) ? match[2] : false;
+                }
+
+                // Add Photo
                 var gFrame;
-                $('#btn_upload_galeri').click(function(e){ e.preventDefault(); if(gFrame){gFrame.open();return;} gFrame = wp.media({title:'Galeri', multiple:true, library:{type:'image'}}); gFrame.on('select', function(){ var s = gFrame.state().get('selection'); var cur = $('#galeri_urls').val() ? $('#galeri_urls').val().split(',') : []; s.map(function(at){ at=at.toJSON(); if(cur.indexOf(at.url)===-1){ cur.push(at.url); $('#galeri-preview-container').append('<div class="galeri-item" style="position:relative;width:100px;height:100px;"><img src="'+at.url+'" style="width:100%;height:100%;object-fit:cover;border-radius:4px;"><span class="remove-galeri" data-url="'+at.url+'" style="position:absolute;top:-5px;right:-5px;background:#d63638;color:white;border-radius:50%;width:20px;height:20px;text-align:center;line-height:20px;cursor:pointer;">&times;</span></div>'); } }); $('#galeri_urls').val(cur.join(',')); }); gFrame.open(); });
-                $(document).on('click', '.remove-galeri', function(){ var u = $(this).data('url'); var cur = $('#galeri_urls').val().split(','); var i = cur.indexOf(u); if(i > -1) cur.splice(i,1); $('#galeri_urls').val(cur.join(',')); $(this).closest('.galeri-item').remove(); });
+                $('#btn_upload_galeri').click(function(e){ 
+                    e.preventDefault(); 
+                    if(gFrame){ gFrame.open(); return; } 
+                    gFrame = wp.media({title:'Tambah Foto Galeri', multiple:true, library:{type:'image'}}); 
+                    gFrame.on('select', function(){ 
+                        var s = gFrame.state().get('selection'); 
+                        s.map(function(at){ 
+                            at = at.toJSON(); 
+                            galeriData.push({ type: 'image', url: at.url });
+                        }); 
+                        renderGaleri();
+                    }); 
+                    gFrame.open(); 
+                });
+
+                // Add Video
+                $('#btn_add_video').click(function(){
+                    let url = $('#yt_url_input').val();
+                    if(!url) return alert('Masukkan link YouTube!');
+                    let id = getYtId(url);
+                    if(!id) return alert('Link YouTube tidak valid!');
+                    
+                    galeriData.push({ type: 'video', url: `https://www.youtube.com/watch?v=${id}` });
+                    $('#yt_url_input').val('');
+                    renderGaleri();
+                });
+
+                // Remove Item
+                $(document).on('click', '.remove-galeri', function(){
+                    let idx = $(this).closest('.galeri-item').data('index');
+                    galeriData.splice(idx, 1);
+                    renderGaleri();
+                });
             });
             </script>
 
