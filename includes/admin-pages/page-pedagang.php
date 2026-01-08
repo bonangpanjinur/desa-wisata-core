@@ -186,6 +186,7 @@ function dw_pedagang_page_render() {
                 'shipping_ojek_lokal_aktif' => $shipping_ojek,
                 'shipping_ojek_lokal_json'  => json_encode($ojek_zona_data),
                 'allow_pesan_di_tempat'     => isset($_POST['allow_pesan_di_tempat']) ? 1 : 0,
+                'galeri'                    => !empty($_POST['galeri_urls']) ? json_encode(array_filter(explode(',', wp_unslash($_POST['galeri_urls'])))) : '[]',
             ];
 
             if (!empty($_POST['pedagang_id'])) {
@@ -453,6 +454,37 @@ function dw_pedagang_page_render() {
                                     </div>
                                 </div>
                             </div>
+                            <div class="dw-row" style="margin-top:20px; padding-top:20px; border-top:1px solid #eee;">
+                                <div class="dw-col-12">
+                                    <div class="dw-form-group">
+                                        <label>Galeri Toko (Foto Tambahan)</label>
+                                        <div id="galeri-container" style="display:flex; flex-wrap:wrap; gap:15px; margin-bottom:20px; background:#f9f9f9; padding:15px; border-radius:8px; border:1px dashed #ccc;">
+                                            <?php 
+                                            $galeri_urls = [];
+                                            if (!empty($edit_data->galeri)) {
+                                                $decoded = json_decode($edit_data->galeri, true);
+                                                if (is_array($decoded)) {
+                                                    foreach($decoded as $url) {
+                                                        if($url) {
+                                                            $galeri_urls[] = $url;
+                                                            echo '<div class="g-item" style="position:relative; width:100px; height:100px; border-radius:8px; overflow:hidden; border:1px solid #ddd;">';
+                                                            echo '<img src="'.esc_url($url).'" style="width:100px; height:100px; object-cover:cover;">';
+                                                            echo '<span class="rem-g" data-url="'.esc_attr($url).'" style="position:absolute; top:5px; right:5px; background:rgba(255,0,0,0.7); color:white; width:20px; height:20px; border-radius:50%; text-align:center; line-height:18px; cursor:pointer; font-weight:bold;">&times;</span>';
+                                                            echo '</div>';
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            ?>
+                                        </div>
+                                        <input type="hidden" name="galeri_urls" id="galeri_urls" value="<?php echo esc_attr(implode(',', $galeri_urls)); ?>">
+                                        <button type="button" class="dw-btn dw-btn-outline" id="btn_galeri">
+                                            <span class="dashicons dashicons-images-alt2"></span> Tambah Foto Galeri
+                                        </button>
+                                        <p class="dw-help-text">Pilih beberapa foto untuk ditampilkan di halaman profil toko.</p>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <div id="tab-keuangan" class="dw-tab-pane">
@@ -608,6 +640,38 @@ function dw_pedagang_page_render() {
                         }
                     });
                     frame.open();
+                });
+
+                // Gallery Logic
+                $('#btn_galeri').click(function(e){
+                    e.preventDefault();
+                    var frame = wp.media({
+                        title: 'Pilih Foto Galeri',
+                        multiple: true,
+                        library: { type: 'image' }
+                    });
+                    frame.on('select', function(){
+                        var selections = frame.state().get('selection');
+                        var urls = $('#galeri_urls').val() ? $('#galeri_urls').val().split(',') : [];
+                        
+                        selections.map(function(attachment){
+                            var att = attachment.toJSON();
+                            if (urls.indexOf(att.url) === -1) {
+                                urls.push(att.url);
+                                $('#galeri-container').append('<div class="g-item" style="position:relative; width:100px; height:100px; border-radius:8px; overflow:hidden; border:1px solid #ddd;"><img src="'+att.url+'" style="width:100px; height:100px; object-fit:cover;"><span class="rem-g" data-url="'+att.url+'" style="position:absolute; top:5px; right:5px; background:rgba(255,0,0,0.7); color:white; width:20px; height:20px; border-radius:50%; text-align:center; line-height:18px; cursor:pointer; font-weight:bold;">&times;</span></div>');
+                            }
+                        });
+                        $('#galeri_urls').val(urls.join(','));
+                    });
+                    frame.open();
+                });
+
+                $(document).on('click', '.rem-g', function(){
+                    var url = $(this).data('url');
+                    var urls = $('#galeri_urls').val().split(',');
+                    urls = urls.filter(function(item){ return item !== url; });
+                    $('#galeri_urls').val(urls.join(',')); 
+                    $(this).parent().remove();
                 });
             });
             </script>
