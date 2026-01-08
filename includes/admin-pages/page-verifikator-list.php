@@ -28,11 +28,11 @@ if ( isset($_POST['dw_action']) ) {
     $action_type = sanitize_text_field($_POST['dw_action']);
     $redirect_url = admin_url('admin.php?page=dw-verifikator');
     
-    // DELETE LOGIC
+        // DELETE LOGIC
     if ($action_type == 'delete') {
         $id_del = intval($_POST['id']);
         $wpdb->delete($table_v, ['id' => $id_del]);
-        wp_redirect(add_query_arg(['msg' => 'success_delete'], $redirect_url));
+        wp_redirect(add_query_arg(['msg' => 'success_delete'], admin_url('admin.php?page=dw-verifikator-list')));
         exit;
     }
 
@@ -90,15 +90,15 @@ if ( isset($_POST['dw_action']) ) {
         $exist_ref  = $wpdb->get_var($wpdb->prepare("SELECT id FROM $table_v WHERE kode_referral = %s", $data['kode_referral']));
 
         if($exist_user) {
-            wp_redirect(add_query_arg(['msg' => 'error_exist_user'], $redirect_url));
+            wp_redirect(add_query_arg(['msg' => 'error_exist_user'], admin_url('admin.php?page=dw-verifikator-list')));
         } elseif($exist_ref) {
-            wp_redirect(add_query_arg(['msg' => 'error_exist_ref'], $redirect_url));
+            wp_redirect(add_query_arg(['msg' => 'error_exist_ref'], admin_url('admin.php?page=dw-verifikator-list')));
         } else {
             $result = $wpdb->insert($table_v, $data);
             if($result === false) {
                 wp_die('Database Error (Insert): ' . $wpdb->last_error);
             }
-            wp_redirect(add_query_arg(['msg' => 'success_add'], $redirect_url));
+            wp_redirect(add_query_arg(['msg' => 'success_add'], admin_url('admin.php?page=dw-verifikator-list')));
         }
     } 
     // F. LOGIKA UPDATE (EDIT)
@@ -111,15 +111,15 @@ if ( isset($_POST['dw_action']) ) {
         $exist_ref  = $wpdb->get_var($wpdb->prepare("SELECT id FROM $table_v WHERE kode_referral = %s AND id != %d", $data['kode_referral'], $id));
         
         if($exist_user) {
-            wp_redirect(add_query_arg(['msg' => 'error_exist_user'], $redirect_url));
+            wp_redirect(add_query_arg(['msg' => 'error_exist_user'], admin_url('admin.php?page=dw-verifikator-list')));
         } elseif($exist_ref) {
-            wp_redirect(add_query_arg(['msg' => 'error_exist_ref'], $redirect_url));
+            wp_redirect(add_query_arg(['msg' => 'error_exist_ref'], admin_url('admin.php?page=dw-verifikator-list')));
         } else {
             $result = $wpdb->update($table_v, $data, ['id' => $id]);
             if($result === false) {
                 wp_die('Database Error (Update): ' . $wpdb->last_error);
             }
-            wp_redirect(add_query_arg(['msg' => 'success_edit'], $redirect_url));
+            wp_redirect(add_query_arg(['msg' => 'success_edit'], admin_url('admin.php?page=dw-verifikator-list')));
         }
     }
     exit;
@@ -379,7 +379,7 @@ $region_nonce = wp_create_nonce('dw_region_nonce');
                         <?php endif; ?>
                         
                         <!-- Delete Button -->
-                        <form method="post" action="<?php echo admin_url('admin.php?page=dw-verifikator'); ?>" style="display:inline-block; margin-left: 5px;" onsubmit="return confirm('Hapus Verifikator ini? Data user WP tidak akan terhapus.');">
+                        <form method="post" action="<?php echo admin_url('admin.php?page=dw-verifikator-list'); ?>" style="display:inline-block; margin-left: 5px;" onsubmit="return confirm('Hapus Verifikator ini? Data user WP tidak akan terhapus.');">
                             <?php wp_nonce_field('dw_save_verifikator_action', 'dw_verifikator_nonce'); ?>
                             <input type="hidden" name="dw_action" value="delete">
                             <input type="hidden" name="id" value="<?php echo $v->id; ?>">
@@ -403,7 +403,7 @@ $region_nonce = wp_create_nonce('dw_region_nonce');
         </div>
         
         <!-- Form Action ke URL Page untuk menghindari Access Denied -->
-        <form method="post" action="<?php echo admin_url('admin.php?page=dw-verifikator'); ?>" id="vForm" style="display:flex; flex-direction:column; flex:1; overflow:hidden;">
+        <form method="post" action="<?php echo admin_url('admin.php?page=dw-verifikator-list'); ?>" id="vForm">
             <?php wp_nonce_field('dw_save_verifikator_action', 'dw_verifikator_nonce'); ?>
             <input type="hidden" name="dw_action" id="vAction" value="add">
             <input type="hidden" name="verifikator_id" id="vId" value="">

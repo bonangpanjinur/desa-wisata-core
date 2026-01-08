@@ -181,7 +181,58 @@ function dw_rest_register($request) {
     $user = new WP_User($user_id);
     $user->set_role('subscriber'); // Atau 'customer' jika ada
 
-    // 4. Auto Login (Generate Token)
+    // 4. Referral Logic for Buyer
+    global $wpdb;
+    $t_pembeli = $wpdb->prefix . 'dw_pembeli';
+    $referral_code = 'BUY' . strtoupper(wp_generate_password(6, false));
+    $terdaftar_melalui_kode = sanitize_text_field($params['referral_code'] ?? '');
+    
+    $referrer_id = 0;
+    $referrer_type = null;
+    
+    if (!empty($terdaftar_melalui_kode)) {
+        // Check if referral code belongs to another buyer
+        $referrer = $wpdb->get_row($wpdb->prepare("SELECT id_user FROM $t_pembeli WHERE kode_referral = %s", $terdaftar_melalui_kode));
+        if ($referrer) {
+            $referrer_id = $referrer->id_user;
+            $referrer_type = 'pembeli';
+            
+            // Give points to referrer
+            $points_to_give = get_option('dw_buyer_referral_points', 10);
+            if ($points_to_give > 0) {
+                $wpdb->query($wpdb->prepare("UPDATE $t_pembeli SET poin_reward = poin_reward + %d WHERE id_user = %d", $points_to_give, $referrer_id));
+                
+                // Log the reward if there's a log table (optional, but good for tracking)
+                $t_rewards = $wpdb->prefix . 'dw_referral_rewards';
+                if ($wpdb->get_var("SHOW TABLES LIKE '$t_rewards'") === $t_rewards) {
+                    $wpdb->insert($t_rewards, [
+                        'id_penerima' => $referrer_id,
+                        'role_penerima' => 'pembeli',
+                        'id_sumber_pembeli' => $user_id,
+                        'reward_poin' => $points_to_give,
+                        'keterangan' => 'Bonus referral pembeli baru: ' . $fullname,
+                        'created_at' => current_time('mysql')
+                    ]);
+                }
+            }
+        }
+    }
+
+    // Insert into dw_pembeli table
+    $wpdb->insert($t_pembeli, [
+        'id_user' => $user_id,
+        'nama_lengkap' => $fullname,
+        'no_hp' => $no_hp,
+        'kode_referral' => $referral_code,
+        'terdaftar_melalui_kode' => $terdaftar_melalui_kode,
+        'referrer_id' => $referrer_id,
+        'referrer_type' => $referrer_type,
+        'status_akun' => 'aktif',
+        'created_at' => current_time('mysql'),
+        'updated_at' => current_time('mysql')
+    ]);
+
+    // 5. Auto Login (Generate Token)
     $access_token = dw_encode_jwt(['user_id' => $user_id]);
     $refresh_token = dw_create_refresh_token($user_id);
 

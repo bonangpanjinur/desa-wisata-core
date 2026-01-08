@@ -584,8 +584,22 @@ function dw_pedagang_page_render() {
                                 </div>
                                 <div class="dw-col-6">
                                     <div class="dw-form-group">
-                                        <label>Nomor Rekening</label>
-                                        <input name="no_rekening" type="text" value="<?php echo esc_attr($edit_data->no_rekening ?? ''); ?>" class="dw-form-control">
+                                        <label>Nama Pemilik</label>
+                                        <input name="nama_pemilik" type="text" value="<?php echo esc_attr($edit_data->nama_pemilik ?? ''); ?>" class="dw-form-control">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="dw-row">
+                                <div class="dw-col-6">
+                                    <div class="dw-form-group">
+                                        <label>Jam Buka</label>
+                                        <input name="jam_buka" type="time" value="<?php echo esc_attr($edit_data->jam_buka ?? ''); ?>" class="dw-form-control">
+                                    </div>
+                                </div>
+                                <div class="dw-col-6">
+                                    <div class="dw-form-group">
+                                        <label>Jam Tutup</label>
+                                        <input name="jam_tutup" type="time" value="<?php echo esc_attr($edit_data->jam_tutup ?? ''); ?>" class="dw-form-control">
                                     </div>
                                 </div>
                             </div>
@@ -645,22 +659,40 @@ function dw_pedagang_page_render() {
                             
                             <div style="margin-top:30px; padding-top:20px; border-top:1px solid #eee;">
                                 <h4>Pengaturan Ongkir</h4>
-                                <div class="dw-form-group">
-                                    <label class="dw-toggle-switch">
-                                        <input type="checkbox" name="shipping_nasional_aktif" value="1" <?php checked($edit_data->shipping_nasional_aktif ?? 0, 1); ?>>
-                                        <span class="slider"></span>
-                                        <span>Aktifkan Pengiriman Nasional (Flat Rate)</span>
-                                    </label>
+                                <div class="dw-row">
+                                    <div class="dw-col-6">
+                                        <div class="dw-form-group">
+                                            <label class="dw-toggle-switch">
+                                                <input type="checkbox" name="shipping_nasional_aktif" value="1" <?php checked($edit_data->shipping_nasional_aktif ?? 0, 1); ?>>
+                                                <span class="slider"></span>
+                                                <span>Aktifkan Pengiriman Nasional (Flat Rate)</span>
+                                            </label>
+                                        </div>
+                                        <div class="dw-form-group">
+                                            <label>Biaya Pengiriman Nasional (Rp)</label>
+                                            <input name="shipping_nasional_harga" type="number" value="<?php echo esc_attr($edit_data->shipping_nasional_harga ?? '0'); ?>" class="dw-form-control">
+                                        </div>
+                                    </div>
+                                    <div class="dw-col-6">
+                                        <div class="dw-form-group">
+                                            <label class="dw-toggle-switch">
+                                                <input type="checkbox" name="shipping_ojek_lokal_aktif" value="1" <?php checked($edit_data->shipping_ojek_lokal_aktif ?? 0, 1); ?>>
+                                                <span class="slider"></span>
+                                                <span>Aktifkan Ojek Lokal</span>
+                                            </label>
+                                        </div>
+                                        <div class="dw-form-group">
+                                            <label>Status Ojek Lokal</label>
+                                            <p class="dw-help-text">Jika diaktifkan, pembeli dapat memilih pengiriman menggunakan ojek desa yang terdaftar.</p>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="dw-form-group">
-                                    <label>Biaya Pengiriman Nasional (Rp)</label>
-                                    <input name="shipping_nasional_harga" type="number" value="<?php echo esc_attr($edit_data->shipping_nasional_harga ?? '0'); ?>" class="dw-form-control">
-                                </div>
-                                <div class="dw-form-group">
+                                
+                                <div class="dw-form-group" style="margin-top:15px;">
                                     <label class="dw-toggle-switch">
-                                        <input type="checkbox" name="shipping_ojek_lokal_aktif" value="1" <?php checked($edit_data->shipping_ojek_lokal_aktif ?? 0, 1); ?>>
+                                        <input type="checkbox" name="allow_pesan_di_tempat" value="1" <?php checked($edit_data->allow_pesan_di_tempat ?? 0, 1); ?>>
                                         <span class="slider"></span>
-                                        <span>Aktifkan Ojek Lokal</span>
+                                        <span>Izinkan Pesan di Tempat (Ambil Sendiri)</span>
                                     </label>
                                 </div>
                             </div>
