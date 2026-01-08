@@ -7,6 +7,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
+function dw_render_page_verifikator_list() {
 global $wpdb;
 // FIX: Sesuaikan nama tabel dengan activation.php (prefix 'dw_')
 $table_v = $wpdb->prefix . 'dw_verifikator'; 
@@ -706,3 +707,5 @@ window.copyCode = function(txt) {
     navigator.clipboard.writeText(txt).then(() => alert('Kode disalin: ' + txt));
 }
 </script>
+<?php
+}

@@ -34,6 +34,7 @@ function dw_settings_save_handler() {
         update_option( 'dw_bonus_quota_referral', absint( $_POST['dw_bonus_quota_referral'] ) );
         update_option( 'dw_prefix_referral_pedagang', strtoupper( sanitize_text_field( $_POST['dw_prefix_referral_pedagang'] ) ) );
         update_option( 'dw_ref_auto_verify', sanitize_key( $_POST['dw_ref_auto_verify'] ) );
+        update_option( 'dw_buyer_referral_points', absint( $_POST['dw_buyer_referral_points'] ) );
     } elseif ( $tab === 'notification' ) {
         update_option( 'dw_default_order_sound_url', esc_url_raw( $_POST['dw_default_order_sound_url'] ) );
         update_option( 'dw_default_order_sound_type', sanitize_text_field( $_POST['dw_default_order_sound_type'] ) );
@@ -196,6 +197,12 @@ function dw_admin_settings_page_handler() {
                                     <option value="auto" <?php selected($current_verify, 'auto'); ?>>Berikan Kuota Otomatis (Instan)</option>
                                     <option value="manual" <?php selected($current_verify, 'manual'); ?>>Tinjau Manual Oleh Admin</option>
                                 </select>
+                            </div>
+
+                            <div class="dw-input-group" style="margin-top: 30px; border-top: 1px solid #f1f5f9; padding-top: 25px;">
+                                <label>Poin Referral Pembeli</label>
+                                <input type="number" name="dw_buyer_referral_points" value="<?php echo esc_attr(get_option('dw_buyer_referral_points', 10)); ?>" min="0">
+                                <p class="dw-help-text">Jumlah poin yang diberikan kepada Pembeli lama setiap kali ada Pembeli baru mendaftar menggunakan kode referral mereka.</p>
                             </div>
                         </div>
 

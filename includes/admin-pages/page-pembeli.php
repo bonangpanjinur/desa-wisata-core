@@ -104,6 +104,7 @@ if ( isset($_POST['dw_action']) && $_POST['dw_action'] == 'save_buyer' && check_
         'kecamatan'         => sanitize_text_field($_POST['kecamatan_nama']),
         'api_kelurahan_id'  => sanitize_text_field($_POST['api_kelurahan_id']),
         'kelurahan'         => sanitize_text_field($_POST['kelurahan_nama']),
+        'kode_referral'     => !empty($_POST['kode_referral']) ? strtoupper(sanitize_text_field($_POST['kode_referral'])) : 'BUY' . strtoupper(wp_generate_password(6, false)),
         'updated_at'        => current_time('mysql')
     ];
 
@@ -172,6 +173,8 @@ foreach($users as $u) {
         'nm_kab'   => $profil ? $profil->kabupaten : '',
         'nm_kec'   => $profil ? $profil->kecamatan : '',
         'nm_kel'   => $profil ? $profil->kelurahan : '',
+        'points'   => $profil ? $profil->poin_reward : 0,
+        'ref_code' => $profil ? $profil->kode_referral : '',
     ];
 }
 ?>
@@ -265,13 +268,14 @@ foreach($users as $u) {
                     <th>Pengguna</th>
                     <th>Kontak</th>
                     <th>Domisili</th>
+                    <th>Poin & Referral</th>
                     <th>Statistik</th>
                     <th>Aksi</th>
                 </tr>
             </thead>
             <tbody>
                 <?php if(empty($buyer_list)): ?>
-                    <tr><td colspan="5" style="text-align:center; padding:40px; color:#aaa;">Belum ada data.</td></tr>
+                    <tr><td colspan="6" style="text-align:center; padding:40px; color:#aaa;">Belum ada data.</td></tr>
                 <?php else: foreach($buyer_list as $b): 
                     $json = htmlspecialchars(json_encode($b), ENT_QUOTES, 'UTF-8');
                 ?>
@@ -291,8 +295,12 @@ foreach($users as $u) {
                     </td>
                     <td><?php echo esc_html($b->location); ?></td>
                     <td>
-                        <div style="font-weight:600;"><?php echo $b->orders; ?> Trx</div>
-                        <small style="color:var(--dw-g);">Rp <?php echo number_format($b->spent, 0, ',', '.'); ?></small>
+                        <div style="font-weight:600; color:var(--dw-o);"><?php echo $b->points; ?> Poin</div>
+                        <div style="font-size:11px; color:#888;">Ref: <?php echo $b->ref_code ?: '-'; ?></div>
+                    </td>
+                    <td>
+                        <div style="font-weight:600; color:var(--dw-p);"><?php echo $b->orders; ?> Pesanan</div>
+                        <div style="font-size:12px; color:var(--dw-g);">Rp <?php echo number_format($b->spent, 0, ',', '.'); ?></div>
                     </td>
                     <td>
                         <button class="btn-small" onclick='openModal(<?php echo $json; ?>)'><span class="dashicons dashicons-edit"></span> Detail</button>
@@ -341,8 +349,18 @@ foreach($users as $u) {
                         <input type="email" name="email" id="f_email" class="f-input" required>
                     </div>
                     <div class="f-group">
-                        <label>No. HP / WhatsApp</label>
-                        <input type="text" name="no_hp" id="f_hp" class="f-input">
+                        <label>NIK</label>
+                        <input type="text" name="nik" id="fNik" class="f-input">
+                    </div>
+                </div>
+                <div class="f-grid">
+                    <div class="f-group">
+                        <label>Kode Referral Saya</label>
+                        <input type="text" name="kode_referral" id="fRef" class="f-input" placeholder="Otomatis jika kosong">
+                    </div>
+                    <div class="f-group">
+                        <label>Poin Reward</label>
+                        <input type="number" name="poin_reward" id="fPoints" class="f-input" readonly>
                     </div>
                 </div>
 
@@ -425,9 +443,12 @@ jQuery(document).ready(function($) {
         $('#mTitle').text('Edit: ' + data.name);
         $('#f_name').val(data.name);
         $('#f_nik').val(data.nik);
-        $('#f_email').val(data.email);
-        $('#f_hp').val(data.phone);
-        $('#f_alamat').val(data.address);
+          $('#fNik').val(data.nik);
+        $('#fPhone').val(data.phone);
+        $('#fAddress').val(data.address);
+        $('#fRef').val(data.ref_code);
+        $('#fPoints').val(data.points);
+
 
         loadRegion('get_prov', null, $('#s_prov'), data.raw_prov);
         $('#t_prov').val(data.nm_prov);
