@@ -119,13 +119,15 @@ function dw_wisata_page_render() {
                         'slug'         => $slug,
                         'kategori'     => sanitize_text_field($_POST['kategori']),
                         'deskripsi'    => wp_kses_post($_POST['deskripsi']),
-                        'harga_tiket'  => floatval($_POST['harga_tiket']),
-                        'jam_buka'     => sanitize_text_field($_POST['jam_buka']),
-                        'fasilitas'    => isset($_POST['fasilitas']) ? sanitize_textarea_field($_POST['fasilitas']) : '',
+	                        'harga_tiket'  => floatval($_POST['harga_tiket']),
+	                        'jam_buka'     => sanitize_text_field($_POST['jam_buka']),
+	                        'jam_tutup'    => sanitize_text_field($_POST['jam_tutup']),
+	                        'fasilitas'    => isset($_POST['fasilitas']) ? sanitize_textarea_field($_POST['fasilitas']) : '',
                         'kontak_pengelola' => isset($_POST['kontak_pengelola']) ? sanitize_text_field($_POST['kontak_pengelola']) : '',
-                        'lokasi_maps'  => isset($_POST['lokasi_maps']) ? esc_url_raw($_POST['lokasi_maps']) : '',
-                        'foto_utama'   => esc_url_raw($_POST['foto_utama']),
-                        'galeri'       => $galeri_json,
+	                        'lokasi_maps'  => isset($_POST['lokasi_maps']) ? esc_url_raw($_POST['lokasi_maps']) : '',
+	                        'foto_utama'   => esc_url_raw($_POST['foto_utama']),
+	                        'video_url'    => isset($_POST['video_url']) ? esc_url_raw($_POST['video_url']) : '',
+	                        'galeri'       => $galeri_json,
                         'status'       => sanitize_text_field($_POST['status']),
                         'updated_at'   => current_time('mysql')
                     ];
@@ -206,10 +208,12 @@ function dw_wisata_page_render() {
             $val_desc     = $use_post ? stripslashes($_POST['deskripsi']) : ($edit_data->deskripsi ?? '');
             $val_fasilitas= $use_post ? stripslashes($_POST['fasilitas']) : ($edit_data->fasilitas ?? '');
             $val_kategori = $use_post ? $_POST['kategori'] : ($edit_data->kategori ?? '');
-            $val_foto     = $use_post ? $_POST['foto_utama'] : ($edit_data->foto_utama ?? '');
-            $val_harga    = $use_post ? $_POST['harga_tiket'] : ($edit_data->harga_tiket ?? 0);
-            $val_jam      = $use_post ? $_POST['jam_buka'] : ($edit_data->jam_buka ?? '');
-            $val_kontak   = $use_post ? $_POST['kontak_pengelola'] : ($edit_data->kontak_pengelola ?? '');
+	            $val_foto     = $use_post ? $_POST['foto_utama'] : ($edit_data->foto_utama ?? '');
+	            $val_video    = $use_post ? $_POST['video_url'] : ($edit_data->video_url ?? '');
+	            $val_harga    = $use_post ? $_POST['harga_tiket'] : ($edit_data->harga_tiket ?? 0);
+	            $val_jam      = $use_post ? $_POST['jam_buka'] : ($edit_data->jam_buka ?? '');
+	            $val_jam_tutup = $use_post ? $_POST['jam_tutup'] : ($edit_data->jam_tutup ?? '');
+	            $val_kontak   = $use_post ? $_POST['kontak_pengelola'] : ($edit_data->kontak_pengelola ?? '');
             $val_maps     = $use_post ? $_POST['lokasi_maps'] : ($edit_data->lokasi_maps ?? '');
             $val_status   = $use_post ? $_POST['status'] : ($edit_data->status ?? 'aktif');
             $val_galeri   = $use_post ? $_POST['galeri_data'] : ($edit_data->galeri ?? '[]');
@@ -368,10 +372,22 @@ function dw_wisata_page_render() {
                                     <div style="text-align:center; background:#f0f0f1; padding:10px; margin-bottom:10px; border-radius:4px;">
                                         <img id="preview_foto_utama" src="<?php echo !empty($val_foto) ? esc_url($val_foto) : 'https://placehold.co/300x200?text=No+Image'; ?>" style="max-width:100%; height:auto;">
                                     </div>
-                                    <input type="text" name="foto_utama" id="foto_utama" value="<?php echo esc_attr($val_foto); ?>" class="widefat" placeholder="URL Gambar">
-                                    <button type="button" class="button" id="btn_upload_utama" style="width:100%; margin-top:5px;">Pilih Gambar Utama</button>
-                                </div>
-                            </div>
+	                                    <input type="text" name="foto_utama" id="foto_utama" value="<?php echo esc_attr($val_foto); ?>" class="widefat" placeholder="URL Gambar">
+	                                    <button type="button" class="button" id="btn_upload_utama" style="width:100%; margin-top:5px;">Pilih Gambar Utama</button>
+	                                </div>
+	                            </div>
+	
+	                            <!-- Video Utama -->
+	                            <div class="postbox">
+	                                <div class="postbox-header"><h2 class="hndle">Video YouTube</h2></div>
+	                                <div class="inside">
+	                                    <p>
+	                                        <label>Link Video YouTube:</label>
+	                                        <input type="url" name="video_url" value="<?php echo esc_url($val_video); ?>" class="widefat" placeholder="https://www.youtube.com/watch?v=...">
+	                                    </p>
+	                                    <p class="description">Video ini akan muncul dengan tombol Play di halaman detail wisata.</p>
+	                                </div>
+	                            </div>
 
                             <!-- Info Tiket & Kontak -->
                             <div class="postbox">
@@ -381,10 +397,16 @@ function dw_wisata_page_render() {
                                         <label>Harga Tiket (Rp):</label>
                                         <input name="harga_tiket" type="number" value="<?php echo esc_attr($val_harga); ?>" class="widefat">
                                     </p>
-                                    <p>
-                                        <label>Jam Buka:</label>
-                                        <input name="jam_buka" type="text" value="<?php echo esc_attr($val_jam); ?>" class="widefat">
-                                    </p>
+	                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+	                                        <p>
+	                                            <label>Jam Buka:</label>
+	                                            <input name="jam_buka" type="time" value="<?php echo esc_attr($val_jam); ?>" class="widefat">
+	                                        </p>
+	                                        <p>
+	                                            <label>Jam Tutup:</label>
+	                                            <input name="jam_tutup" type="time" value="<?php echo esc_attr($val_jam_tutup); ?>" class="widefat">
+	                                        </p>
+	                                    </div>
                                     <p>
                                         <label>Kontak (WA):</label>
                                         <input name="kontak_pengelola" type="text" value="<?php echo esc_attr($val_kontak); ?>" class="widefat" placeholder="0812...">

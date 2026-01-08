@@ -164,9 +164,11 @@ function dw_desa_page_render() {
                     'deskripsi'               => wp_kses_post($_POST['deskripsi']),
                     
                     // [NEW] Nomor WA / Kontak
-                    'nomor_wa'                => sanitize_text_field($_POST['nomor_wa']), 
-
-                    'foto'                    => esc_url_raw($_POST['foto_url']),
+	                    'nomor_wa'                => sanitize_text_field($_POST['nomor_wa']), 
+	                    'jam_buka'                => sanitize_text_field($_POST['jam_buka']),
+	                    'jam_tutup'               => sanitize_text_field($_POST['jam_tutup']),
+	
+	                    'foto'                    => esc_url_raw($_POST['foto_url']),
                     'foto_sampul'             => esc_url_raw($_POST['foto_sampul_url']),
                     
                     // Status Publikasi
@@ -559,10 +561,20 @@ function dw_desa_page_render() {
                                     <label>Nama Desa Wisata</label>
                                     <input type="text" name="nama_desa" id="inp_nama_desa" class="dw-input" value="<?php echo esc_attr($edit_data->nama_desa); ?>" required>
                                 </div>
-                                <div class="dw-form-group">
-                                    <label>Nomor WhatsApp (Kontak Desa)</label>
-                                    <input type="text" name="nomor_wa" class="dw-input" value="<?php echo esc_attr($edit_data->nomor_wa); ?>" placeholder="Contoh: 628123456789">
-                                </div>
+	                                <div class="dw-form-group">
+	                                    <label>Nomor WhatsApp (Kontak Desa)</label>
+	                                    <input type="text" name="nomor_wa" class="dw-input" value="<?php echo esc_attr($edit_data->nomor_wa); ?>" placeholder="Contoh: 628123456789">
+	                                </div>
+	                                <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+	                                    <div class="dw-form-group">
+	                                        <label>Jam Buka</label>
+	                                        <input type="time" name="jam_buka" class="dw-input" value="<?php echo esc_attr($edit_data->jam_buka); ?>">
+	                                    </div>
+	                                    <div class="dw-form-group">
+	                                        <label>Jam Tutup</label>
+	                                        <input type="time" name="jam_tutup" class="dw-input" value="<?php echo esc_attr($edit_data->jam_tutup); ?>">
+	                                    </div>
+	                                </div>
                                 <div class="dw-form-group">
                                     <label>Kode Referral (Otomatis)</label>
                                     <div class="dw-input-group">
