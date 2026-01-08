@@ -211,17 +211,332 @@ function dw_pedagang_page_render() {
     $users = get_users(['role__in' => ['administrator', 'pedagang', 'subscriber', 'customer']]);
     ?>
 
+    <style>
+        :root {
+            --dw-primary: #2563eb;
+            --dw-primary-hover: #1d4ed8;
+            --dw-success: #10b981;
+            --dw-warning: #f59e0b;
+            --dw-danger: #ef4444;
+            --dw-text-main: #1e293b;
+            --dw-text-muted: #64748b;
+            --dw-bg-body: #f8fafc;
+            --dw-border: #e2e8f0;
+        }
+
+        .dw-admin-wrap {
+            max-width: 1200px;
+            margin: 20px 20px 0 0;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            color: var(--dw-text-main);
+        }
+
+        /* Header */
+        .dw-admin-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+            background: #fff;
+            padding: 20px 24px;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            border: 1px solid var(--dw-border);
+        }
+        .dw-header-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .dw-header-title .dashicons {
+            font-size: 28px;
+            width: 28px;
+            height: 28px;
+            color: var(--dw-primary);
+        }
+        .dw-header-title h1 {
+            font-size: 22px;
+            font-weight: 700;
+            margin: 0;
+            color: var(--dw-text-main);
+        }
+
+        /* Buttons */
+        .dw-btn-primary {
+            background: var(--dw-primary);
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+        }
+        .dw-btn-primary:hover {
+            background: var(--dw-primary-hover);
+            color: #fff;
+            transform: translateY(-1px);
+        }
+        .dw-btn-secondary {
+            background: #fff;
+            color: var(--dw-text-main);
+            border: 1px solid var(--dw-border);
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+        }
+        .dw-btn-secondary:hover {
+            background: var(--dw-bg-body);
+            border-color: #cbd5e1;
+            color: var(--dw-text-main);
+        }
+
+        /* Card System */
+        .dw-card {
+            background: #fff;
+            border: 1px solid var(--dw-border);
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            overflow: hidden;
+            margin-bottom: 24px;
+        }
+        .dw-card-header {
+            padding: 18px 24px;
+            border-bottom: 1px solid var(--dw-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .dw-card-header h3 {
+            margin: 0;
+            font-size: 16px;
+            font-weight: 700;
+        }
+        .dw-card-body {
+            padding: 24px;
+        }
+
+        /* Tabs */
+        .dw-tabs-nav {
+            display: flex;
+            gap: 8px;
+            margin-bottom: -1px;
+            padding: 0 10px;
+        }
+        .dw-tab-link {
+            padding: 12px 20px;
+            background: #f1f5f9;
+            border: 1px solid var(--dw-border);
+            border-bottom: none;
+            border-radius: 8px 8px 0 0;
+            cursor: pointer;
+            font-weight: 600;
+            color: var(--dw-text-muted);
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .dw-tab-link:hover {
+            background: #e2e8f0;
+            color: var(--dw-text-main);
+        }
+        .dw-tab-link.active {
+            background: #fff;
+            color: var(--dw-primary);
+            border-bottom: 2px solid #fff;
+            margin-bottom: -1px;
+            z-index: 2;
+        }
+        .dw-tab-pane {
+            display: none;
+        }
+        .dw-tab-pane.active {
+            display: block;
+        }
+
+        /* Form Controls */
+        .dw-form-group {
+            margin-bottom: 20px;
+        }
+        .dw-form-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--dw-text-main);
+            font-size: 14px;
+        }
+        .dw-form-control {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1px solid var(--dw-border);
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+            background: #fff;
+        }
+        .dw-form-control:focus {
+            border-color: var(--dw-primary);
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+        .dw-form-control[readonly] {
+            background: #f8fafc;
+            cursor: not-allowed;
+        }
+
+        /* Grid */
+        .dw-row {
+            display: flex;
+            flex-wrap: wrap;
+            margin: 0 -10px;
+        }
+        .dw-col-6 {
+            flex: 0 0 50%;
+            max-width: 50%;
+            padding: 0 10px;
+        }
+        @media (max-width: 768px) {
+            .dw-col-6 {
+                flex: 0 0 100%;
+                max-width: 100%;
+            }
+        }
+
+        /* Badges */
+        .dw-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            line-height: 1;
+        }
+        .dw-badge-success { background: #dcfce7; color: #166534; }
+        .dw-badge-warning { background: #fef9c3; color: #854d0e; }
+        .dw-badge-danger { background: #fee2e2; color: #991b1b; }
+        .dw-badge-info { background: #e0f2fe; color: #0369a1; }
+
+        /* Toggle Switch */
+        .dw-toggle-switch {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+        }
+        .dw-toggle-switch input { display: none; }
+        .dw-toggle-switch .slider {
+            width: 40px;
+            height: 20px;
+            background: #cbd5e1;
+            border-radius: 20px;
+            position: relative;
+            transition: 0.3s;
+        }
+        .dw-toggle-switch .slider:before {
+            content: "";
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            background: #fff;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            transition: 0.3s;
+        }
+        .dw-toggle-switch input:checked + .slider { background: var(--dw-success); }
+        .dw-toggle-switch input:checked + .slider:before { transform: translateX(20px); }
+
+        /* Gallery */
+        #galeri-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 12px;
+            margin-top: 15px;
+        }
+        .g-item {
+            position: relative;
+            aspect-ratio: 1;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid var(--dw-border);
+        }
+        .g-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .rem-g {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            background: rgba(239, 68, 68, 0.9);
+            color: #fff;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        /* Help Text */
+        .dw-help-text {
+            font-size: 12px;
+            color: var(--dw-text-muted);
+            margin-top: 4px;
+        }
+
+        /* Table Modernization */
+        .wp-list-table.widefat {
+            border: none;
+            box-shadow: none;
+        }
+        .wp-list-table.widefat thead th {
+            background: #f8fafc;
+            padding: 15px;
+            font-weight: 700;
+            color: var(--dw-text-muted);
+            border-bottom: 2px solid var(--dw-border);
+        }
+        .wp-list-table.widefat tbody td {
+            padding: 15px;
+            vertical-align: middle;
+            border-bottom: 1px solid var(--dw-border);
+        }
+    </style>
+
     <div class="wrap dw-admin-wrap">
         <div class="dw-admin-header">
             <div class="dw-header-title">
                 <span class="dashicons dashicons-store"></span>
                 <h1>Manajemen Toko & Pedagang</h1>
             </div>
-            <?php if ($action === 'list'): ?>
-                <a href="?page=dw-pedagang&action=edit" class="dw-btn-primary">Tambah Pedagang Baru</a>
-            <?php else: ?>
-                <a href="?page=dw-pedagang" class="dw-btn-secondary">Kembali ke Daftar</a>
-            <?php endif; ?>
+            <div class="dw-header-actions">
+                <?php if ($action === 'list'): ?>
+                    <a href="?page=dw-pedagang&action=edit" class="dw-btn-primary">
+                        <span class="dashicons dashicons-plus"></span> Tambah Pedagang Baru
+                    </a>
+                <?php else: ?>
+                    <a href="?page=dw-pedagang" class="dw-btn-secondary">
+                        <span class="dashicons dashicons-arrow-left-alt"></span> Kembali ke Daftar
+                    </a>
+                <?php endif; ?>
+            </div>
         </div>
 
         <?php if ($message): ?>
@@ -230,17 +545,23 @@ function dw_pedagang_page_render() {
 
         <?php if ($action === 'list'): ?>
             <div class="dw-card">
+                <div class="dw-card-header">
+                    <h3>Daftar Toko & Pedagang</h3>
+                    <div class="dw-card-tools">
+                        <input type="text" id="dw-search-pedagang" class="dw-form-control" placeholder="Cari toko atau pemilik..." style="width: 250px;">
+                    </div>
+                </div>
                 <div class="dw-card-body" style="padding:0;">
-                    <table class="wp-list-table widefat fixed striped">
+                    <table class="wp-list-table widefat fixed striped" id="table-pedagang">
                         <thead>
                             <tr>
-                                <th style="width:50px;">ID</th>
+                                <th style="width:60px;">ID</th>
                                 <th>Nama Toko</th>
                                 <th>Pemilik</th>
                                 <th>Wilayah</th>
                                 <th>Status Akun</th>
                                 <th>Verifikasi</th>
-                                <th>Aksi</th>
+                                <th style="width:150px;">Aksi</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -250,37 +571,82 @@ function dw_pedagang_page_render() {
                                 $user_info = get_userdata($item->id_user);
                             ?>
                                 <tr>
-                                    <td><?php echo $item->id; ?></td>
-                                    <td><strong><?php echo esc_html($item->nama_toko); ?></strong></td>
-                                    <td><?php echo $user_info ? $user_info->display_name : 'N/A'; ?></td>
-                                    <td><?php echo esc_html($item->kecamatan_nama . ', ' . $item->kabupaten_nama); ?></td>
+                                    <td><span style="color:#94a3b8; font-weight:600;">#<?php echo $item->id; ?></span></td>
                                     <td>
-                                        <span class="dw-badge dw-badge-<?php echo $item->status_akun === 'aktif' ? 'success' : 'danger'; ?>">
+                                        <div style="display:flex; align-items:center; gap:10px;">
+                                            <?php if($item->foto_profil): ?>
+                                                <img src="<?php echo esc_url($item->foto_profil); ?>" style="width:32px; height:32px; border-radius:50%; object-fit:cover;">
+                                            <?php else: ?>
+                                                <div style="width:32px; height:32px; border-radius:50%; background:#f1f5f9; display:flex; align-items:center; justify-content:center;">
+                                                    <span class="dashicons dashicons-store" style="font-size:16px; color:#94a3b8;"></span>
+                                                </div>
+                                            <?php endif; ?>
+                                            <strong><?php echo esc_html($item->nama_toko); ?></strong>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div style="font-weight:500;"><?php echo $user_info ? $user_info->display_name : 'N/A'; ?></div>
+                                        <div style="font-size:12px; color:#64748b;"><?php echo $user_info ? $user_info->user_email : ''; ?></div>
+                                    </td>
+                                    <td>
+                                        <div style="font-size:13px;"><span class="dashicons dashicons-location" style="font-size:14px; width:14px; height:14px; color:#94a3b8;"></span> <?php echo esc_html($item->kecamatan_nama); ?></div>
+                                        <div style="font-size:11px; color:#64748b; margin-left:18px;"><?php echo esc_html($item->kabupaten_nama); ?></div>
+                                    </td>
+                                    <td>
+                                        <?php 
+                                        $status_class = 'info';
+                                        if($item->status_akun === 'aktif') $status_class = 'success';
+                                        if($item->status_akun === 'nonaktif') $status_class = 'danger';
+                                        if($item->status_akun === 'suspend') $status_class = 'warning';
+                                        ?>
+                                        <span class="dw-badge dw-badge-<?php echo $status_class; ?>">
                                             <?php echo ucfirst($item->status_akun); ?>
                                         </span>
                                     </td>
                                     <td>
-                                        <span class="dw-badge dw-badge-<?php echo $item->status_pendaftaran === 'disetujui' ? 'success' : ($item->status_pendaftaran === 'ditolak' ? 'danger' : 'warning'); ?>">
+                                        <?php 
+                                        $verif_class = 'warning';
+                                        if($item->status_pendaftaran === 'disetujui') $verif_class = 'success';
+                                        if($item->status_pendaftaran === 'ditolak') $verif_class = 'danger';
+                                        ?>
+                                        <span class="dw-badge dw-badge-<?php echo $verif_class; ?>">
                                             <?php echo ucfirst($item->status_pendaftaran); ?>
                                         </span>
                                     </td>
                                     <td>
-                                        <a href="?page=dw-pedagang&action=edit&id=<?php echo $item->id; ?>" class="button button-small">Edit</a>
-                                        <form method="post" style="display:inline;" onsubmit="return confirm('Hapus pedagang ini?');">
-                                            <?php wp_nonce_field('dw_pedagang_action'); ?>
-                                            <input type="hidden" name="action_pedagang" value="delete">
-                                            <input type="hidden" name="pedagang_id" value="<?php echo $item->id; ?>">
-                                            <button type="submit" class="button button-small button-link-delete">Hapus</button>
-                                        </form>
+                                        <div style="display:flex; gap:5px;">
+                                            <a href="?page=dw-pedagang&action=edit&id=<?php echo $item->id; ?>" class="button button-small" title="Edit Data">
+                                                <span class="dashicons dashicons-edit" style="font-size:16px; margin-top:2px;"></span>
+                                            </a>
+                                            <form method="post" style="display:inline;" onsubmit="return confirm('Hapus pedagang ini?');">
+                                                <?php wp_nonce_field('dw_pedagang_action'); ?>
+                                                <input type="hidden" name="action_pedagang" value="delete">
+                                                <input type="hidden" name="pedagang_id" value="<?php echo $item->id; ?>">
+                                                <button type="submit" class="button button-small button-link-delete" title="Hapus">
+                                                    <span class="dashicons dashicons-trash" style="font-size:16px; margin-top:2px;"></span>
+                                                </button>
+                                            </form>
+                                        </div>
                                     </td>
                                 </tr>
                             <?php endforeach; else: ?>
-                                <tr><td colspan="7">Belum ada data pedagang.</td></tr>
+                                <tr><td colspan="7" style="text-align:center; padding:40px; color:#94a3b8;">Belum ada data pedagang.</td></tr>
                             <?php endif; ?>
                         </tbody>
                     </table>
                 </div>
             </div>
+
+            <script>
+            jQuery(document).ready(function($){
+                $("#dw-search-pedagang").on("keyup", function() {
+                    var value = $(this).val().toLowerCase();
+                    $("#table-pedagang tbody tr").filter(function() {
+                        $(this).toggle($(this).text().toLowerCase().indexOf(value) > -1)
+                    });
+                });
+            });
+            </script>
         <?php else: ?>
             <form method="post">
                 <?php wp_nonce_field('dw_pedagang_action'); ?>
@@ -288,11 +654,21 @@ function dw_pedagang_page_render() {
                 <input type="hidden" name="pedagang_id" value="<?php echo $edit_data->id ?? ''; ?>">
                 
                 <div class="dw-tabs-nav">
-                    <div class="dw-tab-link active" data-target="#tab-umum">Informasi Umum</div>
-                    <div class="dw-tab-link" data-target="#tab-lokasi">Lokasi & Alamat</div>
-                    <div class="dw-tab-link" data-target="#tab-visual">Visual & Legalitas</div>
-                    <div class="dw-tab-link" data-target="#tab-keuangan">Keuangan</div>
-                    <div class="dw-tab-link" data-target="#tab-pengaturan">Pengaturan & Ongkir</div>
+                    <div class="dw-tab-link active" data-target="#tab-umum">
+                        <span class="dashicons dashicons-admin-users"></span> Informasi Umum
+                    </div>
+                    <div class="dw-tab-link" data-target="#tab-lokasi">
+                        <span class="dashicons dashicons-location"></span> Lokasi & Alamat
+                    </div>
+                    <div class="dw-tab-link" data-target="#tab-visual">
+                        <span class="dashicons dashicons-format-image"></span> Visual & Legalitas
+                    </div>
+                    <div class="dw-tab-link" data-target="#tab-keuangan">
+                        <span class="dashicons dashicons-money-alt"></span> Keuangan
+                    </div>
+                    <div class="dw-tab-link" data-target="#tab-pengaturan">
+                        <span class="dashicons dashicons-admin-generic"></span> Pengaturan & Ongkir
+                    </div>
                 </div>
 
                 <div class="dw-card" style="border-top:none; border-radius:0 0 8px 8px;">
@@ -395,15 +771,15 @@ function dw_pedagang_page_render() {
                             </div>
                             <div class="dw-form-group">
                                 <label>Alamat Lengkap</label>
-                                <textarea name="pedagang_detail" class="dw-form-control" rows="3"><?php echo esc_textarea($edit_data->alamat_lengkap ?? ''); ?></textarea>
+                                <textarea name="pedagang_detail" class="dw-form-control" rows="3" placeholder="Nama jalan, nomor rumah, RT/RW..."><?php echo esc_textarea($edit_data->alamat_lengkap ?? ''); ?></textarea>
                             </div>
                             <div class="dw-form-group">
                                 <label>Kode Pos</label>
-                                <input name="kode_pos" type="text" value="<?php echo esc_attr($edit_data->kode_pos ?? ''); ?>" class="dw-form-control">
+                                <input name="kode_pos" type="text" value="<?php echo esc_attr($edit_data->kode_pos ?? ''); ?>" class="dw-form-control" placeholder="Contoh: 12345">
                             </div>
                             <div class="dw-form-group">
                                 <label>URL Google Maps</label>
-                                <input name="url_gmaps" type="text" value="<?php echo esc_attr($edit_data->url_gmaps ?? ''); ?>" class="dw-form-control">
+                                <input name="url_gmaps" type="text" value="<?php echo esc_attr($edit_data->url_gmaps ?? ''); ?>" class="dw-form-control" placeholder="https://goo.gl/maps/...">
                             </div>
                         </div>
 
@@ -413,42 +789,48 @@ function dw_pedagang_page_render() {
                                     <div class="dw-form-group">
                                         <label>Foto Profil Toko</label>
                                         <div class="dw-media-uploader">
-                                            <div style="margin-bottom:10px;">
-                                                <img id="prev_foto_profil" src="<?php echo esc_url($edit_data->foto_profil ?? 'https://placehold.co/150x150?text=Profil'); ?>" style="max-width:150px; border-radius:12px; border:1px solid #ddd;">
+                                            <div style="margin-bottom:12px; text-align:center; background:#f8fafc; padding:20px; border-radius:12px; border:2px dashed #e2e8f0;">
+                                                <img id="prev_foto_profil" src="<?php echo esc_url($edit_data->foto_profil ?? 'https://placehold.co/150x150?text=Profil'); ?>" style="width:120px; height:120px; border-radius:50%; object-fit:cover; border:4px solid #fff; box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);">
                                             </div>
                                             <div style="display:flex; gap:10px;">
-                                                <input type="text" name="foto_profil" id="foto_profil" value="<?php echo esc_attr($edit_data->foto_profil ?? ''); ?>" class="dw-form-control" readonly>
-                                                <button type="button" class="button btn_upload" data-target="#foto_profil" data-preview="#prev_foto_profil">Pilih Foto</button>
+                                                <input type="text" name="foto_profil" id="foto_profil" value="<?php echo esc_attr($edit_data->foto_profil ?? ''); ?>" class="dw-form-control" readonly placeholder="URL Foto Profil">
+                                                <button type="button" class="dw-btn-secondary btn_upload" data-target="#foto_profil" data-preview="#prev_foto_profil" style="padding:8px 15px;">
+                                                    <span class="dashicons dashicons-upload" style="margin-top:4px;"></span>
+                                                </button>
                                             </div>
                                         </div>
                                     </div>
                                     <div class="dw-form-group">
                                         <label>NIK Pemilik</label>
-                                        <input name="nik" type="text" value="<?php echo esc_attr($edit_data->nik ?? ''); ?>" class="dw-form-control">
+                                        <input name="nik" type="text" value="<?php echo esc_attr($edit_data->nik ?? ''); ?>" class="dw-form-control" placeholder="Masukkan 16 digit NIK">
                                     </div>
                                 </div>
                                 <div class="dw-col-6">
                                     <div class="dw-form-group">
                                         <label>Foto Sampul Toko</label>
                                         <div class="dw-media-uploader">
-                                            <div style="margin-bottom:10px;">
-                                                <img id="prev_foto_sampul" src="<?php echo esc_url($edit_data->foto_sampul ?? 'https://placehold.co/300x150?text=Sampul'); ?>" style="max-width:300px; border-radius:12px; border:1px solid #ddd;">
+                                            <div style="margin-bottom:12px; background:#f8fafc; padding:10px; border-radius:12px; border:2px dashed #e2e8f0;">
+                                                <img id="prev_foto_sampul" src="<?php echo esc_url($edit_data->foto_sampul ?? 'https://placehold.co/600x200?text=Sampul+Toko'); ?>" style="width:100%; height:140px; object-fit:cover; border-radius:8px;">
                                             </div>
                                             <div style="display:flex; gap:10px;">
-                                                <input type="text" name="foto_sampul" id="foto_sampul" value="<?php echo esc_attr($edit_data->foto_sampul ?? ''); ?>" class="dw-form-control" readonly>
-                                                <button type="button" class="button btn_upload" data-target="#foto_sampul" data-preview="#prev_foto_sampul">Pilih Sampul</button>
+                                                <input type="text" name="foto_sampul" id="foto_sampul" value="<?php echo esc_attr($edit_data->foto_sampul ?? ''); ?>" class="dw-form-control" readonly placeholder="URL Foto Sampul">
+                                                <button type="button" class="dw-btn-secondary btn_upload" data-target="#foto_sampul" data-preview="#prev_foto_sampul" style="padding:8px 15px;">
+                                                    <span class="dashicons dashicons-upload" style="margin-top:4px;"></span>
+                                                </button>
                                             </div>
                                         </div>
                                     </div>
                                     <div class="dw-form-group">
                                         <label>Foto KTP</label>
                                         <div class="dw-media-uploader">
-                                            <div style="margin-bottom:10px;">
-                                                <img id="prev_url_ktp" src="<?php echo esc_url($edit_data->url_ktp ?? 'https://placehold.co/150x100?text=KTP'); ?>" style="max-width:150px; border-radius:6px; border:1px solid #ddd;">
-                                            </div>
-                                            <div style="display:flex; gap:10px;">
-                                                <input type="text" name="url_ktp" id="url_ktp" value="<?php echo esc_attr($edit_data->url_ktp ?? ''); ?>" class="dw-form-control" readonly>
-                                                <button type="button" class="button btn_upload" data-target="#url_ktp" data-preview="#prev_url_ktp">Upload KTP</button>
+                                            <div style="display:flex; gap:10px; align-items:center;">
+                                                <div style="width:60px; height:40px; border-radius:4px; overflow:hidden; border:1px solid #e2e8f0; background:#f1f5f9;">
+                                                    <img id="prev_url_ktp" src="<?php echo esc_url($edit_data->url_ktp ?? 'https://placehold.co/60x40?text=KTP'); ?>" style="width:100%; height:100%; object-fit:cover;">
+                                                </div>
+                                                <input type="text" name="url_ktp" id="url_ktp" value="<?php echo esc_attr($edit_data->url_ktp ?? ''); ?>" class="dw-form-control" readonly placeholder="URL Foto KTP">
+                                                <button type="button" class="dw-btn-secondary btn_upload" data-target="#url_ktp" data-preview="#prev_url_ktp" style="padding:8px 15px;">
+                                                    <span class="dashicons dashicons-upload" style="margin-top:4px;"></span>
+                                                </button>
                                             </div>
                                         </div>
                                     </div>
@@ -457,8 +839,13 @@ function dw_pedagang_page_render() {
                             <div class="dw-row" style="margin-top:20px; padding-top:20px; border-top:1px solid #eee;">
                                 <div class="dw-col-12">
                                     <div class="dw-form-group">
-                                        <label>Galeri Toko (Foto Tambahan)</label>
-                                        <div id="galeri-container" style="display:flex; flex-wrap:wrap; gap:15px; margin-bottom:20px; background:#f9f9f9; padding:15px; border-radius:8px; border:1px dashed #ccc;">
+                                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                                            <label style="margin-bottom:0;">Galeri Toko (Foto Tambahan)</label>
+                                            <button type="button" class="dw-btn-secondary" id="btn_galeri" style="font-size:13px; padding:6px 12px;">
+                                                <span class="dashicons dashicons-images-alt2" style="font-size:16px; margin-top:4px;"></span> Tambah Foto Galeri
+                                            </button>
+                                        </div>
+                                        <div id="galeri-container">
                                             <?php 
                                             $galeri_urls = [];
                                             if (!empty($edit_data->galeri)) {
@@ -467,9 +854,9 @@ function dw_pedagang_page_render() {
                                                     foreach($decoded as $url) {
                                                         if($url) {
                                                             $galeri_urls[] = $url;
-                                                            echo '<div class="g-item" style="position:relative; width:100px; height:100px; border-radius:8px; overflow:hidden; border:1px solid #ddd;">';
-                                                            echo '<img src="'.esc_url($url).'" style="width:100px; height:100px; object-cover:cover;">';
-                                                            echo '<span class="rem-g" data-url="'.esc_attr($url).'" style="position:absolute; top:5px; right:5px; background:rgba(255,0,0,0.7); color:white; width:20px; height:20px; border-radius:50%; text-align:center; line-height:18px; cursor:pointer; font-weight:bold;">&times;</span>';
+                                                            echo '<div class="g-item">';
+                                                            echo '<img src="'.esc_url($url).'">';
+                                                            echo '<span class="rem-g" data-url="'.esc_attr($url).'">&times;</span>';
                                                             echo '</div>';
                                                         }
                                                     }
@@ -478,9 +865,7 @@ function dw_pedagang_page_render() {
                                             ?>
                                         </div>
                                         <input type="hidden" name="galeri_urls" id="galeri_urls" value="<?php echo esc_attr(implode(',', $galeri_urls)); ?>">
-                                        <button type="button" class="dw-btn dw-btn-outline" id="btn_galeri">
-                                            <span class="dashicons dashicons-images-alt2"></span> Tambah Foto Galeri
-                                        </button>
+
                                         <p class="dw-help-text">Pilih beberapa foto untuk ditampilkan di halaman profil toko.</p>
                                     </div>
                                 </div>
@@ -492,29 +877,36 @@ function dw_pedagang_page_render() {
                                 <div class="dw-col-6">
                                     <div class="dw-form-group">
                                         <label>Nama Bank</label>
-                                        <input name="nama_bank" type="text" value="<?php echo esc_attr($edit_data->nama_bank ?? ''); ?>" class="dw-form-control">
+                                        <input name="nama_bank" type="text" value="<?php echo esc_attr($edit_data->nama_bank ?? ''); ?>" class="dw-form-control" placeholder="Contoh: BCA, Mandiri, BRI">
                                     </div>
                                 </div>
                                 <div class="dw-col-6">
                                     <div class="dw-form-group">
                                         <label>Nomor Rekening</label>
-                                        <input name="no_rekening" type="text" value="<?php echo esc_attr($edit_data->no_rekening ?? ''); ?>" class="dw-form-control">
+                                        <input name="no_rekening" type="text" value="<?php echo esc_attr($edit_data->no_rekening ?? ''); ?>" class="dw-form-control" placeholder="Masukkan nomor rekening">
                                     </div>
                                 </div>
                             </div>
                             <div class="dw-form-group">
                                 <label>Atas Nama Rekening</label>
-                                <input name="atas_nama_rekening" type="text" value="<?php echo esc_attr($edit_data->atas_nama_rekening ?? ''); ?>" class="dw-form-control">
+                                <input name="atas_nama_rekening" type="text" value="<?php echo esc_attr($edit_data->atas_nama_rekening ?? ''); ?>" class="dw-form-control" placeholder="Nama sesuai buku tabungan">
                             </div>
                             <div class="dw-form-group">
-                                <label>QRIS Image URL</label>
+                                <label>QRIS Pembayaran</label>
                                 <div class="dw-media-uploader">
-                                    <div style="margin-bottom:10px;">
-                                        <img id="prev_qris_image_url" src="<?php echo esc_url($edit_data->qris_image_url ?? 'https://placehold.co/150x150?text=QRIS'); ?>" style="max-width:150px; border-radius:6px; border:1px solid #ddd;">
-                                    </div>
-                                    <div style="display:flex; gap:10px;">
-                                        <input type="text" name="qris_image_url" id="qris_image_url" value="<?php echo esc_attr($edit_data->qris_image_url ?? ''); ?>" class="dw-form-control" readonly>
-                                        <button type="button" class="button btn_upload" data-target="#qris_image_url" data-preview="#prev_qris_image_url">Upload QRIS</button>
+                                    <div style="display:flex; gap:20px; align-items:flex-start; background:#f8fafc; padding:20px; border-radius:12px; border:1px solid #e2e8f0;">
+                                        <div style="width:120px; height:120px; background:#fff; padding:10px; border-radius:8px; border:1px solid #ddd;">
+                                            <img id="prev_qris_image_url" src="<?php echo esc_url($edit_data->qris_image_url ?? 'https://placehold.co/150x150?text=QRIS'); ?>" style="width:100%; height:100%; object-fit:contain;">
+                                        </div>
+                                        <div style="flex:1;">
+                                            <p class="dw-help-text" style="margin-bottom:10px;">Upload gambar QRIS toko untuk mempermudah transaksi non-tunai.</p>
+                                            <div style="display:flex; gap:10px;">
+                                                <input type="text" name="qris_image_url" id="qris_image_url" value="<?php echo esc_attr($edit_data->qris_image_url ?? ''); ?>" class="dw-form-control" readonly placeholder="URL Gambar QRIS">
+                                                <button type="button" class="dw-btn-secondary btn_upload" data-target="#qris_image_url" data-preview="#prev_qris_image_url">
+                                                    <span class="dashicons dashicons-upload" style="margin-top:4px;"></span>
+                                                </button>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
