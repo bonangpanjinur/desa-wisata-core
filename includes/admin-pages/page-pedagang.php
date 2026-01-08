@@ -106,21 +106,21 @@ function dw_pedagang_page_render() {
             $ojek_zona_data = [
                 'satu_kecamatan' => [
                     'dekat' => [
-                        'harga' => floatval($_POST['ojek_dekat_harga']),
+                        'harga' => floatval($_POST['ojek_dekat_harga'] ?? 0),
                         'desa_ids' => $safe_array_map($_POST['ojek_dekat_desa_ids'] ?? null)
                     ],
                     'jauh' => [
-                        'harga' => floatval($_POST['ojek_jauh_harga']),
+                        'harga' => floatval($_POST['ojek_jauh_harga'] ?? 0),
                         'desa_ids' => $safe_array_map($_POST['ojek_jauh_desa_ids'] ?? null)
                     ]
                 ],
                 'beda_kecamatan' => [
                     'dekat' => [
-                        'harga' => floatval($_POST['ojek_beda_kec_dekat_harga']),
+                        'harga' => floatval($_POST['ojek_beda_kec_dekat_harga'] ?? 0),
                         'kecamatan_ids' => $safe_array_map($_POST['ojek_beda_kec_dekat_ids'] ?? null)
                     ],
                     'jauh' => [
-                        'harga' => floatval($_POST['ojek_beda_kec_jauh_harga']),
+                        'harga' => floatval($_POST['ojek_beda_kec_jauh_harga'] ?? 0),
                         'kecamatan_ids' => $safe_array_map($_POST['ojek_beda_kec_jauh_ids'] ?? null)
                     ]
                 ]
@@ -134,30 +134,30 @@ function dw_pedagang_page_render() {
                 'is_independent'   => $is_independent,
                 'nama_toko'        => $nama_toko,
                 'slug_toko'        => sanitize_title($nama_toko),
-                'nama_pemilik'     => sanitize_text_field($_POST['nama_pemilik']),
-                'nomor_wa'         => sanitize_text_field($_POST['nomor_wa']),
-                'jam_buka'         => sanitize_text_field($_POST['jam_buka']),
-                'jam_tutup'        => sanitize_text_field($_POST['jam_tutup']),
-                'alamat_lengkap'   => sanitize_textarea_field($_POST['pedagang_detail']),
-                'url_gmaps'        => esc_url_raw($_POST['url_gmaps']),
+                'nama_pemilik'     => sanitize_text_field($_POST['nama_pemilik'] ?? ''),
+                'nomor_wa'         => sanitize_text_field($_POST['nomor_wa'] ?? ''),
+                'jam_buka'         => sanitize_text_field($_POST['jam_buka'] ?? ''),
+                'jam_tutup'        => sanitize_text_field($_POST['jam_tutup'] ?? ''),
+                'alamat_lengkap'   => sanitize_textarea_field($_POST['pedagang_detail'] ?? ''),
+                'url_gmaps'        => esc_url_raw($_POST['url_gmaps'] ?? ''),
                 
                 // REFERRAL (Simpan kode manual)
                 'terdaftar_melalui_kode' => $terdaftar_melalui_kode,
 
                 // LEGALITAS & PROFIL
-                'nik'              => sanitize_text_field($_POST['nik']),
-                'url_ktp'          => esc_url_raw($_POST['url_ktp']),
-                'foto_profil'      => esc_url_raw($_POST['foto_profil']),
-                'foto_sampul'      => esc_url_raw($_POST['foto_sampul']),
+                'nik'              => sanitize_text_field($_POST['nik'] ?? ''),
+                'url_ktp'          => esc_url_raw($_POST['url_ktp'] ?? ''),
+                'foto_profil'      => esc_url_raw($_POST['foto_profil'] ?? ''),
+                'foto_sampul'      => esc_url_raw($_POST['foto_sampul'] ?? ''),
                 
                 // KEUANGAN
-                'no_rekening'        => sanitize_text_field($_POST['no_rekening']),
-                'nama_bank'          => sanitize_text_field($_POST['nama_bank']),
-                'atas_nama_rekening' => sanitize_text_field($_POST['atas_nama_rekening']),
-                'qris_image_url'     => esc_url_raw($_POST['qris_image_url']),
+                'no_rekening'        => sanitize_text_field($_POST['no_rekening'] ?? ''),
+                'nama_bank'          => sanitize_text_field($_POST['nama_bank'] ?? ''),
+                'atas_nama_rekening' => sanitize_text_field($_POST['atas_nama_rekening'] ?? ''),
+                'qris_image_url'     => esc_url_raw($_POST['qris_image_url'] ?? ''),
                 
                 // STATUS & SISTEM
-                'status_pendaftaran' => sanitize_text_field($_POST['status_pendaftaran']),
+                'status_pendaftaran' => sanitize_text_field($_POST['status_pendaftaran'] ?? ''),
                 'status_akun'        => $status_sekarang,
                 'is_verified'        => $is_verified,
                 'verified_at'        => $verified_at,

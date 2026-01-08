@@ -290,15 +290,7 @@ function dw_wisata_page_render() {
                                 </div>
                             </div>
 
-                            <?php
-                            // Helper to get YouTube ID
-                            if(!function_exists('dw_get_youtube_id')) {
-                                function dw_get_youtube_id($url) {
-                                    preg_match('%(?:youtube(?:-nocookie)?\.com/(?:[^/]+/.+/|(?:v|e(?:mbed)?)/|.*[?&]v=)|youtu\.be/)([^"&?/ ]{11})%i', $url, $match);
-                                    return $match[1] ?? '';
-                                }
-                            }
-                            ?>
+
                         </div>
 
                         <!-- KOLOM KANAN (SIDEBAR) -->

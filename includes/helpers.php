@@ -629,3 +629,13 @@ function dw_can_add_wisata($user_id = null) {
 
     return true;
 }
+/**
+ * Helper to get YouTube ID from URL
+ */
+if(!function_exists('dw_get_youtube_id')) {
+    function dw_get_youtube_id($url) {
+        if (empty($url)) return '';
+        preg_match('%(?:youtube(?:-nocookie)?\.com/(?:[^/]+/.+/|(?:v|e(?:mbed)?)/|.*[?&]v=)|youtu\.be/)([^"&?/ ]{11})%i', $url, $match);
+        return $match[1] ?? '';
+    }
+}
