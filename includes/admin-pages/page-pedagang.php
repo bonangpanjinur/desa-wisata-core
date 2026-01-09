@@ -721,25 +721,25 @@ function dw_pedagang_page_render() {
                                 <div class="dw-col-6">
                                     <div class="dw-form-group">
                                         <label>Provinsi</label>
-                                        <select name="pedagang_prov" class="dw-form-control">
+                                        <select name="pedagang_prov" class="dw-form-control dw-region-prov" data-current="<?php echo esc_attr($edit_data->api_provinsi_id ?? ''); ?>">
                                             <option value="">Pilih Provinsi...</option>
                                             <?php if(class_exists('DW_Address_API')): $provs = DW_Address_API::get_provinces(); foreach($provs as $v): ?>
                                                 <option value="<?php echo $v['id']; ?>" <?php selected($edit_data->api_provinsi_id ?? '', $v['id']); ?>><?php echo $v['name']; ?></option>
                                             <?php endforeach; endif; ?>
                                         </select>
-                                        <input type="hidden" name="provinsi_text" value="<?php echo esc_attr($edit_data->provinsi_nama ?? ''); ?>">
+                                        <input type="hidden" name="provinsi_text" class="dw-text-prov" value="<?php echo esc_attr($edit_data->provinsi_nama ?? ''); ?>">
                                     </div>
                                 </div>
                                 <div class="dw-col-6">
                                     <div class="dw-form-group">
                                         <label>Kota/Kabupaten</label>
-                                        <select name="pedagang_kota" class="dw-form-control">
+                                        <select name="pedagang_kota" class="dw-form-control dw-region-kota" data-current="<?php echo esc_attr($edit_data->api_kabupaten_id ?? ''); ?>">
                                             <option value="">Pilih Kota...</option>
                                             <?php if($edit_data && !empty($edit_data->api_provinsi_id) && class_exists('DW_Address_API')): $cities = DW_Address_API::get_cities($edit_data->api_provinsi_id); foreach($cities as $v): ?>
                                                 <option value="<?php echo $v['id']; ?>" <?php selected($edit_data->api_kabupaten_id ?? '', $v['id']); ?>><?php echo $v['name']; ?></option>
                                             <?php endforeach; endif; ?>
                                         </select>
-                                        <input type="hidden" name="kabupaten_text" value="<?php echo esc_attr($edit_data->kabupaten_nama ?? ''); ?>">
+                                        <input type="hidden" name="kabupaten_text" class="dw-text-kota" value="<?php echo esc_attr($edit_data->kabupaten_nama ?? ''); ?>">
                                     </div>
                                 </div>
                             </div>
@@ -747,25 +747,25 @@ function dw_pedagang_page_render() {
                                 <div class="dw-col-6">
                                     <div class="dw-form-group">
                                         <label>Kecamatan</label>
-                                        <select name="pedagang_kec" class="dw-form-control">
+                                        <select name="pedagang_kec" class="dw-form-control dw-region-kec" data-current="<?php echo esc_attr($edit_data->api_kecamatan_id ?? ''); ?>">
                                             <option value="">Pilih Kecamatan...</option>
                                             <?php if($edit_data && !empty($edit_data->api_kabupaten_id) && class_exists('DW_Address_API')): $districts = DW_Address_API::get_subdistricts($edit_data->api_kabupaten_id); foreach($districts as $v): ?>
                                                 <option value="<?php echo $v['id']; ?>" <?php selected($edit_data->api_kecamatan_id ?? '', $v['id']); ?>><?php echo $v['name']; ?></option>
                                             <?php endforeach; endif; ?>
                                         </select>
-                                        <input type="hidden" name="kecamatan_text" value="<?php echo esc_attr($edit_data->kecamatan_nama ?? ''); ?>">
+                                        <input type="hidden" name="kecamatan_text" class="dw-text-kec" value="<?php echo esc_attr($edit_data->kecamatan_nama ?? ''); ?>">
                                     </div>
                                 </div>
                                 <div class="dw-col-6">
                                     <div class="dw-form-group">
                                         <label>Kelurahan/Desa</label>
-                                        <select name="pedagang_nama_id" class="dw-form-control">
+                                        <select name="pedagang_nama_id" class="dw-form-control dw-region-desa" data-current="<?php echo esc_attr($edit_data->api_kelurahan_id ?? ''); ?>">
                                             <option value="">Pilih Kelurahan...</option>
                                             <?php if($edit_data && !empty($edit_data->api_kecamatan_id) && class_exists('DW_Address_API')): $villages = DW_Address_API::get_villages($edit_data->api_kecamatan_id); foreach($villages as $v): ?>
                                                 <option value="<?php echo $v['id']; ?>" <?php selected($edit_data->api_kelurahan_id ?? '', $v['id']); ?>><?php echo $v['name']; ?></option>
                                             <?php endforeach; endif; ?>
                                         </select>
-                                        <input type="hidden" name="kelurahan_text" value="<?php echo esc_attr($edit_data->kelurahan_nama ?? ''); ?>">
+                                        <input type="hidden" name="kelurahan_text" class="dw-text-desa" value="<?php echo esc_attr($edit_data->kelurahan_nama ?? ''); ?>">
                                     </div>
                                 </div>
                             </div>
@@ -775,7 +775,7 @@ function dw_pedagang_page_render() {
                             </div>
                             <div class="dw-form-group">
                                 <label>Kode Pos</label>
-                                <input name="kode_pos" type="text" value="<?php echo esc_attr($edit_data->kode_pos ?? ''); ?>" class="dw-form-control" placeholder="Contoh: 12345">
+                                <input name="kode_pos" id="inp_kode_pos" type="text" value="<?php echo esc_attr($edit_data->kode_pos ?? ''); ?>" class="dw-form-control" placeholder="Contoh: 12345">
                             </div>
                             <div class="dw-form-group">
                                 <label>URL Google Maps</label>
@@ -1075,15 +1075,47 @@ function dw_pedagang_page_render() {
 	                    galleryFrame.open();
 	                });
 
-                $(document).on('click', '.rem-g', function(){
-                    var url = $(this).data('url');
-                    var urls = $('#galeri_urls').val().split(',');
-                    urls = urls.filter(function(item){ return item !== url; });
-                    $('#galeri_urls').val(urls.join(',')); 
-                    $(this).parent().remove();
-                });
-            });
-            </script>
+	                $(document).on('click', '.rem-g', function(){
+	                    var url = $(this).data('url');
+	                    var urls = $('#galeri_urls').val().split(',');
+	                    urls = urls.filter(function(item){ return item !== url; });
+	                    $('#galeri_urls').val(urls.join(',')); 
+	                    $(this).parent().remove();
+	                });
+
+	                // Region API Logic
+	                function loadRegion(type, pid, target, selId) {
+	                    var act = type==='prov'?'dw_fetch_provinces':(type==='kota'?'dw_fetch_regencies':(type==='kec'?'dw_fetch_districts':'dw_fetch_villages'));
+	                    if(type!=='prov' && !pid) return;
+	                    $.get(ajaxurl, { action:act, province_id:pid, regency_id:pid, district_id:pid, nonce:'<?php echo wp_create_nonce("dw_region_nonce"); ?>' }, function(res){
+	                        if(res.success) {
+	                            target.empty().append('<option value="">Pilih...</option>');
+	                            $.each(res.data, function(i,v){ 
+	                                let pos = v.postal_code || '';
+	                                target.append(`<option value="${v.id}" data-nama="${v.name}" data-pos="${pos}" ${(String(v.id)===String(selId)?'selected':'')}>${v.name}</option>`); 
+	                            });
+	                        }
+	                    });
+	                }
+	                
+	                $('.dw-region-prov').change(function(){ $('.dw-text-prov').val($(this).find('option:selected').text()); loadRegion('kota', $(this).val(), $('.dw-region-kota'), null); });
+	                $('.dw-region-kota').change(function(){ $('.dw-text-kota').val($(this).find('option:selected').text()); loadRegion('kec', $(this).val(), $('.dw-region-kec'), null); });
+	                $('.dw-region-kec').change(function(){ $('.dw-text-kec').val($(this).find('option:selected').text()); loadRegion('desa', $(this).val(), $('.dw-region-desa'), null); });
+	                $('.dw-region-desa').change(function(){ 
+	                    $('.dw-text-desa').val($(this).find('option:selected').text()); 
+	                    let pos = $(this).find('option:selected').attr('data-pos');
+	                    if(pos) $('#inp_kode_pos').val(pos);
+	                });
+
+	                // Init Address Waterfall if editing
+	                var p = $('.dw-region-prov').data('current'); 
+	                if(p) {
+	                    // We don't trigger change to avoid resetting values, but we need to ensure options are loaded if they are empty
+	                    // However, the PHP already renders the options for the current selection. 
+	                    // This AJAX is mainly for when the user CHANGES the selection.
+	                }
+	            });
+	            </script>
         <?php endif; ?>
     </div>
     <?php
