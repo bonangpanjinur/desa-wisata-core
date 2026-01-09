@@ -794,7 +794,7 @@ function dw_pedagang_page_render() {
                                             </div>
                                             <div style="display:flex; gap:10px;">
                                                 <input type="text" name="foto_profil" id="foto_profil" value="<?php echo esc_attr($edit_data->foto_profil ?? ''); ?>" class="dw-form-control" readonly placeholder="URL Foto Profil">
-                                                <button type="button" class="dw-btn-secondary btn_upload" data-target="#foto_profil" data-preview="#prev_foto_profil" style="padding:8px 15px;">
+                                                <button type="button" class="dw-btn-secondary btn_upload" data-target="foto_profil" data-preview="#prev_foto_profil" style="padding:8px 15px;">
                                                     <span class="dashicons dashicons-upload" style="margin-top:4px;"></span>
                                                 </button>
                                             </div>
@@ -814,7 +814,7 @@ function dw_pedagang_page_render() {
                                             </div>
                                             <div style="display:flex; gap:10px;">
                                                 <input type="text" name="foto_sampul" id="foto_sampul" value="<?php echo esc_attr($edit_data->foto_sampul ?? ''); ?>" class="dw-form-control" readonly placeholder="URL Foto Sampul">
-                                                <button type="button" class="dw-btn-secondary btn_upload" data-target="#foto_sampul" data-preview="#prev_foto_sampul" style="padding:8px 15px;">
+                                                <button type="button" class="dw-btn-secondary btn_upload" data-target="foto_sampul" data-preview="#prev_foto_sampul" style="padding:8px 15px;">
                                                     <span class="dashicons dashicons-upload" style="margin-top:4px;"></span>
                                                 </button>
                                             </div>
@@ -828,7 +828,7 @@ function dw_pedagang_page_render() {
                                                     <img id="prev_url_ktp" src="<?php echo esc_url($edit_data->url_ktp ?? 'https://placehold.co/60x40?text=KTP'); ?>" style="width:100%; height:100%; object-fit:cover;">
                                                 </div>
                                                 <input type="text" name="url_ktp" id="url_ktp" value="<?php echo esc_attr($edit_data->url_ktp ?? ''); ?>" class="dw-form-control" readonly placeholder="URL Foto KTP">
-                                                <button type="button" class="dw-btn-secondary btn_upload" data-target="#url_ktp" data-preview="#prev_url_ktp" style="padding:8px 15px;">
+                                                <button type="button" class="dw-btn-secondary btn_upload" data-target="url_ktp" data-preview="#prev_url_ktp" style="padding:8px 15px;">
                                                     <span class="dashicons dashicons-upload" style="margin-top:4px;"></span>
                                                 </button>
                                             </div>
@@ -902,7 +902,7 @@ function dw_pedagang_page_render() {
                                             <p class="dw-help-text" style="margin-bottom:10px;">Upload gambar QRIS toko untuk mempermudah transaksi non-tunai.</p>
                                             <div style="display:flex; gap:10px;">
                                                 <input type="text" name="qris_image_url" id="qris_image_url" value="<?php echo esc_attr($edit_data->qris_image_url ?? ''); ?>" class="dw-form-control" readonly placeholder="URL Gambar QRIS">
-                                                <button type="button" class="dw-btn-secondary btn_upload" data-target="#qris_image_url" data-preview="#prev_qris_image_url">
+                                                <button type="button" class="dw-btn-secondary btn_upload" data-target="qris_image_url" data-preview="#prev_qris_image_url">
                                                     <span class="dashicons dashicons-upload" style="margin-top:4px;"></span>
                                                 </button>
                                             </div>
@@ -1006,57 +1006,69 @@ function dw_pedagang_page_render() {
                     $($(this).data('target')).addClass('active');
                 });
 
-                // Media Upload Fix
-                $(document).on('click', '.btn_upload', function(e){
-                    e.preventDefault();
-                    var target = $(this).data('target');
-                    var preview = $(this).data('preview');
-                    
-                    if ( typeof wp === 'undefined' || ! wp.media ) { 
-                        alert('Media uploader tidak tersedia.'); 
-                        return; 
-                    }
-                    
-                    var frame = wp.media({ 
-                        title: 'Pilih Gambar', 
-                        multiple: false, 
-                        library: { type: 'image' } 
-                    });
-                    
-                    frame.on('select', function(){
-                        var attachment = frame.state().get('selection').first().toJSON();
-                        var url = attachment.url;
-                        $(target).val(url);
-                        if(preview && $(preview).length) {
-                            $(preview).attr('src', url).show();
-                        }
-                    });
-                    frame.open();
-                });
+	                // Media Upload Fix
+	                var mediaFrames = {};
+	                $(document).on('click', '.btn_upload', function(e){
+	                    e.preventDefault();
+	                    var $btn = $(this);
+	                    var target = '#' + $btn.data('target');
+	                    var preview = $btn.data('preview');
+	                    
+	                    if ( typeof wp === 'undefined' || ! wp.media ) { 
+	                        alert('Media uploader tidak tersedia.'); 
+	                        return; 
+	                    }
+	                    
+	                    if (mediaFrames[target]) {
+	                        mediaFrames[target].open();
+	                        return;
+	                    }
 
-                // Gallery Logic
-                $('#btn_galeri').click(function(e){
-                    e.preventDefault();
-                    var frame = wp.media({
-                        title: 'Pilih Foto Galeri',
-                        multiple: true,
-                        library: { type: 'image' }
-                    });
-                    frame.on('select', function(){
-                        var selections = frame.state().get('selection');
-                        var urls = $('#galeri_urls').val() ? $('#galeri_urls').val().split(',') : [];
-                        
-                        selections.map(function(attachment){
-                            var att = attachment.toJSON();
-                            if (urls.indexOf(att.url) === -1) {
-                                urls.push(att.url);
-                                $('#galeri-container').append('<div class="g-item" style="position:relative; width:100px; height:100px; border-radius:8px; overflow:hidden; border:1px solid #ddd;"><img src="'+att.url+'" style="width:100px; height:100px; object-fit:cover;"><span class="rem-g" data-url="'+att.url+'" style="position:absolute; top:5px; right:5px; background:rgba(255,0,0,0.7); color:white; width:20px; height:20px; border-radius:50%; text-align:center; line-height:18px; cursor:pointer; font-weight:bold;">&times;</span></div>');
-                            }
-                        });
-                        $('#galeri_urls').val(urls.join(','));
-                    });
-                    frame.open();
-                });
+	                    mediaFrames[target] = wp.media({ 
+	                        title: 'Pilih Gambar', 
+	                        multiple: false, 
+	                        library: { type: 'image' } 
+	                    });
+	                    
+	                    mediaFrames[target].on('select', function(){
+	                        var attachment = mediaFrames[target].state().get('selection').first().toJSON();
+	                        var url = attachment.url;
+	                        $(target).val(url);
+	                        if(preview && $(preview).length) {
+	                            $(preview).attr('src', url).show();
+	                        }
+	                    });
+	                    mediaFrames[target].open();
+	                });
+
+	                // Gallery Logic
+	                var galleryFrame;
+	                $('#btn_galeri').click(function(e){
+	                    e.preventDefault();
+	                    if (galleryFrame) {
+	                        galleryFrame.open();
+	                        return;
+	                    }
+	                    galleryFrame = wp.media({
+	                        title: 'Pilih Foto Galeri',
+	                        multiple: true,
+	                        library: { type: 'image' }
+	                    });
+	                    galleryFrame.on('select', function(){
+	                        var selections = galleryFrame.state().get('selection');
+	                        var urls = $('#galeri_urls').val() ? $('#galeri_urls').val().split(',') : [];
+	                        
+	                        selections.map(function(attachment){
+	                            var att = attachment.toJSON();
+	                            if (urls.indexOf(att.url) === -1) {
+	                                urls.push(att.url);
+	                                $('#galeri-container').append('<div class="g-item" style="position:relative; width:100px; height:100px; border-radius:8px; overflow:hidden; border:1px solid #ddd;"><img src="'+att.url+'" style="width:100px; height:100px; object-fit:cover;"><span class="rem-g" data-url="'+att.url+'" style="position:absolute; top:5px; right:5px; background:rgba(255,0,0,0.7); color:white; width:20px; height:20px; border-radius:50%; text-align:center; line-height:18px; cursor:pointer; font-weight:bold;">&times;</span></div>');
+	                            }
+	                        });
+	                        $('#galeri_urls').val(urls.join(','));
+	                    });
+	                    galleryFrame.open();
+	                });
 
                 $(document).on('click', '.rem-g', function(){
                     var url = $(this).data('url');
