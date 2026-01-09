@@ -117,6 +117,7 @@ function dw_activate_plugin() {
         shipping_nasional_harga DECIMAL(15,2) DEFAULT 0,
         shipping_profiles JSON DEFAULT NULL,
         allow_pesan_di_tempat TINYINT(1) DEFAULT 0,
+        galeri JSON DEFAULT NULL,
         api_provinsi_id VARCHAR(20),
         api_kabupaten_id VARCHAR(20),
         api_kecamatan_id VARCHAR(20),

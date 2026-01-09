@@ -184,7 +184,7 @@ function dw_pedagang_page_render() {
                 'shipping_nasional_aktif' => isset($_POST['shipping_nasional_aktif']) ? 1 : 0,
                 'shipping_nasional_harga' => floatval($_POST['shipping_nasional_harga']),
                 'shipping_ojek_lokal_aktif' => $shipping_ojek,
-                'shipping_ojek_lokal_json'  => json_encode($ojek_zona_data),
+                'shipping_ojek_lokal_zona'  => json_encode($ojek_zona_data),
                 'allow_pesan_di_tempat'     => isset($_POST['allow_pesan_di_tempat']) ? 1 : 0,
                 'galeri'                    => !empty($_POST['galeri_urls']) ? json_encode(array_filter(explode(',', wp_unslash($_POST['galeri_urls'])))) : '[]',
             ];
@@ -849,7 +849,7 @@ function dw_pedagang_page_render() {
                                             <?php 
                                             $galeri_urls = [];
                                             if (!empty($edit_data->galeri)) {
-                                                $decoded = json_decode($edit_data->galeri, true);
+                                                $decoded = is_string($edit_data->galeri) ? json_decode($edit_data->galeri, true) : $edit_data->galeri;
                                                 if (is_array($decoded)) {
                                                     foreach($decoded as $url) {
                                                         if($url) {

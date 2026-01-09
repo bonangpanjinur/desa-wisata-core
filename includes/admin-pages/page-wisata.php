@@ -118,18 +118,18 @@ function dw_wisata_page_render() {
                         'nama_wisata'  => $nama,
                         'slug'         => $slug,
                         'kategori'     => sanitize_text_field($_POST['kategori']),
-                        'deskripsi'    => wp_kses_post($_POST['deskripsi']),
-	                        'harga_tiket'  => floatval($_POST['harga_tiket']),
-	                        'jam_buka'     => sanitize_text_field($_POST['jam_buka']),
-	                        'jam_tutup'    => sanitize_text_field($_POST['jam_tutup']),
-	                        'fasilitas'    => isset($_POST['fasilitas']) ? sanitize_textarea_field($_POST['fasilitas']) : '',
+                        'deskripsi'        => wp_kses_post($_POST['deskripsi']),
+                        'harga_tiket'      => floatval($_POST['harga_tiket']),
+                        'jam_buka'         => sanitize_text_field($_POST['jam_buka']),
+                        'jam_tutup'        => sanitize_text_field($_POST['jam_tutup']),
+                        'fasilitas'        => isset($_POST['fasilitas']) ? sanitize_textarea_field($_POST['fasilitas']) : '',
                         'kontak_pengelola' => isset($_POST['kontak_pengelola']) ? sanitize_text_field($_POST['kontak_pengelola']) : '',
-	                        'lokasi_maps'  => isset($_POST['lokasi_maps']) ? esc_url_raw($_POST['lokasi_maps']) : '',
-	                        'foto_utama'   => esc_url_raw($_POST['foto_utama']),
-	                        'video_url'    => isset($_POST['video_url']) ? esc_url_raw($_POST['video_url']) : '',
-	                        'galeri'       => $galeri_json,
-                        'status'       => sanitize_text_field($_POST['status']),
-                        'updated_at'   => current_time('mysql')
+                        'lokasi_maps'      => isset($_POST['lokasi_maps']) ? esc_url_raw($_POST['lokasi_maps']) : '',
+                        'foto_utama'       => esc_url_raw($_POST['foto_utama']),
+                        'video_url'        => isset($_POST['video_url']) ? esc_url_raw($_POST['video_url']) : '',
+                        'galeri'           => $galeri_json,
+                        'status'           => sanitize_text_field($_POST['status']),
+                        'updated_at'       => current_time('mysql')
                     ];
 
                     if (!empty($_POST['wisata_id'])) {
