@@ -397,16 +397,22 @@ function dw_wisata_page_render() {
                                         <label>Harga Tiket (Rp):</label>
                                         <input name="harga_tiket" type="number" value="<?php echo esc_attr($val_harga); ?>" class="widefat">
                                     </p>
-	                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-	                                        <p>
-	                                            <label>Jam Buka:</label>
-	                                            <input name="jam_buka" type="time" value="<?php echo esc_attr($val_jam); ?>" class="widefat">
-	                                        </p>
-	                                        <p>
-	                                            <label>Jam Tutup:</label>
-	                                            <input name="jam_tutup" type="time" value="<?php echo esc_attr($val_jam_tutup); ?>" class="widefat">
-	                                        </p>
-	                                    </div>
+		                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+		                                        <p style="margin:0;">
+		                                            <label style="display:block; margin-bottom:5px; font-weight:600;">Jam Buka:</label>
+		                                            <input name="jam_buka" id="jam_buka" type="time" value="<?php echo esc_attr($val_jam); ?>" class="widefat" <?php echo ($val_jam === '00:00' && $val_jam_tutup === '23:59') ? 'disabled' : ''; ?>>
+		                                        </p>
+		                                        <p style="margin:0;">
+		                                            <label style="display:block; margin-bottom:5px; font-weight:600;">Jam Tutup:</label>
+		                                            <input name="jam_tutup" id="jam_tutup" type="time" value="<?php echo esc_attr($val_jam_tutup); ?>" class="widefat" <?php echo ($val_jam === '00:00' && $val_jam_tutup === '23:59') ? 'disabled' : ''; ?>>
+		                                        </p>
+		                                    </div>
+		                                    <p style="margin-top:0;">
+		                                        <label style="display:flex; align-items:center; cursor:pointer; font-size:13px;">
+		                                            <input type="checkbox" id="buka_24_jam" <?php echo ($val_jam === '00:00' && $val_jam_tutup === '23:59') ? 'checked' : ''; ?> style="margin-right:8px;"> 
+		                                            Buka 24 Jam
+		                                        </label>
+		                                    </p>
                                     <p>
                                         <label>Kontak (WA):</label>
                                         <input name="kontak_pengelola" type="text" value="<?php echo esc_attr($val_kontak); ?>" class="widefat" placeholder="0812...">
@@ -429,17 +435,35 @@ function dw_wisata_page_render() {
             <!-- JS Uploader & Gallery Logic -->
             <script>
             jQuery(document).ready(function($){
-                // 1. Single Image (Foto Utama)
-                $('#btn_upload_utama').click(function(e){ 
-                    e.preventDefault(); 
-                    var frame = wp.media({title:'Foto Utama', multiple:false, library:{type:'image'}}); 
-                    frame.on('select', function(){ 
-                        var u = frame.state().get('selection').first().toJSON().url; 
-                        $('#foto_utama').val(u); 
-                        $('#preview_foto_utama').attr('src', u); 
-                    }); 
-                    frame.open(); 
-                });
+	                // 0. Jam Buka/Tutup Logic
+	                $('#buka_24_jam').change(function() {
+	                    if($(this).is(':checked')) {
+	                        $('#jam_buka').val('00:00').prop('disabled', true);
+	                        $('#jam_tutup').val('23:59').prop('disabled', true);
+	                    } else {
+	                        $('#jam_buka').prop('disabled', false);
+	                        $('#jam_tutup').prop('disabled', false);
+	                    }
+	                });
+
+	                // Pastikan saat submit, field yang disabled tetap terkirim nilainya
+	                $('form').on('submit', function() {
+	                    $('#jam_buka, #jam_tutup').prop('disabled', false);
+	                });
+
+	                // 1. Single Image (Foto Utama)
+	                var frameUtama;
+	                $('#btn_upload_utama').click(function(e){ 
+	                    e.preventDefault(); 
+	                    if (frameUtama) { frameUtama.open(); return; }
+	                    frameUtama = wp.media({title:'Foto Utama', multiple:false, library:{type:'image'}}); 
+	                    frameUtama.on('select', function(){ 
+	                        var u = frameUtama.state().get('selection').first().toJSON().url; 
+	                        $('#foto_utama').val(u); 
+	                        $('#preview_foto_utama').attr('src', u); 
+	                    }); 
+	                    frameUtama.open(); 
+	                });
 
                 // 2. Gallery Logic (Mixed Media)
                 let galeriData = [];

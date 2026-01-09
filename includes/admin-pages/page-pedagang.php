@@ -1019,26 +1019,31 @@ function dw_pedagang_page_render() {
 	                        return; 
 	                    }
 	                    
-	                    if (mediaFrames[target]) {
-	                        mediaFrames[target].open();
-	                        return;
-	                    }
+		                    // Jika frame sudah ada, buka saja
+		                    if (mediaFrames[target]) {
+		                        mediaFrames[target].open();
+		                        return;
+		                    }
 
-	                    mediaFrames[target] = wp.media({ 
-	                        title: 'Pilih Gambar', 
-	                        multiple: false, 
-	                        library: { type: 'image' } 
-	                    });
-	                    
-	                    mediaFrames[target].on('select', function(){
-	                        var attachment = mediaFrames[target].state().get('selection').first().toJSON();
-	                        var url = attachment.url;
-	                        $(target).val(url);
-	                        if(preview && $(preview).length) {
-	                            $(preview).attr('src', url).show();
-	                        }
-	                    });
-	                    mediaFrames[target].open();
+		                    // Buat frame baru
+		                    mediaFrames[target] = wp.media({ 
+		                        title: 'Pilih Gambar', 
+		                        multiple: false, 
+		                        library: { type: 'image' } 
+		                    });
+		                    
+		                    // Handler saat gambar dipilih
+		                    mediaFrames[target].on('select', function(){
+		                        var attachment = mediaFrames[target].state().get('selection').first().toJSON();
+		                        var url = attachment.url;
+		                        $(target).val(url);
+		                        if(preview && $(preview).length) {
+		                            $(preview).attr('src', url).show();
+		                        }
+		                    });
+
+		                    // Buka frame
+		                    mediaFrames[target].open();
 	                });
 
 	                // Gallery Logic
