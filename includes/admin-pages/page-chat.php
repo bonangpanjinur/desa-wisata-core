@@ -99,9 +99,29 @@ function dw_chat_thread_render($produk_id) {
                     $class = $is_pedagang ? 'dw-chat-out-admin' : 'dw-chat-in-admin';
                     $sender_name = $is_pedagang ? 'Saya (Pedagang)' : esc_html($msg->sender_name);
                     ?>
+                    <?php
+                    // Chat Flagging Logic
+                    $flagged = false;
+                    $flag_reason = '';
+                    $bad_words = ['kasar', 'anjing', 'babi', 'tolol']; // Example bad words
+                    foreach ($bad_words as $word) {
+                        if (stripos($msg->message, $word) !== false) {
+                            $flagged = true;
+                            $flag_reason = 'Kata kasar terdeteksi';
+                            break;
+                        }
+                    }
+                    if (preg_match('/[0-9]{10,}/', $msg->message)) {
+                        $flagged = true;
+                        $flag_reason = 'Nomor HP terdeteksi';
+                    }
+                    ?>
                     <div class="<?php echo $class; ?>" style="margin-bottom: 10px; display: flex; <?php echo $is_pedagang ? 'justify-content: flex-end;' : 'justify-content: flex-start;'; ?>">
-                         <div style="max-width: 80%; padding: 10px; border-radius: 8px; font-size: 13px; <?php echo $is_pedagang ? 'background-color: #d8eaff; margin-left: 10px;' : 'background-color: #fff; border: 1px solid #ccc; margin-right: 10px;'; ?>">
+                         <div style="max-width: 80%; padding: 10px; border-radius: 8px; font-size: 13px; <?php echo $is_pedagang ? 'background-color: #d8eaff; margin-left: 10px;' : 'background-color: #fff; border: 1px solid #ccc; margin-right: 10px;'; ?> <?php echo $flagged ? 'border: 2px solid #d63638;' : ''; ?>">
                             <strong style="font-size: 11px; color: #555;"><?php echo $sender_name; ?></strong>
+                            <?php if ($flagged): ?>
+                                <span style="background: #d63638; color: #fff; font-size: 10px; padding: 2px 5px; border-radius: 3px; margin-left: 5px;"><?php echo $flag_reason; ?></span>
+                            <?php endif; ?>
                             <p style="margin: 5px 0 0;"><?php echo esc_html($msg->message); ?></p>
                             <small style="display: block; text-align: right; color: #888; font-size: 10px;"><?php echo date('H:i', strtotime($msg->created_at)); ?></small>
                         </div>

@@ -19,6 +19,26 @@ function dw_render_dashboard() {
     if (function_exists('dw_dashboard_page_render')) dw_dashboard_page_render(); 
 }
 
+function dw_render_manajemen_pesanan_pusat() {
+    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-manajemen-pesanan-pusat.php';
+    if (function_exists('dw_manajemen_pesanan_pusat_render')) dw_manajemen_pesanan_pusat_render();
+}
+
+function dw_render_kupon() {
+    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-kupon.php';
+    if (function_exists('dw_kupon_page_render')) dw_kupon_page_render();
+}
+
+function dw_render_komplain() {
+    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-komplain.php';
+    if (function_exists('dw_komplain_page_render')) dw_komplain_page_render();
+}
+
+function dw_render_pusat_verifikasi() {
+    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-pusat-verifikasi.php';
+    if (function_exists('dw_pusat_verifikasi_render')) dw_pusat_verifikasi_render();
+}
+
 // MENU 2: DATA DESA
 function dw_render_desa() { 
     require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-desa.php';
@@ -194,6 +214,12 @@ function dw_register_admin_menus() {
     
     add_submenu_page('dw-dashboard', 'Dashboard', 'Dashboard', 'read', 'dw-dashboard', 'dw_render_dashboard');
 
+    // --- PUSAT KOMANDO (ADMIN ONLY) ---
+    if (current_user_can('manage_options')) {
+        add_submenu_page('dw-dashboard', 'Pusat Pesanan', 'Pusat Pesanan', 'manage_options', 'dw-manajemen-pesanan-pusat', 'dw_render_manajemen_pesanan_pusat');
+        add_submenu_page('dw-dashboard', 'Pusat Verifikasi', 'Pusat Verifikasi', 'manage_options', 'dw-pusat-verifikasi', 'dw_render_pusat_verifikasi');
+    }
+
     // --- MANAJEMEN PENGGUNA ---
     // Pastikan user admin melihat ini
     if (current_user_can('manage_options')) {
@@ -228,16 +254,18 @@ function dw_register_admin_menus() {
     // --- ADMIN SETTINGS ---
     if (current_user_can('manage_options')) {
         add_submenu_page('dw-dashboard', 'Paket & Kuota', 'Paket & Kuota', 'manage_options', 'dw-paket-transaksi', 'dw_render_paket');
-        add_submenu_page('dw-dashboard', 'Verifikasi Paket', 'Verifikasi Paket', 'manage_options', 'dw-verifikasi-paket', 'dw_render_verifikasi_paket');
+        // Verifikasi Paket dipindah ke Pusat Verifikasi
         add_submenu_page('dw-dashboard', 'Payout Komisi', 'Payout Komisi', 'manage_options', 'dw-komisi', 'dw_render_komisi');
         add_submenu_page('dw-dashboard', 'Promosi/Iklan', 'Promosi/Iklan', 'manage_options', 'dw-promosi', 'dw_render_promosi');
         add_submenu_page('dw-dashboard', 'Banner Promo', 'Banner Promo', 'manage_options', 'dw-banner', 'dw_render_banner');
+        add_submenu_page('dw-dashboard', 'Kupon Diskon', 'Kupon Diskon', 'manage_options', 'dw-kupon', 'dw_render_kupon');
         add_submenu_page('dw-dashboard', 'Ulasan/Review', 'Ulasan/Review', 'moderate_comments', 'dw-reviews', 'dw_render_reviews');
         
         add_submenu_page('dw-dashboard', 'Ongkos Kirim', 'Ongkos Kirim', 'manage_options', 'dw-ongkir', 'dw_render_ongkir');
         add_submenu_page('dw-dashboard', 'Template WA', 'Template WA', 'manage_options', 'dw-templates', 'dw_render_templates');
         
         add_submenu_page('dw-dashboard', 'Logs Aktivitas', 'Logs Aktivitas', 'manage_options', 'dw-logs', 'dw_render_logs');
+        add_submenu_page('dw-dashboard', 'Logbook Komplain', 'Logbook Komplain', 'manage_options', 'dw-komplain', 'dw_render_komplain');
         add_submenu_page('dw-dashboard', 'Pengaturan Sistem', 'Pengaturan', 'manage_options', 'dw-settings', 'dw_render_settings');
     }
 }

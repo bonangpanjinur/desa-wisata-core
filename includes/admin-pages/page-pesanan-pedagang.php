@@ -136,6 +136,50 @@ function dw_pesanan_pedagang_form_handler() {
 // Hook 'admin_init' memastikan ini berjalan sebelum header dikirim
 add_action('admin_init', 'dw_pesanan_pedagang_form_handler');
 
+// Export Excel Handler
+add_action('admin_init', function() {
+    if (isset($_GET['dw_export_pesanan']) && current_user_can('dw_manage_pesanan')) {
+        global $wpdb;
+        $current_user_id = get_current_user_id();
+        
+        $table_sub = $wpdb->prefix . 'dw_transaksi_sub';
+        $table_pedagang = $wpdb->prefix . 'dw_pedagang';
+        
+        $query = $wpdb->prepare("
+            SELECT s.*, p.nama_bank, p.no_rekening, p.nama_rekening 
+            FROM $table_sub s
+            JOIN $table_pedagang p ON s.id_pedagang = p.id_user
+            WHERE s.id_pedagang = %d
+        ", $current_user_id);
+        
+        $results = $wpdb->get_results($query);
+        
+        if ($results) {
+            header('Content-Type: text/csv; charset=utf-8');
+            header('Content-Disposition: attachment; filename=laporan-pesanan-' . date('Y-m-d') . '.csv');
+            $output = fopen('php://output', 'w');
+            fputcsv($output, ['ID Pesanan', 'Tanggal', 'Total', 'Ongkir', 'Status', 'Bank', 'No Rekening', 'Nama Rekening', 'Nominal Bersih']);
+            
+            foreach ($results as $row) {
+                $nominal_bersih = $row->total_pesanan_toko; // Simplified logic for now
+                fputcsv($output, [
+                    $row->id,
+                    $row->created_at,
+                    $row->total_pesanan_toko,
+                    $row->ongkir,
+                    $row->status_pesanan,
+                    $row->nama_bank,
+                    $row->no_rekening,
+                    $row->nama_rekening,
+                    $nominal_bersih
+                ]);
+            }
+            fclose($output);
+            exit;
+        }
+    }
+});
+
 // KELAS DW_Pesanan_Pedagang_List_Table DIHAPUS DARI SINI
 // karena sudah dideklarasikan di: includes/list-tables/class-dw-pesanan-pedagang-list-table.php
 
@@ -179,7 +223,10 @@ function dw_pesanan_pedagang_page_render() {
     $pesananListTable->prepare_items();
     ?>
     <div class="wrap dw-wrap">
-        <div class="dw-header"><h1>Manajemen Pesanan Saya</h1></div>
+        <div class="dw-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <h1>Manajemen Pesanan Saya</h1>
+            <a href="<?php echo add_query_arg('dw_export_pesanan', '1'); ?>" class="button button-primary">Export Excel (CSV)</a>
+        </div>
 
         <?php
         // BARU: Menampilkan notifikasi error/sukses dari transient

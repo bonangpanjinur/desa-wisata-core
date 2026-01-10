@@ -26,6 +26,16 @@ function dw_produk_form_handler() {
         dw_handle_delete_produk(intval($_GET['id']));
     }
 
+    // --- LOGIKA PIN TO TOP (FEATURED) ---
+    if (isset($_GET['action']) && $_GET['action'] == 'toggle_featured' && isset($_GET['id'])) {
+        if (!current_user_can('manage_options')) return;
+        $id = intval($_GET['id']);
+        $current_featured = $wpdb->get_var($wpdb->prepare("SELECT is_featured FROM {$wpdb->prefix}dw_produk WHERE id = %d", $id));
+        $wpdb->update("{$wpdb->prefix}dw_produk", ['is_featured' => $current_featured ? 0 : 1], ['id' => $id]);
+        dw_add_notice('Status Featured berhasil diperbarui.', 'success');
+        wp_redirect(remove_query_arg(['action', 'id'])); exit;
+    }
+
     // --- B. LOGIKA SIMPAN (SAVE/UPDATE) ---
     // 1. Cek apakah tombol submit ditekan
     if (!isset($_POST['dw_submit_produk'])) return;
@@ -739,12 +749,17 @@ function dw_produk_page_info_render() {
                                     <?php elseif($r->status == 'habis'): ?><span class="dw-pill warning">Habis</span>
                                     <?php else: ?><span class="dw-pill gray">Arsip</span><?php endif; ?>
                                 </td>
-                                <td style="text-align:right;">
-                                    <div style="display:flex; gap:6px; justify-content:flex-end;">
-                                        <a href="<?php echo $edit_url; ?>" class="dw-btn dw-btn-outline dw-btn-sm" title="Edit"><span class="dashicons dashicons-edit"></span></a>
-                                        <a href="<?php echo $del_url; ?>" class="dw-btn dw-btn-danger dw-btn-sm" onclick="return confirm('Hapus produk ini?');" title="Hapus"><span class="dashicons dashicons-trash"></span></a>
-                                    </div>
-                                </td>
+	                                <td style="text-align:right;">
+	                                    <div style="display:flex; gap:6px; justify-content:flex-end;">
+	                                        <?php if (current_user_can('manage_options')): ?>
+	                                            <a href="<?php echo add_query_arg(['action' => 'toggle_featured', 'id' => $r->id]); ?>" class="dw-btn dw-btn-outline dw-btn-sm" title="<?php echo $r->is_featured ? 'Unpin' : 'Pin to Top'; ?>">
+	                                                <span class="dashicons dashicons-<?php echo $r->is_featured ? 'star-filled' : 'star-empty'; ?>"></span>
+	                                            </a>
+	                                        <?php endif; ?>
+	                                        <a href="<?php echo $edit_url; ?>" class="dw-btn dw-btn-outline dw-btn-sm" title="Edit"><span class="dashicons dashicons-edit"></span></a>
+	                                        <a href="<?php echo $del_url; ?>" class="dw-btn dw-btn-danger dw-btn-sm" onclick="return confirm('Hapus produk ini?');" title="Hapus"><span class="dashicons dashicons-trash"></span></a>
+	                                    </div>
+	                                </td>
                             </tr>
                             <?php endforeach; else: ?>
                                 <tr><td colspan="7" style="text-align:center; padding:50px; color:var(--dw-gray-500);">Belum ada data produk.</td></tr>

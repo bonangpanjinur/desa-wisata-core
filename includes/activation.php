@@ -295,6 +295,7 @@ function dw_activate_plugin() {
         terjual INT DEFAULT 0,
         rating_avg DECIMAL(3,2) DEFAULT 0,
         dilihat INT DEFAULT 0,
+        is_featured TINYINT(1) DEFAULT 0,
         status ENUM('aktif','nonaktif','habis','arsip') DEFAULT 'aktif',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -559,6 +560,7 @@ function dw_activate_plugin() {
     $sql_logs = "CREATE TABLE {$table_prefix}logs (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         user_id BIGINT(20) UNSIGNED DEFAULT 0,
+        actor_id BIGINT(20) UNSIGNED DEFAULT 0,
         activity TEXT NOT NULL, 
         type VARCHAR(50) DEFAULT 'info',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -660,6 +662,29 @@ function dw_activate_plugin() {
         KEY id_user_baru (id_user_baru)
     ) $charset_collate;";
     dbDelta($sql_referral_reward);
+
+    // 25. Tabel Kupon
+    $sql_coupons = "CREATE TABLE {$table_prefix}coupons (
+        id BIGINT(20) NOT NULL AUTO_INCREMENT,
+        kode VARCHAR(50) NOT NULL,
+        nominal DECIMAL(15,2) NOT NULL,
+        expired_at DATE NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY  (id),
+        UNIQUE KEY kode (kode)
+    ) $charset_collate;";
+    dbDelta($sql_coupons);
+
+    // 26. Tabel Komplain
+    $sql_complaints = "CREATE TABLE {$table_prefix}complaints (
+        id BIGINT(20) NOT NULL AUTO_INCREMENT,
+        order_id BIGINT(20) NOT NULL,
+        keterangan TEXT NOT NULL,
+        status ENUM('open','resolved') DEFAULT 'open',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY  (id)
+    ) $charset_collate;";
+    dbDelta($sql_complaints);
 
     /* =========================================
        5. FINALISASI

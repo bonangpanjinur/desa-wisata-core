@@ -460,12 +460,19 @@ if ( ! function_exists( 'dw_get_status_label' ) ) {
 }
 
 if ( ! function_exists( 'dw_add_log' ) ) {
-    function dw_add_log($user_id, $activity, $type = 'info') {
+    function dw_add_log($user_id, $activity, $type = 'info', $actor_id = 0) {
         global $wpdb;
         $table_logs = $wpdb->prefix . 'dw_logs';
         if($wpdb->get_var("SHOW TABLES LIKE '$table_logs'") != $table_logs) return;
+        
+        if ($actor_id === 0) $actor_id = get_current_user_id();
+        
         $wpdb->insert($table_logs, [
-            'user_id' => $user_id, 'activity' => $activity, 'type' => $type, 'created_at' => current_time('mysql')
+            'user_id' => $user_id, 
+            'activity' => $activity, 
+            'type' => $type, 
+            'actor_id' => $actor_id, // Added actor_id
+            'created_at' => current_time('mysql')
         ]);
     }
 }
@@ -503,6 +510,11 @@ function dw_update_sub_order_status($sub_order_id, $new_status, $notes = '', $re
     if ($updated !== false) {
         dw_sync_main_order_totals($sub_order->id_transaksi);
         dw_sync_main_order_status($sub_order->id_transaksi);
+        
+        // Audit Log
+        $actor = get_userdata($actor_id);
+        $actor_name = $actor ? $actor->display_name : 'System';
+        dw_add_log($sub_order->id_pedagang, "Pesanan #$sub_order_id status diubah menjadi $new_status oleh $actor_name", 'info', $actor_id);
     }
 
     return true; 

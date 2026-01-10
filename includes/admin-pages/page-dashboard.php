@@ -60,12 +60,33 @@ function dw_dashboard_page_render() {
         'ojek'         => 0,
     ];
 
-    // --- 4. HITUNG STATISTIK (Berdasarkan Role) ---
-
+     // --- 4. HITUNG STATISTIK (Berdasarkan Role) ---
     if ( $role_context === 'super_admin' ) {
         // --- GLOBAL STATS ---
         $stats['income']       = $wpdb->get_var("SELECT SUM(total_transaksi) FROM $t_transaksi WHERE status_transaksi = 'selesai'");
         $stats['orders_count'] = $wpdb->get_var("SELECT COUNT(id) FROM $t_transaksi");
+        
+        // Chart Data: Total Transaksi per Desa
+        $chart_data = $wpdb->get_results("
+            SELECT d.nama_desa, COUNT(s.id) as total_transaksi 
+            FROM $t_sub s 
+            JOIN $t_pedagang p ON s.id_pedagang = p.id_user 
+            JOIN $t_desa d ON p.id_desa = d.id 
+            GROUP BY d.id 
+            ORDER BY total_transaksi DESC 
+            LIMIT 10
+        ");
+        
+        // Widget: Butuh Perhatian (5 pesanan terlama status pending)
+        $attention_orders = $wpdb->get_results("
+            SELECT s.id, s.created_at, p.nama_toko, d.nama_desa 
+            FROM $t_sub s 
+            JOIN $t_pedagang p ON s.id_pedagang = p.id_user 
+            JOIN $t_desa d ON p.id_desa = d.id 
+            WHERE s.status_pesanan = 'pending' 
+            ORDER BY s.created_at ASC 
+            LIMIT 5
+        ");
         $stats['desa']         = $wpdb->get_var("SELECT COUNT(id) FROM $t_desa WHERE status = 'aktif'");
         $stats['wisata']       = $wpdb->get_var("SELECT COUNT(id) FROM $t_wisata WHERE status = 'aktif'");
         $stats['pedagang']     = $wpdb->get_var("SELECT COUNT(id) FROM $t_pedagang WHERE status_akun = 'aktif'");
@@ -284,8 +305,40 @@ function dw_dashboard_page_render() {
         <!-- Layout 2 Kolom -->
         <div class="dw-dashboard-layout">
             
-            <!-- Kolom Kiri: Transaksi Terbaru -->
+            <!-- Kolom Kiri: Transaksi Terbaru & Chart -->
             <div class="dw-column-main">
+                <?php if ($role_context === 'super_admin' && !empty($chart_data)): ?>
+                <div class="dw-card">
+                    <div class="dw-card-header">
+                        <h3 class="card-heading"><span class="dashicons dashicons-chart-bar"></span> Performa Desa (Total Transaksi)</h3>
+                    </div>
+                    <div style="padding: 20px;">
+                        <canvas id="dwTransactionChart" height="100"></canvas>
+                    </div>
+                </div>
+                <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+                <script>
+                const ctx = document.getElementById('dwTransactionChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: <?php echo json_encode(array_column($chart_data, 'nama_desa')); ?>,
+                        datasets: [{
+                            label: 'Jumlah Transaksi',
+                            data: <?php echo json_encode(array_column($chart_data, 'total_transaksi')); ?>,
+                            backgroundColor: 'rgba(34, 113, 177, 0.7)',
+                            borderColor: 'rgba(34, 113, 177, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        scales: { y: { beginAtZero: true } }
+                    }
+                });
+                </script>
+                <?php endif; ?>
+
+                <div class="dw-card dw-card-table">
                 <div class="dw-card dw-card-table">
                     <div class="dw-card-header">
                         <h3 class="card-heading">
@@ -409,6 +462,23 @@ function dw_dashboard_page_render() {
                         <?php endif; ?>
                     </div>
                 </div>
+
+                <!-- Widget: Butuh Perhatian -->
+                <?php if ($role_context === 'super_admin' && !empty($attention_orders)): ?>
+                <div class="dw-card">
+                    <div class="dw-card-header">
+                        <h3 class="card-heading" style="color: #d63638;"><span class="dashicons dashicons-warning"></span> Butuh Perhatian</h3>
+                    </div>
+                    <div class="dw-system-info">
+                        <?php foreach ($attention_orders as $order): ?>
+                        <div class="sys-item">
+                            <span class="sys-label">#<?php echo $order->id; ?> - <?php echo esc_html($order->nama_toko); ?> (<?php echo esc_html($order->nama_desa); ?>)</span>
+                            <span class="sys-val" style="color: #d63638;"><?php echo human_time_diff(strtotime($order->created_at), current_time('timestamp')); ?> lalu</span>
+                        </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+                <?php endif; ?>
 
                 <!-- System Info (Clean List) -->
                 <?php if($role_context == 'super_admin'): ?>
