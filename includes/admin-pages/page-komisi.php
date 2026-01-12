@@ -8,7 +8,7 @@
 if ( ! defined( 'ABSPATH' ) ) exit;
 
 // Include UI components
-require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/admin-ui-components.php';
+require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin-ui-components.php';
 
 function dw_komisi_page_render() {
     global $wpdb;
@@ -29,7 +29,7 @@ function dw_komisi_page_render() {
             current_time('mysql'), $type, $id
         ));
         
-        echo '<?php echo dw_admin_render_alert('Pembayaran berhasil ditandai lunas.', 'success'); ?>';
+        echo dw_admin_render_alert('Pembayaran berhasil ditandai lunas.', 'success');
     }
 
     // --- AMBIL DATA ---

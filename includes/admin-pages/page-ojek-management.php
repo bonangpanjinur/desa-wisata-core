@@ -76,9 +76,9 @@ function dw_ojek_management_page_render() {
             $updated = $wpdb->update($table_ojek, $data, ['id' => $post_id], null, ['%d']);
             
             if ($updated !== false) {
-                $message = '<?php echo dw_admin_render_alert('Data Ojek berhasil diperbarui.', 'success'); ?>';
+                $message = dw_admin_render_alert('Data Ojek berhasil diperbarui.', 'success');
             } else {
-                $message = '<?php echo dw_admin_render_alert('Gagal memperbarui data. DB Error: '. $wpdb->last_error .'', 'error'); ?>';
+                $message = dw_admin_render_alert('Gagal memperbarui data. DB Error: '. $wpdb->last_error .'', 'error');
             }
         } else {
             // --- INSERT ---
@@ -91,7 +91,7 @@ function dw_ojek_management_page_render() {
                 echo "<script>window.location.href='$redirect_url';</script>";
                 exit;
             } else {
-                $message = '<?php echo dw_admin_render_alert('Gagal menyimpan data baru. DB Error: '. $wpdb->last_error .'', 'error'); ?>';
+                $message = dw_admin_render_alert('Gagal menyimpan data baru. DB Error: '. $wpdb->last_error .'', 'error');
             }
         }
     }

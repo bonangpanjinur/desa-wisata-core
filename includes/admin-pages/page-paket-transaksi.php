@@ -8,7 +8,7 @@
 if ( ! defined( 'ABSPATH' ) ) exit;
 
 // Include UI components
-require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/admin-ui-components.php';
+require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin-ui-components.php';
 
 function dw_render_paket_transaksi_page() {
     global $wpdb;
@@ -21,7 +21,7 @@ function dw_render_paket_transaksi_page() {
         update_option('dw_quota_free_via_desa', intval($_POST['quota_desa']));
         update_option('dw_quota_free_via_verif', intval($_POST['quota_verif']));
         
-        echo '<?php echo dw_admin_render_alert('Pengaturan Kuota Gratis berhasil disimpan.', 'success'); ?>';
+        echo dw_admin_render_alert('Pengaturan Kuota Gratis berhasil disimpan.', 'success');
     }
 
     // --- 2. HANDLE POST: CRUD PAKET BERBAYAR ---
@@ -53,11 +53,11 @@ function dw_render_paket_transaksi_page() {
         if ( ! empty( $_POST['paket_id'] ) ) {
             // UPDATE
             $wpdb->update( $table_paket, $data, ['id' => intval($_POST['paket_id'])], $format, ['%d'] );
-            echo '<?php echo dw_admin_render_alert('Paket berhasil diperbarui.', 'success'); ?>';
+            echo dw_admin_render_alert('Paket berhasil diperbarui.', 'success');
         } else {
             // INSERT
             $wpdb->insert( $table_paket, $data, $format );
-            echo '<?php echo dw_admin_render_alert('Paket baru berhasil dibuat.', 'success'); ?>';
+            echo dw_admin_render_alert('Paket baru berhasil dibuat.', 'success');
         }
     }
 
@@ -65,7 +65,7 @@ function dw_render_paket_transaksi_page() {
     if ( isset( $_GET['action'] ) && $_GET['action'] == 'delete' && isset( $_GET['id'] ) ) {
         $id_del = intval( $_GET['id'] );
         $wpdb->delete( $table_paket, ['id' => $id_del] );
-        echo '<?php echo dw_admin_render_alert('Paket dihapus.', 'success'); ?>';
+        echo dw_admin_render_alert('Paket dihapus.', 'success');
     }
 
     // --- 4. PREPARE DATA ---

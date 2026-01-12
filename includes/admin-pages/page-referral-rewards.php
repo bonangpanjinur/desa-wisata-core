@@ -53,9 +53,9 @@ function dw_render_referral_rewards_page() {
         }
 
         if ( $fixed_count > 0 ) {
-            echo '<?php echo dw_admin_render_alert('<strong>Sukses:</strong> Sinkronisasi selesai. ' . $fixed_count . ' data reward yang hilang berhasil dipulihkan.', 'success'); ?>';
+            echo dw_admin_render_alert('<strong>Sukses:</strong> Sinkronisasi selesai. ' . $fixed_count . ' data reward yang hilang berhasil dipulihkan.', 'success');
         } else {
-            echo '<?php echo dw_admin_render_alert('Data sudah sinkron. Tidak ada reward yang hilang.', 'info'); ?>';
+            echo dw_admin_render_alert('Data sudah sinkron. Tidak ada reward yang hilang.', 'info');
         }
     }
 
@@ -64,7 +64,7 @@ function dw_render_referral_rewards_page() {
         $new_bonus = intval($_POST['dw_referral_bonus_amount']);
         update_option('dw_referral_bonus_amount', $new_bonus);
         $current_bonus_setting = $new_bonus;
-        echo '<?php echo dw_admin_render_alert('Pengaturan bonus berhasil disimpan.', 'success'); ?>';
+        echo dw_admin_render_alert('Pengaturan bonus berhasil disimpan.', 'success');
     }
 
     // --- 3. PREPARE DATA TABLE ---

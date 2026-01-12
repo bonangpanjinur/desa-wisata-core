@@ -31,7 +31,7 @@ function dw_pedagang_page_render() {
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_pedagang'])) {
         
         if (!isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'dw_pedagang_action')) {
-            echo '<?php echo dw_admin_render_alert('Keamanan tidak valid (Nonce Failed).', 'error'); ?>'; 
+            echo dw_admin_render_alert('Keamanan tidak valid (Nonce Failed).', 'error'); 
             return;
         }
 

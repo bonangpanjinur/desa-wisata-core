@@ -12,7 +12,7 @@
 if ( ! defined( 'ABSPATH' ) ) exit;
 
 // Include UI components
-require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/admin-ui-components.php';
+require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin-ui-components.php';
 
 /**
  * Handler Aksi Admin Desa

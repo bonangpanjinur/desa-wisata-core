@@ -11,7 +11,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Include UI components
-require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/admin-ui-components.php';
+require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin-ui-components.php';
 
 /**
  * Handle POST/GET actions for Banner CRUD

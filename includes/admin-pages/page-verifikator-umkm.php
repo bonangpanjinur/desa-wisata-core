@@ -8,7 +8,7 @@
 if ( ! defined( 'ABSPATH' ) ) exit;
 
 // Include UI components
-require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/admin-ui-components.php';
+require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin-ui-components.php';
 
 function dw_render_verifikator_umkm_page() {
     global $wpdb;
@@ -43,7 +43,7 @@ function dw_render_verifikator_umkm_page() {
             // Update Stats Verifikator
             $wpdb->query( $wpdb->prepare("UPDATE {$wpdb->prefix}dw_verifikator SET total_verifikasi_sukses = total_verifikasi_sukses + 1 WHERE id = %d", $verifikator->id) );
             
-            echo '<?php echo dw_admin_render_alert('UMKM berhasil diverifikasi lapangan & diaktifkan.', 'success'); ?>';
+            echo dw_admin_render_alert('UMKM berhasil diverifikasi lapangan & diaktifkan.', 'success');
         }
     }
 

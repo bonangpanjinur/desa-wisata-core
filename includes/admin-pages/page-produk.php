@@ -656,9 +656,9 @@ function dw_produk_page_info_render() {
 	                                <td style="text-align:right;">
 	                                    <div style="display:flex; gap:6px; justify-content:flex-end;">
 	                                        <?php if (current_user_can('manage_options')): ?>
-	                                            <a href="<?php echo add_query_arg(['action' => 'toggle_featured', 'id' => $r->id]); ?>" class="dw-btn dw-btn-outline dw-btn-sm" title="<?php echo $r->is_featured ? 'Unpin' : 'Pin to Top'; ?>">
-	                                                <span class="dashicons dashicons-<?php echo $r->is_featured ? 'star-filled' : 'star-empty'; ?>"></span>
-	                                            </a>
+<a href="<?php echo add_query_arg(['action' => 'toggle_featured', 'id' => $r->id]); ?>" class="dw-btn dw-btn-outline dw-btn-sm" title="<?php echo (isset($r->is_featured) && $r->is_featured) ? 'Unpin' : 'Pin to Top'; ?>">
+		                                                <span class="dashicons dashicons-<?php echo (isset($r->is_featured) && $r->is_featured) ? 'star-filled' : 'star-empty'; ?>"></span>
+		                                            </a>
 	                                        <?php endif; ?>
 	                                        <a href="<?php echo $edit_url; ?>" class="dw-btn dw-btn-outline dw-btn-sm" title="Edit"><span class="dashicons dashicons-edit"></span></a>
 	                                        <a href="<?php echo $del_url; ?>" class="dw-btn dw-btn-danger dw-btn-sm" onclick="return confirm('Hapus produk ini?');" title="Hapus"><span class="dashicons dashicons-trash"></span></a>
