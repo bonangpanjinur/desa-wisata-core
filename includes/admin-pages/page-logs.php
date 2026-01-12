@@ -43,7 +43,7 @@ function dw_logs_page_render() {
             </div>
         </div>
 
-        <div class="dw-table-container">
+        <div class="dw-modern-table-container">
             <div class="tablenav top">
                 <div class="alignleft actions">
                     <!-- Placeholder untuk filter log level jika diperlukan -->

@@ -18,7 +18,7 @@ function dw_render_verifikator_umkm_page() {
     $verifikator = $wpdb->get_row( $wpdb->prepare( "SELECT id, nama_lengkap, kode_referral FROM {$wpdb->prefix}dw_verifikator WHERE id_user = %d", $current_user_id ) );
 
     if ( ! $verifikator ) {
-        echo '<div class="wrap"><div class="notice notice-error"><p>Akses Ditolak. Akun Anda tidak terdaftar sebagai Verifikator.</p></div></div>';
+        echo '<div class="wrap dw-wrap"><div class="notice notice-error"><p>Akses Ditolak. Akun Anda tidak terdaftar sebagai Verifikator.</p></div></div>';
         return;
     }
 
@@ -69,7 +69,7 @@ function dw_render_verifikator_umkm_page() {
     <!-- STYLE DARI FILE SEBELUMNYA -->
     
 
-    <div class="wrap dw-admin-wrap">
+    <div class="wrap dw-wrap">
         
         <div class="dw-header-flex">
             <div>
@@ -101,7 +101,7 @@ function dw_render_verifikator_umkm_page() {
         </div>
 
         <div class="dw-main-card">
-            <table class="dw-table">
+            <table class="dw-modern-table">
                 <thead>
                     <tr>
                         <th>Nama UMKM & Pemilik</th>

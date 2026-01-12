@@ -90,7 +90,7 @@ function dw_komisi_page_render() {
     $active_tab = isset($_GET['tab']) ? $_GET['tab'] : 'desa';
     ?>
 
-    <div class="wrap">
+    <div class="wrap dw-wrap">
         <h1 class="wp-heading-inline"><span class="dashicons dashicons-money-alt"></span> Keuangan & Komisi</h1>
         <hr class="wp-header-end">
         
@@ -142,11 +142,11 @@ function dw_komisi_page_render() {
             
             <!-- TAB 1: DESA -->
             <?php if ($active_tab == 'desa'): ?>
-                <div class="dw-table-header">
+                <div class="dw-modern-table-header">
                     <h3>Tagihan Komisi Desa</h3>
                     <p class="description">Daftar komisi yang harus ditransfer ke Desa Wisata.</p>
                 </div>
-                <table class="wp-list-table widefat fixed striped">
+                <table class="dw-modern-table">
                     <thead>
                         <tr>
                             <th>Nama Desa</th>
@@ -195,11 +195,11 @@ function dw_komisi_page_render() {
 
             <!-- TAB 2: VERIFIKATOR -->
             <?php elseif ($active_tab == 'verifikator'): ?>
-                <div class="dw-table-header">
+                <div class="dw-modern-table-header">
                     <h3>Tagihan Komisi Verifikator</h3>
                     <p class="description">Daftar komisi untuk Verifikator UMKM/Pedagang.</p>
                 </div>
-                <table class="wp-list-table widefat fixed striped">
+                <table class="dw-modern-table">
                     <thead>
                         <tr>
                             <th>Nama Verifikator</th>
@@ -246,10 +246,10 @@ function dw_komisi_page_render() {
 
             <!-- TAB 3: RIWAYAT -->
             <?php elseif ($active_tab == 'riwayat'): ?>
-                <div class="dw-table-header">
+                <div class="dw-modern-table-header">
                     <h3>Riwayat Transfer Terakhir</h3>
                 </div>
-                <table class="wp-list-table widefat fixed striped">
+                <table class="dw-modern-table">
                     <thead>
                         <tr>
                             <th>ID Trx</th>

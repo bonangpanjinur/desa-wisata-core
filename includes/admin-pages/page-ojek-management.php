@@ -6,6 +6,9 @@
  */
 
 if (!defined('ABSPATH')) {
+
+// Include UI components
+require_once plugin_dir_path( dirname( __FILE__ ) ) . "admin-ui-components.php";
     exit;
 }
 
@@ -355,14 +358,14 @@ function dw_ojek_management_page_render() {
                             
                             <hr style="margin: 20px 0; border: 0; border-top: 1px solid #f0f0f1;">
                             
-                            <button type="submit" class="button button-primary button-large dw-btn-full">
+                            <button type="submit" class="button button-primary button-large dw-button-full">
                                 <span class="dashicons dashicons-saved" style="margin-top:4px; margin-right:5px;"></span> Simpan Perubahan
                             </button>
                             
-                            <div class="dw-btn-group">
-                                <a href="<?php echo admin_url('admin.php?page=' . $current_page_slug); ?>" class="dw-btn-outline">Batal</a>
+                            <div class="dw-button-group">
+                                <a href="<?php echo admin_url('admin.php?page=' . $current_page_slug); ?>" class="dw-button-outline">Batal</a>
                                 <?php if ($view == 'edit' && $url_id > 0) : ?>
-                                    <a href="<?php echo wp_nonce_url(admin_url('admin.php?page=' . $current_page_slug . '&action=delete&id=' . $url_id), 'delete_ojek_' . $url_id); ?>" class="dw-btn-outline dw-btn-danger" onclick="return confirm('Hapus permanen data ini?');">Hapus</a>
+                                    <a href="<?php echo wp_nonce_url(admin_url('admin.php?page=' . $current_page_slug . '&action=delete&id=' . $url_id), 'delete_ojek_' . $url_id); ?>" class="dw-button-outline dw-button-danger" onclick="return confirm('Hapus permanen data ini?');">Hapus</a>
                                 <?php endif; ?>
                             </div>
                         </div>

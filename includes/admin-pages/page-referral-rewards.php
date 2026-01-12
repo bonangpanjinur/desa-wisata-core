@@ -7,6 +7,9 @@
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
+
+// Include UI components
+require_once plugin_dir_path( dirname( __FILE__ ) ) . "admin-ui-components.php";
     exit;
 }
 

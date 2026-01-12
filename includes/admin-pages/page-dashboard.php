@@ -179,7 +179,7 @@ function dw_dashboard_page_render() {
             <div class="dw-panel">
                 <div class="dw-panel-header">
                     <h3>Pesanan Terbaru</h3>
-                    <a href="<?php echo admin_url('admin.php?page=dw-manajemen-pesanan-pusat'); ?>" class="dw-btn-link">Lihat Semua</a>
+                    <a href="<?php echo admin_url('admin.php?page=dw-manajemen-pesanan-pusat'); ?>" class="dw-button-link">Lihat Semua</a>
                 </div>
                 <div class="dw-panel-body" style="padding: 0;">
                     <?php

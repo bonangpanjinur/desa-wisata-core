@@ -177,7 +177,7 @@ function dw_reviews_moderation_page_render() {
         </h2>
 
         <!-- 3. TABLE WRAPPER -->
-        <div class="dw-table-card">
+        <div class="dw-modern-table-card">
             <form method="post">
                 <input type="hidden" name="page" value="<?php echo esc_attr($_REQUEST['page']); ?>" />
                 <?php 

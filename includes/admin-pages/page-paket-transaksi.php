@@ -82,7 +82,7 @@ function dw_render_paket_transaksi_page() {
 
     // --- 5. VIEW ---
     ?>
-    <div class="wrap">
+    <div class="wrap dw-wrap">
         <h1 class="wp-heading-inline">Manajemen Paket & Insentif Pendaftaran</h1>
         <hr class="wp-header-end">
 

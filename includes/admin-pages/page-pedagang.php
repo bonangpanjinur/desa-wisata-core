@@ -6,6 +6,9 @@
 
 defined('ABSPATH') || exit;
 
+// Include UI components
+require_once plugin_dir_path( dirname( __FILE__ ) ) . "admin-ui-components.php";
+
 // 1. Pastikan class API Address tersedia
 $address_api_path = dirname(dirname(__FILE__)) . '/address-api.php';
 if (file_exists($address_api_path)) {
@@ -213,19 +216,19 @@ function dw_pedagang_page_render() {
 
     
 
-    <div class="wrap dw-admin-wrap">
-        <div class="dw-admin-header">
+    <div class="wrap dw-wrap">
+        <div class="dw-header">
             <div class="dw-header-title">
                 <span class="dashicons dashicons-store"></span>
                 <h1>Manajemen Toko & Pedagang</h1>
             </div>
             <div class="dw-header-actions">
                 <?php if ($action === 'list'): ?>
-                    <a href="?page=dw-pedagang&action=edit" class="dw-btn-primary">
+                    <a href="?page=dw-pedagang&action=edit" class="dw-button-primary">
                         <span class="dashicons dashicons-plus"></span> Tambah Pedagang Baru
                     </a>
                 <?php else: ?>
-                    <a href="?page=dw-pedagang" class="dw-btn-secondary">
+                    <a href="?page=dw-pedagang" class="dw-button-secondary">
                         <span class="dashicons dashicons-arrow-left-alt"></span> Kembali ke Daftar
                     </a>
                 <?php endif; ?>
@@ -487,7 +490,7 @@ function dw_pedagang_page_render() {
                                             </div>
                                             <div style="display:flex; gap:10px;">
                                                 <input type="text" name="foto_profil" id="foto_profil" value="<?php echo esc_attr($edit_data->foto_profil ?? ''); ?>" class="dw-form-control" readonly placeholder="URL Foto Profil">
-                                                <button type="button" class="dw-btn-secondary btn_upload" data-target="foto_profil" data-preview="#prev_foto_profil" style="padding:8px 15px;">
+                                                <button type="button" class="dw-button-secondary btn_upload" data-target="foto_profil" data-preview="#prev_foto_profil" style="padding:8px 15px;">
                                                     <span class="dashicons dashicons-upload" style="margin-top:4px;"></span>
                                                 </button>
                                             </div>
@@ -507,7 +510,7 @@ function dw_pedagang_page_render() {
                                             </div>
                                             <div style="display:flex; gap:10px;">
                                                 <input type="text" name="foto_sampul" id="foto_sampul" value="<?php echo esc_attr($edit_data->foto_sampul ?? ''); ?>" class="dw-form-control" readonly placeholder="URL Foto Sampul">
-                                                <button type="button" class="dw-btn-secondary btn_upload" data-target="foto_sampul" data-preview="#prev_foto_sampul" style="padding:8px 15px;">
+                                                <button type="button" class="dw-button-secondary btn_upload" data-target="foto_sampul" data-preview="#prev_foto_sampul" style="padding:8px 15px;">
                                                     <span class="dashicons dashicons-upload" style="margin-top:4px;"></span>
                                                 </button>
                                             </div>
@@ -521,7 +524,7 @@ function dw_pedagang_page_render() {
                                                     <img id="prev_url_ktp" src="<?php echo esc_url($edit_data->url_ktp ?? 'https://placehold.co/60x40?text=KTP'); ?>" style="width:100%; height:100%; object-fit:cover;">
                                                 </div>
                                                 <input type="text" name="url_ktp" id="url_ktp" value="<?php echo esc_attr($edit_data->url_ktp ?? ''); ?>" class="dw-form-control" readonly placeholder="URL Foto KTP">
-                                                <button type="button" class="dw-btn-secondary btn_upload" data-target="url_ktp" data-preview="#prev_url_ktp" style="padding:8px 15px;">
+                                                <button type="button" class="dw-button-secondary btn_upload" data-target="url_ktp" data-preview="#prev_url_ktp" style="padding:8px 15px;">
                                                     <span class="dashicons dashicons-upload" style="margin-top:4px;"></span>
                                                 </button>
                                             </div>
@@ -534,7 +537,7 @@ function dw_pedagang_page_render() {
                                     <div class="dw-form-group">
                                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                                             <label style="margin-bottom:0;">Galeri Toko (Foto Tambahan)</label>
-                                            <button type="button" class="dw-btn-secondary" id="btn_galeri" style="font-size:13px; padding:6px 12px;">
+                                            <button type="button" class="dw-button-secondary" id="btn_galeri" style="font-size:13px; padding:6px 12px;">
                                                 <span class="dashicons dashicons-images-alt2" style="font-size:16px; margin-top:4px;"></span> Tambah Foto Galeri
                                             </button>
                                         </div>
@@ -595,7 +598,7 @@ function dw_pedagang_page_render() {
                                             <p class="dw-help-text" style="margin-bottom:10px;">Upload gambar QRIS toko untuk mempermudah transaksi non-tunai.</p>
                                             <div style="display:flex; gap:10px;">
                                                 <input type="text" name="qris_image_url" id="qris_image_url" value="<?php echo esc_attr($edit_data->qris_image_url ?? ''); ?>" class="dw-form-control" readonly placeholder="URL Gambar QRIS">
-                                                <button type="button" class="dw-btn-secondary btn_upload" data-target="qris_image_url" data-preview="#prev_qris_image_url">
+                                                <button type="button" class="dw-button-secondary btn_upload" data-target="qris_image_url" data-preview="#prev_qris_image_url">
                                                     <span class="dashicons dashicons-upload" style="margin-top:4px;"></span>
                                                 </button>
                                             </div>
@@ -684,7 +687,7 @@ function dw_pedagang_page_render() {
                     </div>
                     <div class="dw-card-footer" style="padding: 20px; background: #f9f9f9; border-top: 1px solid #eee; text-align: right;">
                         <a href="<?php echo admin_url('admin.php?page=dw-pedagang'); ?>" class="button">Batal</a>
-                        <button type="submit" class="dw-btn-primary">Simpan Data Pedagang</button>
+                        <button type="submit" class="dw-button-primary">Simpan Data Pedagang</button>
                     </div>
                 </div>
             </form>

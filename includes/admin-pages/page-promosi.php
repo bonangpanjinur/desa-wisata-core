@@ -6,6 +6,9 @@
 
 if (!defined('ABSPATH')) exit;
 
+// Include UI components
+require_once plugin_dir_path( dirname( __FILE__ ) ) . "admin-ui-components.php";
+
 function dw_promosi_page_render() {
     global $wpdb;
     $table_promosi = $wpdb->prefix . 'dw_promosi';
@@ -105,7 +108,7 @@ function dw_promosi_page_render() {
     $quota_percent_item = ($item_settings['max_quota'] > 0) ? min(100, ($used_quota_item / $item_settings['max_quota']) * 100) : 0;
     ?>
 
-    <div class="wrap dw-admin-wrapper">
+    <div class="wrap dw-wrapper">
         <div class="dw-header">
             <div class="dw-header-title">
                 <div class="dw-icon-box bg-gradient-purple">
@@ -197,8 +200,8 @@ function dw_promosi_page_render() {
                 </div>
 
                 <!-- Table -->
-                <div class="dw-table-card">
-                    <table class="wp-list-table widefat fixed striped dw-table-premium">
+                <div class="dw-modern-table-card">
+                    <table class="wp-list-table widefat fixed striped dw-modern-table-premium">
                         <thead>
                             <tr>
                                 <th width="120">Tanggal</th>
@@ -266,8 +269,8 @@ function dw_promosi_page_render() {
                                 <td style="text-align:right;">
                                     <?php if($r->status == 'pending'): ?>
                                         <div class="dw-action-group">
-                                            <a href="<?php echo $approve_url; ?>" class="dw-btn-action success tooltip" title="Setujui" onclick="return confirm('Setujui iklan ini?');"><span class="dashicons dashicons-yes"></span></a>
-                                            <a href="<?php echo $reject_url; ?>" class="dw-btn-action danger tooltip" title="Tolak" onclick="return confirm('Tolak iklan ini?');"><span class="dashicons dashicons-no"></span></a>
+                                            <a href="<?php echo $approve_url; ?>" class="dw-button-action success tooltip" title="Setujui" onclick="return confirm('Setujui iklan ini?');"><span class="dashicons dashicons-yes"></span></a>
+                                            <a href="<?php echo $reject_url; ?>" class="dw-button-action danger tooltip" title="Tolak" onclick="return confirm('Tolak iklan ini?');"><span class="dashicons dashicons-no"></span></a>
                                         </div>
                                     <?php elseif($r->status == 'aktif'): ?>
                                         <span class="text-green small-caps"><span class="dashicons dashicons-visibility"></span> Live</span>
@@ -368,7 +371,7 @@ function dw_promosi_page_render() {
                                                 <td><input type="number" name="ad_packages[<?php echo $i; ?>][days]" value="<?php echo esc_attr($pkg['days']); ?>" required></td>
                                                 <td><input type="number" name="ad_packages[<?php echo $i; ?>][price]" value="<?php echo esc_attr($pkg['price']); ?>" required></td>
                                                 <td><input type="number" name="ad_packages[<?php echo $i; ?>][quota]" value="<?php echo esc_attr($pkg['quota']); ?>" required></td>
-                                                <td><button type="button" class="dw-btn-icon remove-row text-red"><span class="dashicons dashicons-no-alt"></span></button></td>
+                                                <td><button type="button" class="dw-button-icon remove-row text-red"><span class="dashicons dashicons-no-alt"></span></button></td>
                                             </tr>
                                             <?php endforeach; else: ?>
                                             <tr class="empty-row"><td colspan="5">Belum ada paket.</td></tr>
@@ -377,7 +380,7 @@ function dw_promosi_page_render() {
                                     </table>
                                 </div>
                                 <div class="setting-actions">
-                                    <button type="button" class="dw-btn-outline" id="add-package-btn"><span class="dashicons dashicons-plus-alt2"></span> Tambah Paket</button>
+                                    <button type="button" class="dw-button-outline" id="add-package-btn"><span class="dashicons dashicons-plus-alt2"></span> Tambah Paket</button>
                                 </div>
                             </div>
                         </div>
@@ -385,7 +388,7 @@ function dw_promosi_page_render() {
                     </div>
 
                     <div class="dw-form-footer">
-                        <button type="submit" class="dw-btn-primary large">Simpan Perubahan</button>
+                        <button type="submit" class="dw-button-primary large">Simpan Perubahan</button>
                     </div>
                 </form>
             </div>
@@ -421,7 +424,7 @@ function dw_promosi_page_render() {
                 <td><input type="number" name="ad_packages[${index}][days]" required></td>
                 <td><input type="number" name="ad_packages[${index}][price]" required></td>
                 <td><input type="number" name="ad_packages[${index}][quota]" required></td>
-                <td><button type="button" class="dw-btn-icon remove-row text-red"><span class="dashicons dashicons-no-alt"></span></button></td>
+                <td><button type="button" class="dw-button-icon remove-row text-red"><span class="dashicons dashicons-no-alt"></span></button></td>
             </tr>`;
             $('#package-rows').append(row);
             $('.empty-row').remove();

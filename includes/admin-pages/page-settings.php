@@ -276,7 +276,7 @@ function dw_admin_settings_page_handler() {
                         </script>
                     <?php endif; ?>
                     
-                    <button type="submit" name="dw_settings_submit" class="dw-btn-save">Simpan Perubahan</button>
+                    <button type="submit" name="dw_settings_submit" class="dw-button-save">Simpan Perubahan</button>
                 </form>
             </div>
         </div>

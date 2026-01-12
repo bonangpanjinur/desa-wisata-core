@@ -8,6 +8,9 @@
 
 defined('ABSPATH') || exit;
 
+// Include UI components
+require_once plugin_dir_path( dirname( __FILE__ ) ) . "admin-ui-components.php";
+
 /**
  * 1. HANDLER: SIMPAN & HAPUS
  * Fungsi ini menangani logika database.
@@ -267,7 +270,7 @@ function dw_produk_page_info_render() {
     <!-- STYLE CSS MODERN (TETAP SAMA) -->
     
 
-    <div class="wrap dw-container">
+    <div class="wrap dw-wrap">
         <!-- HEADER -->
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
             <div>
@@ -275,7 +278,7 @@ function dw_produk_page_info_render() {
                 <p style="margin: 5px 0 0; color: #64748b; font-size: 14px;">Kelola katalog produk, stok, variasi, dan harga.</p>
             </div>
             <?php if (!$is_edit): ?>
-                <a href="?page=dw-produk&action=new" class="dw-btn dw-btn-primary">
+                <a href="?page=dw-produk&action=new" class="dw-button dw-button-primary">
                     <span class="dashicons dashicons-plus-alt2" style="font-size: 18px;"></span> Tambah Produk
                 </a>
             <?php endif; ?>
@@ -292,13 +295,13 @@ function dw_produk_page_info_render() {
                 <?php if($edit_data): ?><input type="hidden" name="produk_id" value="<?php echo $edit_data->id; ?>"><?php endif; ?>
 
                 <div style="margin-bottom: 20px;">
-                    <a href="?page=dw-produk" class="dw-btn dw-btn-outline"><span class="dashicons dashicons-arrow-left-alt"></span> Kembali</a>
+                    <a href="?page=dw-produk" class="dw-button dw-button-outline"><span class="dashicons dashicons-arrow-left-alt"></span> Kembali</a>
                 </div>
 
                 <div class="dw-edit-layout">
                     <!-- LEFT COLUMN -->
                     <div class="dw-main-col">
-                        <div class="dw-modern-card" style="padding:0; overflow:hidden;">
+                        <div class="dw-card" style="padding:0; overflow:hidden;">
                             <!-- Internal Tabs -->
                             <div class="dw-form-tabs">
                                 <div class="dw-form-tab active" data-target="tab-info">
@@ -374,7 +377,7 @@ function dw_produk_page_info_render() {
                                         ?>
                                     </div>
                                     <input type="hidden" name="galeri_urls" id="galeri_urls" value="<?php echo esc_attr(implode(',', $galeri_urls)); ?>">
-                                    <button type="button" class="dw-btn dw-btn-outline" id="btn_galeri">
+                                    <button type="button" class="dw-button dw-button-outline" id="btn_galeri">
                                         <span class="dashicons dashicons-plus-alt2"></span> Tambah Foto Galeri
                                     </button>
                                 </div>
@@ -387,7 +390,7 @@ function dw_produk_page_info_render() {
                                     <p class="description" style="margin-bottom:15px;">Gunakan jika produk memiliki pilihan warna atau ukuran. Kosongkan jika produk tunggal.</p>
                                     
                                     <div class="dw-table-wrapper">
-                                        <table class="dw-table">
+                                        <table class="dw-modern-table">
                                             <thead>
                                                 <tr>
                                                     <th>Nama Variasi</th>
@@ -407,14 +410,14 @@ function dw_produk_page_info_render() {
                                                             <input type="text" name="var_sku[]" class="dw-input" value="<?php echo esc_attr($var->sku); ?>">
                                                             <input type="hidden" name="var_foto[]" value="<?php echo esc_attr($var->foto); ?>">
                                                         </td>
-                                                        <td style="text-align:center;"><button type="button" class="dw-btn dw-btn-danger dw-btn-sm btn-del-var"><span class="dashicons dashicons-trash" style="margin:0;"></span></button></td>
+                                                        <td style="text-align:center;"><button type="button" class="dw-button dw-button-danger dw-button-sm btn-del-var"><span class="dashicons dashicons-trash" style="margin:0;"></span></button></td>
                                                     </tr>
                                                 <?php endforeach; endif; ?>
                                             </tbody>
                                         </table>
                                     </div>
                                     <div style="margin-top:15px;">
-                                        <button type="button" class="dw-btn dw-btn-primary dw-btn-sm" id="btn-add-var">
+                                        <button type="button" class="dw-button dw-button-primary dw-button-sm" id="btn-add-var">
                                             <span class="dashicons dashicons-plus"></span> Tambah Baris Variasi
                                         </button>
                                     </div>
@@ -427,8 +430,8 @@ function dw_produk_page_info_render() {
                     <div class="dw-sidebar-col">
                         
                         <!-- PUBLISH BOX -->
-                        <div class="dw-modern-card">
-                            <div class="dw-card-header"><h3 class="dw-card-title">Penerbitan</h3></div>
+                        <div class="dw-card">
+                            <div class="dw-card-header"><h3 class="card-heading">Penerbitan</h3></div>
                             <div class="dw-form-group">
                                 <label>Status</label>
                                 <select name="status" class="dw-input">
@@ -437,14 +440,14 @@ function dw_produk_page_info_render() {
                                     <option value="arsip" <?php selected($edit_data->status ?? '', 'arsip'); ?>>Arsip (Sembunyikan)</option>
                                 </select>
                             </div>
-                            <button type="submit" class="dw-btn dw-btn-primary" style="width:100%; justify-content:center; margin-top:10px;">
+                            <button type="submit" class="dw-button dw-button-primary" style="width:100%; justify-content:center; margin-top:10px;">
                                 <span class="dashicons dashicons-saved"></span> Simpan Produk
                             </button>
                         </div>
 
                         <!-- CATEGORY BOX -->
-                        <div class="dw-modern-card">
-                            <div class="dw-card-header"><h3 class="dw-card-title">Kategori</h3></div>
+                        <div class="dw-card">
+                            <div class="dw-card-header"><h3 class="card-heading">Kategori</h3></div>
                             <div class="dw-form-group">
                                 <select name="kategori" class="dw-input">
                                     <option value="">-- Pilih Kategori --</option>
@@ -465,8 +468,8 @@ function dw_produk_page_info_render() {
                         </div>
 
                         <!-- IMAGE BOX -->
-                        <div class="dw-modern-card">
-                            <div class="dw-card-header"><h3 class="dw-card-title">Foto Utama</h3></div>
+                        <div class="dw-card">
+                            <div class="dw-card-header"><h3 class="card-heading">Foto Utama</h3></div>
                             <div class="dw-form-group">
                                 <div class="dw-img-preview <?php echo empty($edit_data->foto_utama) ? 'empty' : ''; ?>">
                                     <?php if(!empty($edit_data->foto_utama)): ?>
@@ -476,13 +479,13 @@ function dw_produk_page_info_render() {
                                     <?php endif; ?>
                                 </div>
                                 <input type="hidden" name="foto_utama" id="foto_utama" value="<?php echo esc_attr($edit_data->foto_utama ?? ''); ?>">
-                                <button type="button" class="dw-btn dw-btn-outline dw-btn-sm" id="btn_upl" style="width:100%; justify-content:center;">Pilih Foto Utama</button>
+                                <button type="button" class="dw-button dw-button-outline dw-button-sm" id="btn_upl" style="width:100%; justify-content:center;">Pilih Foto Utama</button>
                             </div>
                         </div>
 
                         <!-- OWNER BOX -->
-                        <div class="dw-modern-card">
-                            <div class="dw-card-header"><h3 class="dw-card-title">Pemilik Toko</h3></div>
+                        <div class="dw-card">
+                            <div class="dw-card-header"><h3 class="card-heading">Pemilik Toko</h3></div>
                             <div class="dw-form-group">
                                 <?php if ($is_super_admin): ?>
                                     <?php $list_pedagang = $wpdb->get_results("SELECT id, nama_toko FROM $table_pedagang WHERE status_akun='aktif'"); ?>
@@ -556,7 +559,7 @@ function dw_produk_page_info_render() {
                         '<td><input type="number" name="var_harga[]" class="dw-input" placeholder="0"></td>'+
                         '<td><input type="number" name="var_stok[]" class="dw-input" placeholder="0"></td>'+
                         '<td><input type="text" name="var_sku[]" class="dw-input"><input type="hidden" name="var_foto[]"></td>'+
-                        '<td style="text-align:center;"><button type="button" class="dw-btn dw-btn-danger dw-btn-sm btn-del-var"><span class="dashicons dashicons-trash" style="margin:0;"></span></button></td>'+
+                        '<td style="text-align:center;"><button type="button" class="dw-button dw-button-danger dw-button-sm btn-del-var"><span class="dashicons dashicons-trash" style="margin:0;"></span></button></td>'+
                     '</tr>';
                     $('#variasi-rows').append(row);
                 });
@@ -592,19 +595,19 @@ function dw_produk_page_info_render() {
             </div>
 
             <!-- TABLE CARD -->
-            <div class="dw-modern-card" style="padding:0; overflow:hidden;">
+            <div class="dw-card" style="padding:0; overflow:hidden;">
                 <!-- Toolbar -->
                 <div style="padding:15px 20px; background:var(--dw-gray-50); border-bottom:1px solid var(--dw-gray-200); display:flex; justify-content:space-between; align-items:center;">
                     <h3 style="margin:0; font-size:16px; color:var(--dw-gray-800);">Daftar Produk</h3>
                     <form method="get" style="display:flex; gap:10px;">
                         <input type="hidden" name="page" value="dw-produk">
                         <input type="text" name="s" class="dw-input" placeholder="Cari produk..." value="<?php echo isset($_GET['s']) ? esc_attr($_GET['s']) : ''; ?>" style="background:white; width:250px;">
-                        <button type="submit" class="dw-btn dw-btn-outline">Cari</button>
+                        <button type="submit" class="dw-button dw-button-outline">Cari</button>
                     </form>
                 </div>
 
                 <div class="dw-table-wrapper" style="border:none; border-radius:0;">
-                    <table class="dw-table">
+                    <table class="dw-modern-table">
                         <thead>
                             <tr>
                                 <th width="80">Foto</th>
@@ -656,12 +659,12 @@ function dw_produk_page_info_render() {
 	                                <td style="text-align:right;">
 	                                    <div style="display:flex; gap:6px; justify-content:flex-end;">
 	                                        <?php if (current_user_can('manage_options')): ?>
-<a href="<?php echo add_query_arg(['action' => 'toggle_featured', 'id' => $r->id]); ?>" class="dw-btn dw-btn-outline dw-btn-sm" title="<?php echo (isset($r->is_featured) && $r->is_featured) ? 'Unpin' : 'Pin to Top'; ?>">
+<a href="<?php echo add_query_arg(['action' => 'toggle_featured', 'id' => $r->id]); ?>" class="dw-button dw-button-outline dw-button-sm" title="<?php echo (isset($r->is_featured) && $r->is_featured) ? 'Unpin' : 'Pin to Top'; ?>">
 		                                                <span class="dashicons dashicons-<?php echo (isset($r->is_featured) && $r->is_featured) ? 'star-filled' : 'star-empty'; ?>"></span>
 		                                            </a>
 	                                        <?php endif; ?>
-	                                        <a href="<?php echo $edit_url; ?>" class="dw-btn dw-btn-outline dw-btn-sm" title="Edit"><span class="dashicons dashicons-edit"></span></a>
-	                                        <a href="<?php echo $del_url; ?>" class="dw-btn dw-btn-danger dw-btn-sm" onclick="return confirm('Hapus produk ini?');" title="Hapus"><span class="dashicons dashicons-trash"></span></a>
+	                                        <a href="<?php echo $edit_url; ?>" class="dw-button dw-button-outline dw-button-sm" title="Edit"><span class="dashicons dashicons-edit"></span></a>
+	                                        <a href="<?php echo $del_url; ?>" class="dw-button dw-button-danger dw-button-sm" onclick="return confirm('Hapus produk ini?');" title="Hapus"><span class="dashicons dashicons-trash"></span></a>
 	                                    </div>
 	                                </td>
                             </tr>

@@ -131,7 +131,7 @@ function dw_banner_page_render() {
             <div class="dw-card">
                 <div class="dw-card-header">
                     <h3 class="card-heading"><?php echo $id > 0 ? 'Edit Banner' : 'Tambah Banner Baru'; ?></h3>
-                    <a href="<?php echo admin_url('admin.php?page=dw-banner'); ?>" class="dw-btn-link">Kembali</a>
+                    <a href="<?php echo admin_url('admin.php?page=dw-banner'); ?>" class="dw-button-link">Kembali</a>
                 </div>
                 <div class="dw-card-body">
                     <form method="post" action="">

@@ -6,6 +6,9 @@
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
+
+// Include UI components
+require_once plugin_dir_path( dirname( __FILE__ ) ) . "admin-ui-components.php";
     exit;
 }
 
@@ -149,7 +152,7 @@ function dw_render_page_verifikasi_paket() {
     <!-- CSS STYLING MODERN -->
     
 
-    <div class="wrap dw-admin-wrap">
+    <div class="wrap dw-wrap">
         
         <!-- HEADER -->
         <div class="dw-header-action">
@@ -239,10 +242,10 @@ function dw_render_page_verifikasi_paket() {
                                         $nonce_url_reject = wp_nonce_url( admin_url( 'admin.php?page=dw-verifikasi-paket&action=reject&id=' . $item->id ), 'dw_verifikasi_paket' );
                                         ?>
                                         <div style="display:flex; justify-content:flex-end; gap:5px;">
-                                            <a href="<?php echo $nonce_url_approve; ?>" class="button dw-btn-approve" onclick="return confirm('Yakin setujui pembayaran? Kuota akan bertambah & komisi dicatat.');" title="Setujui">
+                                            <a href="<?php echo $nonce_url_approve; ?>" class="button dw-button-approve" onclick="return confirm('Yakin setujui pembayaran? Kuota akan bertambah & komisi dicatat.');" title="Setujui">
                                                 <span class="dashicons dashicons-yes" style="margin-top:3px;"></span> Terima
                                             </a>
-                                            <a href="<?php echo $nonce_url_reject; ?>" class="button dw-btn-reject" onclick="return confirm('Yakin tolak pembayaran ini?');" title="Tolak">
+                                            <a href="<?php echo $nonce_url_reject; ?>" class="button dw-button-reject" onclick="return confirm('Yakin tolak pembayaran ini?');" title="Tolak">
                                                 <span class="dashicons dashicons-no" style="margin-top:3px;"></span>
                                             </a>
                                         </div>

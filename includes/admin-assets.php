@@ -14,7 +14,7 @@ function dw_enqueue_admin_assets( $hook ) {
     $version = (defined('WP_DEBUG') && WP_DEBUG) ? time() : '1.0.1';
 
     // 1. CSS Admin
-    wp_enqueue_style( 'dw-admin-style', $plugin_url . 'assets/css/admin-styles.css', array(), $version );
+    wp_enqueue_style( 'dw-admin-style', $plugin_url . 'assets/css/admin-style.css', array(), $version );
 
     // 2. JS: dw-admin-script.js (Script Baru/Utama kita)
     wp_enqueue_script( 'dw-admin-script', $plugin_url . 'assets/js/dw-admin-script.js', array( 'jquery' ), $version, true );

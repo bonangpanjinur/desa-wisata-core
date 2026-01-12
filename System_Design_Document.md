@@ -21,18 +21,18 @@ Proses refaktorisasi akan dibagi menjadi tiga fase utama, masing-masing dengan l
 
 ### Fase 1: Sentralisasi Gaya CSS
 
-**Tujuan**: Memindahkan semua gaya CSS inline dari file PHP ke stylesheet eksternal `assets/css/admin-styles.css` dan membuat kelas CSS baru yang diperlukan untuk mencapai desain yang seragam.
+**Tujuan**: Memindahkan semua gaya CSS inline dari file PHP ke stylesheet eksternal `assets/css/admin-style.css` dan membuat kelas CSS baru yang diperlukan untuk mencapai desain yang seragam.
 
 **Langkah-langkah Implementasi**:
 
 1.  **Identifikasi File dengan Inline Styles**: Menggunakan perintah `grep -l "<style>" includes/admin-pages/*.php` untuk mendapatkan daftar semua file PHP yang mengandung blok `<style>` inline. (Daftar file telah diidentifikasi: `page-banner.php`, `page-dashboard.php`, `page-desa.php`, `page-komisi.php`, `page-logs.php`, `page-manajemen-pesanan-pusat.php`, `page-ojek-management.php`, `page-pedagang.php`, `page-pembeli.php`, `page-produk.php`, `page-promosi.php`, `page-referral-rewards.php`, `page-reviews.php`, `page-settings.php`, `page-verifikasi-paket.php`, `page-verifikator-list.php`, `page-verifikator-umkm.php`, `page-wisata.php`).
 2.  **Proses Setiap File PHP**: Untuk setiap file dalam daftar:
     *   **Ekstraksi Blok `<style>`**: Temukan dan ekstrak semua blok `<style>...</style>`.
-    *   **Analisis dan Pemindahan Gaya**: Untuk setiap aturan CSS yang diekstrak, periksa duplikasi dengan `assets/css/admin-styles.css`. Jika gaya unik dan berulang, buat kelas CSS baru yang deskriptif (misalnya, `.dw-form-input`, `.dw-button-primary`) dan tambahkan ke `admin-styles.css`. Pindahkan semua aturan CSS yang diekstrak ke `admin-styles.css`.
+    *   **Analisis dan Pemindahan Gaya**: Untuk setiap aturan CSS yang diekstrak, periksa duplikasi dengan `assets/css/admin-style.css`. Jika gaya unik dan berulang, buat kelas CSS baru yang deskriptif (misalnya, `.dw-form-input`, `.dw-button-primary`) dan tambahkan ke `admin-style.css`. Pindahkan semua aturan CSS yang diekstrak ke `admin-style.css`.
     *   **Ganti Inline Styles di HTML**: Ganti atribut `style="..."` di markup HTML dengan atribut `class="..."` yang merujuk pada kelas CSS yang baru atau yang sudah ada.
     *   **Hapus Blok `<style>`**: Setelah semua gaya dipindahkan atau diganti, hapus seluruh blok `<style>...</style>` dari file PHP.
     *   **Simpan Perubahan**: Simpan file PHP yang telah dimodifikasi.
-3.  **Tambahkan Kelas CSS Baru untuk Elemen Form**: Tambahkan definisi kelas CSS berikut ke `assets/css/admin-styles.css` (jika belum ada, berdasarkan pemeriksaan `admin-styles.css` yang sudah dilakukan, beberapa sudah ada):
+3.  **Tambahkan Kelas CSS Baru untuk Elemen Form**: Tambahkan definisi kelas CSS berikut ke `assets/css/admin-style.css` (jika belum ada, berdasarkan pemeriksaan `admin-style.css` yang sudah dilakukan, beberapa sudah ada):
     *   `.dw-form-group`
     *   `.dw-label`
     *   `.dw-input`
