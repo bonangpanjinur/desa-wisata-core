@@ -31,6 +31,43 @@ use Firebase\JWT\BeforeValidException;
 /**
  * Helper untuk memeriksa sisa kuota transaksi pedagang.
  */
+/**
+ * Mengambil konteks admin (user, role, context_id) secara sentral.
+ */
+function dw_get_admin_context() {
+    global $wpdb;
+    $current_user = wp_get_current_user();
+    $user_id      = $current_user->ID;
+    $role_context = 'guest';
+    $context_id   = 0;
+
+    $t_desa     = $wpdb->prefix . 'dw_desa';
+    $t_pedagang = $wpdb->prefix . 'dw_pedagang';
+
+    if ( current_user_can('administrator') ) {
+        $role_context = 'super_admin';
+    } else {
+        $desa = $wpdb->get_row( $wpdb->prepare("SELECT id FROM $t_desa WHERE id_user_desa = %d", $user_id) );
+        if ( $desa ) {
+            $role_context = 'admin_desa';
+            $context_id   = $desa->id;
+        } else {
+            $pedagang = $wpdb->get_row( $wpdb->prepare("SELECT id FROM $t_pedagang WHERE id_user = %d", $user_id) );
+            if ( $pedagang ) {
+                $role_context = 'pedagang';
+                $context_id   = $pedagang->id;
+            }
+        }
+    }
+
+    return [
+        'current_user' => $current_user,
+        'user_id'      => $user_id,
+        'role_context' => $role_context,
+        'context_id'   => $context_id,
+    ];
+}
+
 function dw_check_pedagang_kuota($user_id) {
     global $wpdb;
     

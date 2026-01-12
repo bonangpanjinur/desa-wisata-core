@@ -7,6 +7,9 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
+// Include UI components
+require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/admin-ui-components.php';
+
 function dw_kupon_page_render() {
     global $wpdb;
     $table_coupons = $wpdb->prefix . 'dw_coupons';

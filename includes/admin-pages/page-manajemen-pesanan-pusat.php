@@ -7,6 +7,9 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
+// Include UI components
+require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/admin-ui-components.php';
+
 function dw_manajemen_pesanan_pusat_render() {
     global $wpdb;
     
@@ -51,17 +54,7 @@ function dw_manajemen_pesanan_pusat_render() {
             </form>
         </div>
 
-        <style>
-            .dw-order-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; margin-top: 20px; }
-            .dw-order-card { border: 1px solid #ccd0d4; background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border-left: 5px solid #ccc; }
-            .dw-order-card.status-pending { border-left-color: #d63638; }
-            .dw-order-card.status-diproses { border-left-color: #dba617; }
-            .dw-order-card.status-selesai { border-left-color: #00a32a; }
-            .dw-order-header { display: flex; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
-            .dw-order-body p { margin: 5px 0; font-size: 13px; }
-            .dw-order-footer { margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap; }
-            .badge-desa { background: #2271b1; color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
-        </style>
+        
 
         <div class="dw-order-grid">
             <?php if ($orders): foreach ($orders as $order): 

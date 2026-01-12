@@ -14,8 +14,11 @@ require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/admin-ui-compone
 
 function dw_dashboard_page_render() {
     global $wpdb;
-    $current_user = wp_get_current_user();
-    $user_id      = $current_user->ID;
+    $context = dw_get_admin_context();
+    $current_user = $context['current_user'];
+    $user_id      = $context['user_id'];
+    $role_context = $context['role_context'];
+    $context_id   = $context['context_id'];
 
     // --- 1. SETUP TABEL DATABASE ---
     $t_desa        = $wpdb->prefix . 'dw_desa';
@@ -235,9 +238,6 @@ function dw_dashboard_page_render() {
             </div>
         </div>
     </div>
-    <style>
-        .dw-avatar-img { border-radius: 50%; border: 3px solid #fff; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        .quick-item:hover { background: #eff6ff !important; border-color: var(--dw-brand-blue) !important; }
-    </style>
+    
     <?php
 }

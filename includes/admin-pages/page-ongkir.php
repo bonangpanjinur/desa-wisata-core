@@ -10,6 +10,9 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
+// Include UI components
+require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/admin-ui-components.php';
+
 /**
  * Merender halaman Laporan Komisi (Hanya Penjualan).
  */

@@ -7,6 +7,9 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
+// Include UI components
+require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/admin-ui-components.php';
+
 /**
  * Handler Simpan Pengaturan
  */
@@ -64,29 +67,7 @@ function dw_admin_settings_page_handler() {
         <h1 class="wp-heading-inline" style="font-weight: 800;">Pengaturan Sistem Desa Wisata</h1>
         <hr class="wp-header-end">
 
-        <style>
-            .dw-settings-container { display: flex; gap: 20px; margin-top: 20px; font-family: 'Inter', -apple-system, sans-serif; }
-            .dw-sidebar-nav { width: 220px; flex-shrink: 0; background: #fff; border: 1px solid #c3c4c7; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-            .dw-nav-item { display: flex; align-items: center; padding: 14px 18px; color: #3c434a; text-decoration: none; border-bottom: 1px solid #f0f0f1; transition: 0.2s; font-weight: 500; }
-            .dw-nav-item:hover { background: #f6f7f7; color: #2271b1; }
-            .dw-nav-item.active { background: #2271b1; color: #fff; border-color: #2271b1; }
-            .dw-nav-item .dashicons { margin-right: 12px; }
-            
-            .dw-settings-content { flex-grow: 1; background: #fff; padding: 35px; border: 1px solid #c3c4c7; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.02); }
-            .dw-form-section h3 { margin-top: 0; border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 25px; font-size: 20px; font-weight: 800; color: #1e293b; display: flex; align-items: center; gap: 10px; }
-            .dw-input-group { margin-bottom: 25px; }
-            .dw-input-group label { display: block; font-weight: 600; margin-bottom: 8px; color: #334155; font-size: 14px; }
-            .dw-input-group input[type="text"], 
-            .dw-input-group input[type="number"], 
-            .dw-input-group input[type="password"], 
-            .dw-input-group select,
-            .dw-input-group textarea { width: 100%; max-width: 600px; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; }
-            .dw-help-text { font-size: 12px; color: #64748b; margin-top: 8px; line-height: 1.5; max-width: 600px; }
-            
-            .dw-qris-preview { margin-top: 15px; border: 1px dashed #cbd5e1; padding: 15px; display: inline-block; border-radius: 12px; background: #f8fafc; }
-            .dw-btn-save { background: #2271b1; color: #fff; border: none; padding: 12px 35px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 700; margin-top: 10px; transition: 0.2s; }
-            .dw-btn-save:hover { background: #135e96; transform: translateY(-1px); }
-        </style>
+        
 
         <div class="dw-settings-container">
             <!-- Sidebar Nav -->

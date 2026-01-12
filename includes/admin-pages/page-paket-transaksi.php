@@ -7,6 +7,9 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
+// Include UI components
+require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/admin-ui-components.php';
+
 function dw_render_paket_transaksi_page() {
     global $wpdb;
     $table_paket = $wpdb->prefix . 'dw_paket_transaksi';
@@ -18,7 +21,7 @@ function dw_render_paket_transaksi_page() {
         update_option('dw_quota_free_via_desa', intval($_POST['quota_desa']));
         update_option('dw_quota_free_via_verif', intval($_POST['quota_verif']));
         
-        echo '<div class="notice notice-success is-dismissible"><p>Pengaturan Kuota Gratis berhasil disimpan.</p></div>';
+        echo '<?php echo dw_admin_render_alert('Pengaturan Kuota Gratis berhasil disimpan.', 'success'); ?>';
     }
 
     // --- 2. HANDLE POST: CRUD PAKET BERBAYAR ---
@@ -50,11 +53,11 @@ function dw_render_paket_transaksi_page() {
         if ( ! empty( $_POST['paket_id'] ) ) {
             // UPDATE
             $wpdb->update( $table_paket, $data, ['id' => intval($_POST['paket_id'])], $format, ['%d'] );
-            echo '<div class="notice notice-success is-dismissible"><p>Paket berhasil diperbarui.</p></div>';
+            echo '<?php echo dw_admin_render_alert('Paket berhasil diperbarui.', 'success'); ?>';
         } else {
             // INSERT
             $wpdb->insert( $table_paket, $data, $format );
-            echo '<div class="notice notice-success is-dismissible"><p>Paket baru berhasil dibuat.</p></div>';
+            echo '<?php echo dw_admin_render_alert('Paket baru berhasil dibuat.', 'success'); ?>';
         }
     }
 
@@ -62,7 +65,7 @@ function dw_render_paket_transaksi_page() {
     if ( isset( $_GET['action'] ) && $_GET['action'] == 'delete' && isset( $_GET['id'] ) ) {
         $id_del = intval( $_GET['id'] );
         $wpdb->delete( $table_paket, ['id' => $id_del] );
-        echo '<div class="notice notice-success is-dismissible"><p>Paket dihapus.</p></div>';
+        echo '<?php echo dw_admin_render_alert('Paket dihapus.', 'success'); ?>';
     }
 
     // --- 4. PREPARE DATA ---

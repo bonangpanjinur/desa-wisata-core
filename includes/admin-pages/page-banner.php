@@ -254,18 +254,7 @@ function dw_banner_page_render() {
                         </form>
                     </div>
                 </div>
-                <style>
-                    .column-status span {
-                        padding: 4px 10px;
-                        border-radius: 999px;
-                        font-size: 11px;
-                        font-weight: 600;
-                        text-transform: uppercase;
-                    }
-                    .column-status .aktif { background: #dcfce7; color: #166534; }
-                    .column-status .nonaktif { background: #fee2e2; color: #991b1b; }
-                    .column-gambar img { border-radius: 8px; border: 1px solid var(--dw-border-color); }
-                </style>
+                
                 <script>
                 jQuery(document).ready(function($){
                     $('.dw-confirm-link').click(function(e){
