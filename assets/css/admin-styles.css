@@ -305,3 +305,177 @@
 .badge-paid { background: #dcfce7; color: #166534; }
 .badge-pending { background: #fef9c3; color: #854d0e; }
 .badge-failed { background: #fee2e2; color: #991b1b; }
+/* --- 4. NEW COMPONENTS FOR STANDARDIZATION --- */
+
+/* Card Component */
+.dw-card {
+    background: var(--dw-white);
+    border-radius: 16px;
+    border: 1px solid var(--dw-border-color);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+    margin-bottom: 24px;
+    overflow: hidden;
+}
+
+.dw-card-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--dw-border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #f8fafc;
+}
+
+.dw-card-header h3.card-heading {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--dw-text-dark);
+}
+
+.dw-card-body {
+    padding: 24px;
+}
+
+.dw-btn-link {
+    color: var(--dw-brand-blue);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.dw-btn-link:hover {
+    text-decoration: underline;
+}
+
+/* Table Component */
+.dw-table-wrapper {
+    overflow-x: auto;
+    background: var(--dw-white);
+    border-radius: 12px;
+    border: 1px solid var(--dw-border-color);
+}
+
+.dw-modern-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+}
+
+.dw-modern-table th {
+    background: #f8fafc;
+    padding: 16px;
+    font-weight: 600;
+    color: var(--dw-text-grey);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+    border-bottom: 1px solid var(--dw-border-color);
+}
+
+.dw-modern-table td {
+    padding: 16px;
+    border-bottom: 1px solid var(--dw-border-color);
+    color: var(--dw-text-dark);
+    font-size: 14px;
+}
+
+.dw-modern-table tr:last-child td {
+    border-bottom: none;
+}
+
+.dw-modern-table tr:hover td {
+    background: #f1f5f9;
+}
+
+/* Badge / Status */
+.dw-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 12px;
+    border-radius: 9999px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.status-success { background: #dcfce7; color: #166534; }
+.status-warning { background: #fef9c3; color: #854d0e; }
+.status-danger { background: #fee2e2; color: #991b1b; }
+.status-info { background: #e0f2fe; color: #0369a1; }
+.status-neutral { background: #f1f5f9; color: #475569; }
+
+/* Form Elements */
+.dw-form-group {
+    margin-bottom: 20px;
+}
+
+.dw-label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: var(--dw-text-dark);
+    font-size: 14px;
+}
+
+.dw-input, .dw-select, .dw-textarea {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid var(--dw-border-color);
+    border-radius: 8px;
+    font-size: 14px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.dw-input:focus, .dw-select:focus, .dw-textarea:focus {
+    outline: none;
+    border-color: var(--dw-brand-blue);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.dw-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+}
+
+.dw-button-primary {
+    background: var(--dw-brand-blue);
+    color: #fff;
+}
+
+.dw-button-primary:hover {
+    background: #1e3a8a;
+}
+
+.dw-button-secondary {
+    background: #f1f5f9;
+    color: var(--dw-text-dark);
+}
+
+.dw-button-secondary:hover {
+    background: #e2e8f0;
+}
+
+.dw-help-text {
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--dw-text-grey);
+}
+
+/* Layout Helpers */
+.dw-section-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--dw-text-dark);
+    margin: 32px 0 16px;
+}
+
+.text-right { text-align: right; }
+.text-center { text-align: center; }
