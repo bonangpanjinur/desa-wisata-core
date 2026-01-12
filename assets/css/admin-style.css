@@ -479,3 +479,62 @@
 
 .text-right { text-align: right; }
 .text-center { text-align: center; }
+
+483	/* --- DW ADMIN CORE STYLES --- */
+484	
+485	/* 1. Wrapper Utama */
+486	.dw-admin-wrapper {
+487	    margin: 20px 20px 0 0;
+488	    max-width: 1200px; /* Membatasi lebar agar nyaman dibaca di layar lebar */
+489	}
+490	
+491	/* 2. Header Modern */
+492	.dw-page-header {
+493	    background: transparent;
+494	    padding-bottom: 20px;
+495	    display: flex;
+496	    justify-content: space-between;
+497	    align-items: center;
+498	}
+499	
+500	.dw-header-title h1 {
+501	    font-size: 24px;
+502	    font-weight: 600;
+503	    color: #1d2327;
+504	    margin: 0;
+505	    line-height: 1.2;
+506	}
+507	
+508	.dw-subtitle {
+509	    font-size: 13px;
+510	    color: #646970;
+511	    margin: 5px 0 0;
+512	}
+513	
+514	/* 3. Card Container (Kotak Putih) */
+515	.dw-card {
+516	    background: #fff;
+517	    border: 1px solid #c3c4c7;
+518	    box-shadow: 0 1px 2px rgba(0,0,0,.04);
+519	    border-radius: 4px; /* Gunakan 8px jika ingin terlihat lebih modern */
+520	    padding: 20px;
+521	    margin-bottom: 20px;
+522	    box-sizing: border-box;
+523	}
+524	
+525	/* 4. Perbaikan Tabel WP dalam Card */
+526	.dw-card .wp-list-table {
+527	    border: none;
+528	    box-shadow: none;
+529	}
+530	
+531	/* 5. Utility Classes */
+532	.dw-header-actions .button {
+533	    margin-left: 10px;
+534	}
+535	.dw-grid-2-col {
+536	    display: grid;
+537	    grid-template-columns: 1fr 1fr;
+538	    gap: 20px;
+539	}
+540	
