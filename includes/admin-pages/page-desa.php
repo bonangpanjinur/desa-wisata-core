@@ -3,7 +3,7 @@
  * File Name: includes/admin-pages/page-desa.php
  * Description: CRUD Desa Wisata & Verifikasi dengan UI/UX Modern.
  * Matches DB Table: dw_desa
- * Version: 7.1 (Tab UI/UX Refinement)
+ * Version: 7.2 (UI/UX & Layout Refinement)
  * @package DesaWisataCore
  */
 
@@ -240,10 +240,19 @@ if (!function_exists('dw_desa_page_render')) {
         }
         if (!$edit_data) $edit_data = $default_data;
 
-        // User list for dropdown
-        $used_user_ids = $wpdb->get_col("SELECT id_user_desa FROM $table_desa");
-        if (!$used_user_ids) $used_user_ids = [];
-        $users = get_users(['orderby' => 'display_name', 'role' => 'desa_admin']);
+        // --- USER FILTER LOGIC ---
+        // 1. Get all assigned user IDs (map user_id => village_name)
+        $assigned_users = $wpdb->get_results("SELECT id_user_desa, nama_desa FROM $table_desa");
+        $user_village_map = [];
+        foreach ($assigned_users as $row) {
+            $user_village_map[$row->id_user_desa] = $row->nama_desa;
+        }
+
+        // 2. Get users with role 'admin_desa' or 'administrator'
+        $users = get_users([
+            'orderby' => 'display_name', 
+            'role__in' => ['admin_desa', 'administrator'] 
+        ]);
 
         // Stats
         $count_verify = $wpdb->get_var("SELECT COUNT(*) FROM $table_desa WHERE status_akses_verifikasi = 'pending'");
@@ -257,53 +266,55 @@ if (!function_exists('dw_desa_page_render')) {
         }
 
         ?>
-
-        <!-- INLINE CSS STYLE FOR TABS (PREMIUM UI) -->
+        
+        <!-- INLINE CSS FOR TABS (To ensure consistent UI without cache issues) -->
         <style>
-            /* Custom Tab Style */
-            .dw-tabs-wrapper {
-                margin-bottom: 25px;
-                border-bottom: 1px solid #e2e8f0;
+            .dw-modern-tabs {
                 display: flex;
                 gap: 5px;
+                border-bottom: 1px solid #c3c4c7;
+                margin-bottom: 20px;
+                padding-left: 0;
             }
-            .dw-tab-link {
-                text-decoration: none;
-                color: #64748b;
-                padding: 12px 20px;
-                font-weight: 600;
-                font-size: 14px;
-                border-bottom: 2px solid transparent;
-                display: flex;
+            .dw-modern-tab {
+                display: inline-flex;
                 align-items: center;
-                gap: 8px;
+                padding: 10px 15px;
+                font-size: 14px;
+                font-weight: 500;
+                color: #50575e;
+                text-decoration: none;
+                background: #f0f0f1;
+                border: 1px solid #c3c4c7;
+                border-bottom: none;
+                border-radius: 4px 4px 0 0;
+                margin-bottom: -1px;
                 transition: all 0.2s ease;
             }
-            .dw-tab-link:hover {
-                color: #1e40af;
-                background-color: #f8fafc;
-                border-radius: 6px 6px 0 0;
+            .dw-modern-tab:hover {
+                background: #fff;
+                color: #2271b1;
             }
-            .dw-tab-link.active {
-                color: #1e40af;
-                border-bottom: 2px solid #1e40af;
+            .dw-modern-tab.active {
+                background: #fff;
+                color: #1d2327;
+                border-bottom-color: #fff;
+                font-weight: 600;
             }
-            .dw-tab-link .dashicons {
+            .dw-modern-tab .dashicons {
+                margin-right: 5px;
                 font-size: 18px;
-                width: 18px;
-                height: 18px;
             }
             .dw-badge-notify {
-                background: #ef4444;
-                color: white;
+                background: #d63638;
+                color: #fff;
                 font-size: 10px;
+                font-weight: 600;
                 padding: 2px 6px;
-                border-radius: 12px;
+                border-radius: 10px;
                 margin-left: 5px;
                 line-height: 1;
             }
-            /* Stats Box Tweaks */
-            .dw-stats-grid { margin-top: 0; }
         </style>
 
         <!-- WRAPPER UTAMA -->
@@ -318,11 +329,11 @@ if (!function_exists('dw_desa_page_render')) {
                 <div class="dw-header-actions">
                     <?php if (!$is_edit && $active_tab == 'data_desa'): ?>
                         <a href="?page=dw-desa&tab=data_desa&view=add" class="dw-button dw-button-primary">
-                            <span class="dashicons dashicons-plus-alt2"></span> Tambah Desa
+                            <span class="dashicons dashicons-plus-alt2" style="margin-right:5px;"></span> Tambah Desa
                         </a>
                     <?php elseif($is_edit): ?>
                          <a href="?page=dw-desa" class="dw-button dw-button-secondary">
-                            <span class="dashicons dashicons-arrow-left-alt"></span> Kembali
+                            <span class="dashicons dashicons-arrow-left-alt" style="margin-right:5px;"></span> Kembali
                         </a>
                     <?php endif; ?>
                 </div>
@@ -337,17 +348,17 @@ if (!function_exists('dw_desa_page_render')) {
                 </div>
             <?php endif; ?>
 
-            <!-- TABS (PREMIUM DESIGN) -->
+            <!-- TABS (MODERN DESIGN) -->
             <?php if(!$is_edit): ?>
-            <div class="dw-tabs-wrapper">
-                <a href="?page=dw-desa&tab=data_desa" class="dw-tab-link <?php echo $active_tab == 'data_desa' ? 'active' : ''; ?>">
+            <div class="dw-modern-tabs">
+                <a href="?page=dw-desa&tab=data_desa" class="dw-modern-tab <?php echo $active_tab == 'data_desa' ? 'active' : ''; ?>">
                     <span class="dashicons dashicons-list-view"></span> Data Desa
                 </a>
-                <a href="?page=dw-desa&tab=verifikasi" class="dw-tab-link <?php echo $active_tab == 'verifikasi' ? 'active' : ''; ?>">
+                <a href="?page=dw-desa&tab=verifikasi" class="dw-modern-tab <?php echo $active_tab == 'verifikasi' ? 'active' : ''; ?>">
                     <span class="dashicons dashicons-shield"></span> Verifikasi Premium
                     <?php if($count_verify > 0) echo '<span class="dw-badge-notify">' . $count_verify . '</span>'; ?>
                 </a>
-                <a href="?page=dw-desa&tab=pengaturan" class="dw-tab-link <?php echo $active_tab == 'pengaturan' ? 'active' : ''; ?>">
+                <a href="?page=dw-desa&tab=pengaturan" class="dw-modern-tab <?php echo $active_tab == 'pengaturan' ? 'active' : ''; ?>">
                     <span class="dashicons dashicons-money-alt"></span> Pengaturan Harga
                 </a>
             </div>
