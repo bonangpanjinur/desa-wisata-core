@@ -1,26 +1,51 @@
-/* * File Name:   admin-style.css
- * Description: Stylesheet Premium Dashboard (Clean Style).
+/* * File Name: admin-style.css
+ * Description: Stylesheet Premium Dashboard (Clean Style) & Standardisasi Halaman Admin.
  */
 
+/* =========================================
+   1. CORE VARIABLES & THEME CONFIG
+   ========================================= */
 :root {
+    /* Brand Colors (Premium Palette) */
     --dw-brand-blue: #1e40af;      /* Biru Gelap (Header) */
     --dw-brand-light: #eff6ff;     /* Biru Sangat Muda (Background Icon) */
+    --dw-brand-hover: #1e3a8a;     /* Hover State */
+    
+    /* Text Colors */
     --dw-text-dark: #1e293b;       /* Slate 800 */
     --dw-text-grey: #64748b;       /* Slate 500 */
-    --dw-border-color: #e2e8f0;
+    --dw-text-white: #ffffff;
+    
+    /* UI Colors */
+    --dw-bg: #f0f2f5;              /* Background Halaman Dashboard */
     --dw-white: #ffffff;
+    --dw-border-color: #e2e8f0;
+    
+    /* Status Indicators */
     --dw-success: #10b981;
     --dw-warning: #f59e0b;
     --dw-danger: #ef4444;
+    --dw-info: #0ea5e9;
+
+    /* Legacy/WP Compatibility Variables (Mapped to New Palette) */
+    --dw-primary: var(--dw-brand-blue);
+    --dw-primary-hover: var(--dw-brand-hover);
+    --dw-secondary: var(--dw-text-grey);
+    --dw-border: var(--dw-border-color);
 }
 
-.dw-wrap {
+/* =========================================
+   2. GLOBAL RESETS & LAYOUT
+   ========================================= */
+.dw-wrap, 
+.dw-admin-wrapper {
     margin: 20px 20px 0 0;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     color: var(--dw-text-dark);
+    max-width: 1200px;
 }
 
-/* --- 1. HERO BANNER (Blue Box) --- */
+/* --- HERO BANNER (Blue Box) --- */
 .dw-dashboard-hero {
     background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%); /* Gradient Biru Profesional */
     color: #fff;
@@ -82,7 +107,7 @@
     font-weight: 600;
 }
 
-/* --- 2. STATS GRID (Clean Cards) --- */
+/* --- STATS GRID (Clean Cards) --- */
 .dw-stats-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); /* Responsif */
@@ -101,6 +126,7 @@
     flex-direction: column;
     justify-content: space-between;
     height: 140px; /* Tinggi seragam */
+    box-sizing: border-box;
 }
 
 .dw-stat-card:hover {
@@ -142,26 +168,56 @@
     margin-top: 8px;
 }
 
-/* --- 3. MAIN CONTENT (Chart & List) --- */
-.dw-dashboard-split {
-    display: grid;
-    grid-template-columns: 2fr 1fr;
-    gap: 24px;
+/* =========================================
+   3. COMPONENTS STANDARD (Cards, Tables, Forms)
+   ========================================= */
+
+/* --- Page Header (Standardized) --- */
+.dw-page-header {
+    background: transparent;
+    padding-bottom: 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
 }
 
-@media (max-width: 1024px) {
-    .dw-dashboard-split { grid-template-columns: 1fr; }
+.dw-header-title h1 {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--dw-text-dark);
+    margin: 0;
+    line-height: 1.2;
+    padding: 0;
+    display: inline-block;
 }
 
-.dw-panel {
+.dw-subtitle {
+    font-size: 14px;
+    color: var(--dw-text-grey);
+    margin: 6px 0 0;
+}
+
+.dw-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* --- Card Container --- */
+.dw-card {
     background: var(--dw-white);
     border-radius: 16px;
     border: 1px solid var(--dw-border-color);
     box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+    margin-bottom: 24px;
+    padding: 0; /* Reset padding to handle header/body separation */
     overflow: hidden;
+    box-sizing: border-box;
 }
 
-.dw-panel-header {
+.dw-card-header {
     padding: 20px 24px;
     border-bottom: 1px solid var(--dw-border-color);
     display: flex;
@@ -170,18 +226,224 @@
     background: #f8fafc;
 }
 
-.dw-panel-header h3 {
+.dw-card-header h3, 
+.dw-card-header h3.card-heading {
     margin: 0;
     font-size: 16px;
     font-weight: 700;
     color: var(--dw-text-dark);
 }
 
-.dw-panel-body {
+.dw-card-body,
+.dw-card > form { /* Direct form inside card gets padding */
     padding: 24px;
 }
 
-/* --- CHART STYLE (CSS Bar Chart) --- */
+/* WP List Table Integration inside Card */
+.dw-card .wp-list-table {
+    border: none;
+    box-shadow: none;
+    table-layout: auto;
+}
+
+.dw-card .tablenav.top {
+    margin: 0 24px 10px;
+    padding-top: 10px;
+}
+.dw-card .tablenav.bottom {
+    margin: 10px 24px;
+}
+.dw-card .subsubsub {
+    margin: 0 24px 10px;
+}
+
+/* --- Buttons --- */
+.dw-button,
+.dw-header-actions .button,
+.dw-header-actions .page-title-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+    text-decoration: none;
+    line-height: normal;
+    height: auto;
+}
+
+.dw-button-primary,
+.dw-header-actions .button-primary {
+    background: var(--dw-brand-blue);
+    color: #fff;
+    border: 1px solid var(--dw-brand-blue);
+}
+
+.dw-button-primary:hover,
+.dw-header-actions .button-primary:hover {
+    background: var(--dw-brand-hover);
+    color: #fff;
+}
+
+.dw-button-secondary {
+    background: #f1f5f9;
+    color: var(--dw-text-dark);
+    border: 1px solid var(--dw-border-color);
+}
+
+.dw-button-secondary:hover {
+    background: #e2e8f0;
+}
+
+/* --- Forms --- */
+.dw-form-group {
+    margin-bottom: 20px;
+}
+
+.dw-label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: var(--dw-text-dark);
+    font-size: 14px;
+}
+
+.dw-input, .dw-select, .dw-textarea,
+.dw-card input[type="text"], 
+.dw-card input[type="email"], 
+.dw-card input[type="number"], 
+.dw-card select, 
+.dw-card textarea {
+    width: 100%;
+    max-width: 100%;
+    padding: 10px 14px;
+    border: 1px solid var(--dw-border-color);
+    border-radius: 8px;
+    font-size: 14px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    box-sizing: border-box;
+    margin: 0;
+}
+
+.dw-input:focus, .dw-select:focus, .dw-textarea:focus,
+.dw-card input:focus, .dw-card select:focus, .dw-card textarea:focus {
+    outline: none;
+    border-color: var(--dw-brand-blue);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.dw-help-text {
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--dw-text-grey);
+}
+
+/* --- Table (Custom Modern) --- */
+.dw-table-wrapper {
+    overflow-x: auto;
+    background: var(--dw-white);
+    border-radius: 12px;
+    border: 1px solid var(--dw-border-color);
+    margin-bottom: 20px;
+}
+
+.dw-modern-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+}
+
+.dw-modern-table th {
+    background: #f8fafc;
+    padding: 16px;
+    font-weight: 600;
+    color: var(--dw-text-grey);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+    border-bottom: 1px solid var(--dw-border-color);
+}
+
+.dw-modern-table td {
+    padding: 16px;
+    border-bottom: 1px solid var(--dw-border-color);
+    color: var(--dw-text-dark);
+    font-size: 14px;
+}
+
+.dw-modern-table tr:last-child td {
+    border-bottom: none;
+}
+
+.dw-modern-table tr:hover td {
+    background: #f1f5f9;
+}
+
+/* --- Badges --- */
+.dw-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 12px;
+    border-radius: 9999px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.status-success { background: #dcfce7; color: #166534; }
+.status-warning { background: #fef9c3; color: #854d0e; }
+.status-danger { background: #fee2e2; color: #991b1b; }
+.status-info { background: #e0f2fe; color: #0369a1; }
+.status-neutral { background: #f1f5f9; color: #475569; }
+
+/* =========================================
+   4. LAYOUT UTILITIES & DASHBOARD WIDGETS
+   ========================================= */
+
+.dw-dashboard-split {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 24px;
+}
+
+.dw-grid-2-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+}
+
+@media (max-width: 1024px) {
+    .dw-dashboard-split,
+    .dw-grid-2-col { 
+        grid-template-columns: 1fr; 
+    }
+}
+
+@media (max-width: 782px) {
+    .dw-page-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .dw-header-actions {
+        width: 100%;
+        justify-content: flex-start;
+    }
+}
+
+.dw-section-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--dw-text-dark);
+    margin: 32px 0 16px;
+}
+
+.text-right { text-align: right; }
+.text-center { text-align: center; }
+
+/* --- CHART STYLE (Pure CSS Bar Chart) --- */
 .dw-css-chart {
     display: flex;
     align-items: flex-end;
@@ -209,9 +471,8 @@
     min-height: 4px;
 }
 
-/* Hover Effect pada Bar */
 .dw-chart-column:hover .dw-chart-bar {
-    background-color: #2563eb; /* Biru */
+    background-color: var(--dw-brand-blue);
 }
 
 /* Tooltip Angka */
@@ -292,249 +553,3 @@
     font-size: 13px;
     color: var(--dw-text-dark);
 }
-
-.activity-badge {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-size: 10px;
-    font-weight: 700;
-    text-transform: uppercase;
-    margin-top: 4px;
-}
-.badge-paid { background: #dcfce7; color: #166534; }
-.badge-pending { background: #fef9c3; color: #854d0e; }
-.badge-failed { background: #fee2e2; color: #991b1b; }
-/* --- 4. NEW COMPONENTS FOR STANDARDIZATION --- */
-
-/* Card Component */
-.dw-card {
-    background: var(--dw-white);
-    border-radius: 16px;
-    border: 1px solid var(--dw-border-color);
-    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-    margin-bottom: 24px;
-    overflow: hidden;
-}
-
-.dw-card-header {
-    padding: 20px 24px;
-    border-bottom: 1px solid var(--dw-border-color);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: #f8fafc;
-}
-
-.dw-card-header h3.card-heading {
-    margin: 0;
-    font-size: 16px;
-    font-weight: 700;
-    color: var(--dw-text-dark);
-}
-
-.dw-card-body {
-    padding: 24px;
-}
-
-.dw-btn-link {
-    color: var(--dw-brand-blue);
-    text-decoration: none;
-    font-weight: 600;
-    font-size: 14px;
-}
-
-.dw-btn-link:hover {
-    text-decoration: underline;
-}
-
-/* Table Component */
-.dw-table-wrapper {
-    overflow-x: auto;
-    background: var(--dw-white);
-    border-radius: 12px;
-    border: 1px solid var(--dw-border-color);
-}
-
-.dw-modern-table {
-    width: 100%;
-    border-collapse: collapse;
-    text-align: left;
-}
-
-.dw-modern-table th {
-    background: #f8fafc;
-    padding: 16px;
-    font-weight: 600;
-    color: var(--dw-text-grey);
-    font-size: 13px;
-    text-transform: uppercase;
-    letter-spacing: 0.025em;
-    border-bottom: 1px solid var(--dw-border-color);
-}
-
-.dw-modern-table td {
-    padding: 16px;
-    border-bottom: 1px solid var(--dw-border-color);
-    color: var(--dw-text-dark);
-    font-size: 14px;
-}
-
-.dw-modern-table tr:last-child td {
-    border-bottom: none;
-}
-
-.dw-modern-table tr:hover td {
-    background: #f1f5f9;
-}
-
-/* Badge / Status */
-.dw-badge {
-    display: inline-flex;
-    align-items: center;
-    padding: 4px 12px;
-    border-radius: 9999px;
-    font-size: 12px;
-    font-weight: 600;
-}
-
-.status-success { background: #dcfce7; color: #166534; }
-.status-warning { background: #fef9c3; color: #854d0e; }
-.status-danger { background: #fee2e2; color: #991b1b; }
-.status-info { background: #e0f2fe; color: #0369a1; }
-.status-neutral { background: #f1f5f9; color: #475569; }
-
-/* Form Elements */
-.dw-form-group {
-    margin-bottom: 20px;
-}
-
-.dw-label {
-    display: block;
-    margin-bottom: 8px;
-    font-weight: 600;
-    color: var(--dw-text-dark);
-    font-size: 14px;
-}
-
-.dw-input, .dw-select, .dw-textarea {
-    width: 100%;
-    padding: 10px 14px;
-    border: 1px solid var(--dw-border-color);
-    border-radius: 8px;
-    font-size: 14px;
-    transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-.dw-input:focus, .dw-select:focus, .dw-textarea:focus {
-    outline: none;
-    border-color: var(--dw-brand-blue);
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-}
-
-.dw-button {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 10px 20px;
-    border-radius: 8px;
-    font-weight: 600;
-    font-size: 14px;
-    cursor: pointer;
-    transition: all 0.2s;
-    border: none;
-}
-
-.dw-button-primary {
-    background: var(--dw-brand-blue);
-    color: #fff;
-}
-
-.dw-button-primary:hover {
-    background: #1e3a8a;
-}
-
-.dw-button-secondary {
-    background: #f1f5f9;
-    color: var(--dw-text-dark);
-}
-
-.dw-button-secondary:hover {
-    background: #e2e8f0;
-}
-
-.dw-help-text {
-    margin-top: 6px;
-    font-size: 12px;
-    color: var(--dw-text-grey);
-}
-
-/* Layout Helpers */
-.dw-section-title {
-    font-size: 18px;
-    font-weight: 700;
-    color: var(--dw-text-dark);
-    margin: 32px 0 16px;
-}
-
-.text-right { text-align: right; }
-.text-center { text-align: center; }
-
-483	/* --- DW ADMIN CORE STYLES --- */
-484	
-485	/* 1. Wrapper Utama */
-486	.dw-admin-wrapper {
-487	    margin: 20px 20px 0 0;
-488	    max-width: 1200px; /* Membatasi lebar agar nyaman dibaca di layar lebar */
-489	}
-490	
-491	/* 2. Header Modern */
-492	.dw-page-header {
-493	    background: transparent;
-494	    padding-bottom: 20px;
-495	    display: flex;
-496	    justify-content: space-between;
-497	    align-items: center;
-498	}
-499	
-500	.dw-header-title h1 {
-501	    font-size: 24px;
-502	    font-weight: 600;
-503	    color: #1d2327;
-504	    margin: 0;
-505	    line-height: 1.2;
-506	}
-507	
-508	.dw-subtitle {
-509	    font-size: 13px;
-510	    color: #646970;
-511	    margin: 5px 0 0;
-512	}
-513	
-514	/* 3. Card Container (Kotak Putih) */
-515	.dw-card {
-516	    background: #fff;
-517	    border: 1px solid #c3c4c7;
-518	    box-shadow: 0 1px 2px rgba(0,0,0,.04);
-519	    border-radius: 4px; /* Gunakan 8px jika ingin terlihat lebih modern */
-520	    padding: 20px;
-521	    margin-bottom: 20px;
-522	    box-sizing: border-box;
-523	}
-524	
-525	/* 4. Perbaikan Tabel WP dalam Card */
-526	.dw-card .wp-list-table {
-527	    border: none;
-528	    box-shadow: none;
-529	}
-530	
-531	/* 5. Utility Classes */
-532	.dw-header-actions .button {
-533	    margin-left: 10px;
-534	}
-535	.dw-grid-2-col {
-536	    display: grid;
-537	    grid-template-columns: 1fr 1fr;
-538	    gap: 20px;
-539	}
-540	
