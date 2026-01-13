@@ -1,15 +1,22 @@
 <?php
 /**
- * File Name:   includes/admin-pages/page-produk.php
+ * File Name: includes/admin-pages/page-produk.php
  * Description: Manajemen Produk Lengkap (Modern UI/UX Enhanced).
- * Features:    Stats Dashboard, Tabbed Form, Modern Table, Gallery & Variation Management.
- * @package     DesaWisataCore
+ * Features: Stats Dashboard, Tabbed Form, Modern Table, Gallery & Variation Management.
+ * @package DesaWisataCore
  */
 
 defined('ABSPATH') || exit;
 
+// --- 1. FIX PATHS & INCLUDES (Relative Path for Safety) ---
+$current_dir = dirname(__FILE__); // includes/admin-pages
+$includes_dir = dirname($current_dir); // includes
+
 // Include UI components
-require_once plugin_dir_path( dirname( __FILE__ ) ) . "admin-ui-components.php";
+$ui_path = $includes_dir . '/admin-ui-components.php';
+if (file_exists($ui_path)) {
+    require_once $ui_path;
+}
 
 /**
  * 1. HANDLER: SIMPAN & HAPUS
@@ -50,7 +57,6 @@ function dw_produk_form_handler() {
     }
     
     // Asumsi nama tabel menggunakan prefix 'dw_'. 
-    // Sesuaikan jika schema Anda menggunakan prefix WP standar saja (misal: wp_produk).
     $table_produk   = $wpdb->prefix . 'dw_produk'; 
     $table_variasi  = $wpdb->prefix . 'dw_produk_variasi';
     $table_pedagang = $wpdb->prefix . 'dw_pedagang';
@@ -267,238 +273,248 @@ function dw_produk_page_info_render() {
     $kategori_terms = get_terms(['taxonomy' => 'kategori_produk', 'hide_empty' => false]);
     ?>
 
-    <!-- STYLE CSS MODERN (TETAP SAMA) -->
-    
-
-    <div class="wrap dw-wrap">
+    <!-- VIEW SECTION -->
+    <div class="wrap dw-admin-wrapper">
         <!-- HEADER -->
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
-            <div>
-                <h1 class="wp-heading-inline" style="font-size: 28px; font-weight: 800; color: #0f172a; margin-right: 15px;">Manajemen Produk</h1>
-                <p style="margin: 5px 0 0; color: #64748b; font-size: 14px;">Kelola katalog produk, stok, variasi, dan harga.</p>
+        <div class="dw-page-header">
+            <div class="dw-header-title">
+                <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
+                <p class="dw-subtitle">Kelola katalog produk, stok, variasi, dan harga.</p>
             </div>
-            <?php if (!$is_edit): ?>
-                <a href="?page=dw-produk&action=new" class="dw-button dw-button-primary">
-                    <span class="dashicons dashicons-plus-alt2" style="font-size: 18px;"></span> Tambah Produk
-                </a>
-            <?php endif; ?>
+            <div class="dw-header-actions">
+                <?php if (!$is_edit): ?>
+                    <a href="?page=dw-produk&action=new" class="dw-button dw-button-primary">
+                        <span class="dashicons dashicons-plus-alt2" style="margin-right:5px;"></span> Tambah Produk
+                    </a>
+                <?php endif; ?>
+            </div>
         </div>
 
         <?php dw_display_notices(); // Tampilkan Notif disini ?>
 
         <?php if($is_edit): ?>
             <!-- === VIEW: ADD / EDIT === -->
-            <form method="post" action="">
+            <form method="post" action="" class="dw-form-grid">
                 <!-- HIDDEN INPUT TRIGGER -->
                 <input type="hidden" name="dw_submit_produk" value="1">
                 <?php wp_nonce_field('dw_prod_save'); ?>
                 <?php if($edit_data): ?><input type="hidden" name="produk_id" value="<?php echo $edit_data->id; ?>"><?php endif; ?>
 
                 <div style="margin-bottom: 20px;">
-                    <a href="?page=dw-produk" class="dw-button dw-button-outline"><span class="dashicons dashicons-arrow-left-alt"></span> Kembali</a>
+                    <a href="?page=dw-produk" class="dw-button dw-button-secondary"><span class="dashicons dashicons-arrow-left-alt"></span> Kembali</a>
                 </div>
 
-                <div class="dw-edit-layout">
-                    <!-- LEFT COLUMN -->
-                    <div class="dw-main-col">
+                <div class="dw-dashboard-split">
+                    <!-- LEFT COLUMN: MAIN CONTENT -->
+                    <div class="dw-content">
                         <div class="dw-card" style="padding:0; overflow:hidden;">
                             <!-- Internal Tabs -->
-                            <div class="dw-form-tabs">
-                                <div class="dw-form-tab active" data-target="tab-info">
+                            <div class="dw-form-tabs" style="display: flex; background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+                                <div class="dw-form-tab active" data-target="tab-info" style="padding: 15px 20px; cursor: pointer; font-weight: 600; border-bottom: 2px solid transparent;">
                                     <span class="dashicons dashicons-info"></span> Informasi Dasar
                                 </div>
-                                <div class="dw-form-tab" data-target="tab-gallery">
+                                <div class="dw-form-tab" data-target="tab-gallery" style="padding: 15px 20px; cursor: pointer; font-weight: 600; border-bottom: 2px solid transparent;">
                                     <span class="dashicons dashicons-images-alt2"></span> Galeri Foto
                                 </div>
-                                <div class="dw-form-tab" data-target="tab-variations">
+                                <div class="dw-form-tab" data-target="tab-variations" style="padding: 15px 20px; cursor: pointer; font-weight: 600; border-bottom: 2px solid transparent;">
                                     <span class="dashicons dashicons-list-view"></span> Variasi Produk
                                 </div>
                             </div>
 
-                            <!-- TAB 1: INFO DASAR -->
-                            <div id="tab-info" class="dw-tab-pane active">
-                                <div class="dw-form-group">
-                                    <label>Nama Produk <span style="color:var(--dw-danger)">*</span></label>
-                                    <input type="text" name="nama_produk" class="dw-input" style="font-size:16px; font-weight:600; padding:12px;" value="<?php echo esc_attr($edit_data->nama_produk ?? ''); ?>" required placeholder="Contoh: Keripik Singkong Balado">
-                                </div>
-                                
-                                <div class="dw-form-group">
-                                    <label>Deskripsi Produk</label>
-                                    <?php wp_editor($edit_data->deskripsi ?? '', 'deskripsi', ['textarea_rows'=>8, 'media_buttons'=>true, 'editor_class'=>'dw-input']); ?>
-                                </div>
-
-                                <div class="dw-grid-2">
+                            <div class="dw-card-body">
+                                <!-- TAB 1: INFO DASAR -->
+                                <div id="tab-info" class="dw-tab-pane active">
                                     <div class="dw-form-group">
-                                        <label>Harga Satuan (Rp) <span style="color:var(--dw-danger)">*</span></label>
-                                        <div style="position:relative;">
-                                            <span style="position:absolute; left:12px; top:10px; color:#94a3b8; font-weight:600;">Rp</span>
-                                            <input type="number" name="harga" class="dw-input" style="padding-left:40px;" value="<?php echo esc_attr($edit_data->harga ?? 0); ?>" required>
+                                        <label class="dw-label">Nama Produk <span style="color:var(--dw-danger)">*</span></label>
+                                        <input type="text" name="nama_produk" class="dw-input" style="font-size:16px; font-weight:600; padding:12px;" value="<?php echo esc_attr($edit_data->nama_produk ?? ''); ?>" required placeholder="Contoh: Keripik Singkong Balado">
+                                    </div>
+                                    
+                                    <div class="dw-form-group">
+                                        <label class="dw-label">Deskripsi Produk</label>
+                                        <?php wp_editor($edit_data->deskripsi ?? '', 'deskripsi', ['textarea_rows'=>8, 'media_buttons'=>true, 'editor_class'=>'dw-input']); ?>
+                                    </div>
+
+                                    <div class="dw-grid-2-col">
+                                        <div class="dw-form-group">
+                                            <label class="dw-label">Harga Satuan (Rp) <span style="color:var(--dw-danger)">*</span></label>
+                                            <div style="position:relative;">
+                                                <span style="position:absolute; left:12px; top:10px; color:#94a3b8; font-weight:600;">Rp</span>
+                                                <input type="number" name="harga" class="dw-input" style="padding-left:40px;" value="<?php echo esc_attr($edit_data->harga ?? 0); ?>" required>
+                                            </div>
+                                        </div>
+                                        <div class="dw-form-group">
+                                            <label class="dw-label">Stok Tersedia <span style="color:var(--dw-danger)">*</span></label>
+                                            <input type="number" name="stok" class="dw-input" value="<?php echo esc_attr($edit_data->stok ?? 0); ?>" required>
                                         </div>
                                     </div>
-                                    <div class="dw-form-group">
-                                        <label>Stok Tersedia <span style="color:var(--dw-danger)">*</span></label>
-                                        <input type="number" name="stok" class="dw-input" value="<?php echo esc_attr($edit_data->stok ?? 0); ?>" required>
+
+                                    <div class="dw-grid-2-col">
+                                        <div class="dw-form-group">
+                                            <label class="dw-label">Berat (Gram)</label>
+                                            <input type="number" name="berat_gram" class="dw-input" value="<?php echo esc_attr($edit_data->berat_gram ?? 0); ?>">
+                                        </div>
+                                        <div class="dw-form-group">
+                                            <label class="dw-label">Kondisi</label>
+                                            <select name="kondisi" class="dw-input">
+                                                <option value="baru" <?php selected($edit_data ? $edit_data->kondisi : 'baru', 'baru'); ?>>Baru</option>
+                                                <option value="bekas" <?php selected($edit_data ? $edit_data->kondisi : '', 'bekas'); ?>>Bekas</option>
+                                            </select>
+                                        </div>
                                     </div>
                                 </div>
 
-                                <div class="dw-grid-2">
+                                <!-- TAB 2: GALERI -->
+                                <div id="tab-gallery" class="dw-tab-pane" style="display:none;">
                                     <div class="dw-form-group">
-                                        <label>Berat (Gram)</label>
-                                        <input type="number" name="berat_gram" class="dw-input" value="<?php echo esc_attr($edit_data->berat_gram ?? 0); ?>">
-                                    </div>
-                                    <div class="dw-form-group">
-                                        <label>Kondisi</label>
-                                        <select name="kondisi" class="dw-input">
-                                            <option value="baru" <?php selected($edit_data ? $edit_data->kondisi : 'baru', 'baru'); ?>>Baru</option>
-                                            <option value="bekas" <?php selected($edit_data ? $edit_data->kondisi : '', 'bekas'); ?>>Bekas</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- TAB 2: GALERI -->
-                            <div id="tab-gallery" class="dw-tab-pane">
-                                <div class="dw-form-group">
-                                    <label style="font-size:16px;">Foto Galeri Tambahan</label>
-                                    <p class="description" style="margin-bottom:15px;">Upload foto dari berbagai sudut untuk menarik pembeli.</p>
-                                    
-                                    <div id="galeri-container" style="display:flex; flex-wrap:wrap; gap:15px; margin-bottom:20px;">
-                                        <?php 
-                                        $galeri_urls = [];
-                                        if (!empty($edit_data->galeri)) {
-                                            $decoded = json_decode($edit_data->galeri, true);
-                                            if (is_array($decoded)) {
-                                                foreach($decoded as $url) {
-                                                    $galeri_urls[] = $url;
-                                                    echo '<div class="g-item"><img src="'.esc_url($url).'"><span class="rem-g" data-url="'.esc_attr($url).'">&times;</span></div>';
+                                        <label class="dw-label" style="font-size:16px;">Foto Galeri Tambahan</label>
+                                        <p class="dw-help-text" style="margin-bottom:15px;">Upload foto dari berbagai sudut untuk menarik pembeli.</p>
+                                        
+                                        <div id="galeri-container" style="display:flex; flex-wrap:wrap; gap:15px; margin-bottom:20px;">
+                                            <?php 
+                                            $galeri_urls = [];
+                                            if (!empty($edit_data->galeri)) {
+                                                $decoded = json_decode($edit_data->galeri, true);
+                                                if (is_array($decoded)) {
+                                                    foreach($decoded as $url) {
+                                                        $galeri_urls[] = $url;
+                                                        echo '<div class="g-item" style="position:relative;"><img src="'.esc_url($url).'" style="width:100px;height:100px;object-fit:cover;border-radius:8px;"><span class="rem-g" data-url="'.esc_attr($url).'" style="position:absolute;top:-8px;right:-8px;background:red;color:white;border-radius:50%;width:20px;height:20px;text-align:center;line-height:20px;cursor:pointer;">&times;</span></div>';
+                                                    }
                                                 }
                                             }
-                                        }
-                                        ?>
-                                    </div>
-                                    <input type="hidden" name="galeri_urls" id="galeri_urls" value="<?php echo esc_attr(implode(',', $galeri_urls)); ?>">
-                                    <button type="button" class="dw-button dw-button-outline" id="btn_galeri">
-                                        <span class="dashicons dashicons-plus-alt2"></span> Tambah Foto Galeri
-                                    </button>
-                                </div>
-                            </div>
-
-                            <!-- TAB 3: VARIASI -->
-                            <div id="tab-variations" class="dw-tab-pane">
-                                <div class="dw-form-group">
-                                    <label style="font-size:16px;">Variasi Produk</label>
-                                    <p class="description" style="margin-bottom:15px;">Gunakan jika produk memiliki pilihan warna atau ukuran. Kosongkan jika produk tunggal.</p>
-                                    
-                                    <div class="dw-table-wrapper">
-                                        <table class="dw-modern-table">
-                                            <thead>
-                                                <tr>
-                                                    <th>Nama Variasi</th>
-                                                    <th width="150">Harga (Rp)</th>
-                                                    <th width="100">Stok</th>
-                                                    <th width="120">SKU</th>
-                                                    <th width="60"></th>
-                                                </tr>
-                                            </thead>
-                                            <tbody id="variasi-rows">
-                                                <?php if($variasi_list): foreach($variasi_list as $var): ?>
-                                                    <tr>
-                                                        <td><input type="text" name="var_nama[]" class="dw-input" value="<?php echo esc_attr($var->deskripsi_variasi); ?>"></td>
-                                                        <td><input type="number" name="var_harga[]" class="dw-input" value="<?php echo esc_attr($var->harga_variasi); ?>"></td>
-                                                        <td><input type="number" name="var_stok[]" class="dw-input" value="<?php echo esc_attr($var->stok_variasi); ?>"></td>
-                                                        <td>
-                                                            <input type="text" name="var_sku[]" class="dw-input" value="<?php echo esc_attr($var->sku); ?>">
-                                                            <input type="hidden" name="var_foto[]" value="<?php echo esc_attr($var->foto); ?>">
-                                                        </td>
-                                                        <td style="text-align:center;"><button type="button" class="dw-button dw-button-danger dw-button-sm btn-del-var"><span class="dashicons dashicons-trash" style="margin:0;"></span></button></td>
-                                                    </tr>
-                                                <?php endforeach; endif; ?>
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                    <div style="margin-top:15px;">
-                                        <button type="button" class="dw-button dw-button-primary dw-button-sm" id="btn-add-var">
-                                            <span class="dashicons dashicons-plus"></span> Tambah Baris Variasi
+                                            ?>
+                                        </div>
+                                        <input type="hidden" name="galeri_urls" id="galeri_urls" value="<?php echo esc_attr(implode(',', $galeri_urls)); ?>">
+                                        <button type="button" class="dw-button dw-button-secondary" id="btn_galeri">
+                                            <span class="dashicons dashicons-plus-alt2"></span> Tambah Foto Galeri
                                         </button>
+                                    </div>
+                                </div>
+
+                                <!-- TAB 3: VARIASI -->
+                                <div id="tab-variations" class="dw-tab-pane" style="display:none;">
+                                    <div class="dw-form-group">
+                                        <label class="dw-label" style="font-size:16px;">Variasi Produk</label>
+                                        <p class="dw-help-text" style="margin-bottom:15px;">Gunakan jika produk memiliki pilihan warna atau ukuran. Kosongkan jika produk tunggal.</p>
+                                        
+                                        <div class="dw-table-wrapper" style="border:none;">
+                                            <table class="dw-modern-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Nama Variasi</th>
+                                                        <th width="150">Harga (Rp)</th>
+                                                        <th width="100">Stok</th>
+                                                        <th width="120">SKU</th>
+                                                        <th width="60"></th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="variasi-rows">
+                                                    <?php if($variasi_list): foreach($variasi_list as $var): ?>
+                                                        <tr>
+                                                            <td><input type="text" name="var_nama[]" class="dw-input" value="<?php echo esc_attr($var->deskripsi_variasi); ?>"></td>
+                                                            <td><input type="number" name="var_harga[]" class="dw-input" value="<?php echo esc_attr($var->harga_variasi); ?>"></td>
+                                                            <td><input type="number" name="var_stok[]" class="dw-input" value="<?php echo esc_attr($var->stok_variasi); ?>"></td>
+                                                            <td>
+                                                                <input type="text" name="var_sku[]" class="dw-input" value="<?php echo esc_attr($var->sku); ?>">
+                                                                <input type="hidden" name="var_foto[]" value="<?php echo esc_attr($var->foto); ?>">
+                                                            </td>
+                                                            <td style="text-align:center;"><button type="button" class="dw-button dw-button-secondary btn-del-var" style="color:red;border-color:red;"><span class="dashicons dashicons-trash" style="margin:0;"></span></button></td>
+                                                        </tr>
+                                                    <?php endforeach; endif; ?>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        <div style="margin-top:15px;">
+                                            <button type="button" class="dw-button dw-button-secondary" id="btn-add-var">
+                                                <span class="dashicons dashicons-plus"></span> Tambah Baris Variasi
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- RIGHT COLUMN -->
-                    <div class="dw-sidebar-col">
+                    <!-- RIGHT COLUMN: SIDEBAR -->
+                    <div class="dw-sidebar">
                         
                         <!-- PUBLISH BOX -->
                         <div class="dw-card">
                             <div class="dw-card-header"><h3 class="card-heading">Penerbitan</h3></div>
-                            <div class="dw-form-group">
-                                <label>Status</label>
-                                <select name="status" class="dw-input">
-                                    <option value="aktif" <?php selected($edit_data->status ?? '', 'aktif'); ?>>Aktif</option>
-                                    <option value="habis" <?php selected($edit_data->status ?? '', 'habis'); ?>>Habis Stok</option>
-                                    <option value="arsip" <?php selected($edit_data->status ?? '', 'arsip'); ?>>Arsip (Sembunyikan)</option>
-                                </select>
+                            <div class="dw-card-body">
+                                <div class="dw-form-group">
+                                    <label class="dw-label">Status</label>
+                                    <select name="status" class="dw-input">
+                                        <option value="aktif" <?php selected($edit_data->status ?? '', 'aktif'); ?>>Aktif</option>
+                                        <option value="habis" <?php selected($edit_data->status ?? '', 'habis'); ?>>Habis Stok</option>
+                                        <option value="arsip" <?php selected($edit_data->status ?? '', 'arsip'); ?>>Arsip (Sembunyikan)</option>
+                                    </select>
+                                </div>
+                                <button type="submit" class="dw-button dw-button-primary" style="width:100%; justify-content:center; margin-top:10px;">
+                                    <span class="dashicons dashicons-saved" style="margin-right:5px;"></span> Simpan Produk
+                                </button>
                             </div>
-                            <button type="submit" class="dw-button dw-button-primary" style="width:100%; justify-content:center; margin-top:10px;">
-                                <span class="dashicons dashicons-saved"></span> Simpan Produk
-                            </button>
                         </div>
 
                         <!-- CATEGORY BOX -->
                         <div class="dw-card">
                             <div class="dw-card-header"><h3 class="card-heading">Kategori</h3></div>
-                            <div class="dw-form-group">
-                                <select name="kategori" class="dw-input">
-                                    <option value="">-- Pilih Kategori --</option>
-                                    <?php if (!empty($kategori_terms) && !is_wp_error($kategori_terms)) : ?>
-                                        <?php foreach ($kategori_terms as $term) : ?>
-                                            <option value="<?php echo esc_attr($term->name); ?>" <?php selected(($edit_data && isset($edit_data->kategori)) ? $edit_data->kategori : '', $term->name); ?>>
-                                                <?php echo esc_html($term->name); ?>
-                                            </option>
-                                        <?php endforeach; ?>
-                                    <?php endif; ?>
-                                </select>
-                                <p class="description" style="margin-top:10px; font-size:12px;">
-                                    <a href="edit-tags.php?taxonomy=kategori_produk&post_type=dw_produk" target="_blank" style="text-decoration:none; display:flex; align-items:center; gap:4px;">
-                                        <span class="dashicons dashicons-plus"></span> Kelola Kategori
-                                    </a>
-                                </p>
+                            <div class="dw-card-body">
+                                <div class="dw-form-group">
+                                    <select name="kategori" class="dw-input">
+                                        <option value="">-- Pilih Kategori --</option>
+                                        <?php if (!empty($kategori_terms) && !is_wp_error($kategori_terms)) : ?>
+                                            <?php foreach ($kategori_terms as $term) : ?>
+                                                <option value="<?php echo esc_attr($term->name); ?>" <?php selected(($edit_data && isset($edit_data->kategori)) ? $edit_data->kategori : '', $term->name); ?>>
+                                                    <?php echo esc_html($term->name); ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        <?php endif; ?>
+                                    </select>
+                                    <p class="dw-help-text" style="margin-top:10px;">
+                                        <a href="edit-tags.php?taxonomy=kategori_produk&post_type=dw_produk" target="_blank" style="text-decoration:none; display:flex; align-items:center; gap:4px;">
+                                            <span class="dashicons dashicons-plus"></span> Kelola Kategori
+                                        </a>
+                                    </p>
+                                </div>
                             </div>
                         </div>
 
                         <!-- IMAGE BOX -->
                         <div class="dw-card">
                             <div class="dw-card-header"><h3 class="card-heading">Foto Utama</h3></div>
-                            <div class="dw-form-group">
-                                <div class="dw-img-preview <?php echo empty($edit_data->foto_utama) ? 'empty' : ''; ?>">
-                                    <?php if(!empty($edit_data->foto_utama)): ?>
-                                        <img id="img_prev_prod" src="<?php echo esc_url($edit_data->foto_utama); ?>">
-                                    <?php else: ?>
-                                        <img id="img_prev_prod" src="" style="display:none;">
-                                    <?php endif; ?>
+                            <div class="dw-card-body">
+                                <div class="dw-form-group">
+                                    <div class="dw-img-preview <?php echo empty($edit_data->foto_utama) ? 'empty' : ''; ?>" style="margin-bottom:10px; text-align:center;">
+                                        <?php if(!empty($edit_data->foto_utama)): ?>
+                                            <img id="img_prev_prod" src="<?php echo esc_url($edit_data->foto_utama); ?>" style="max-width:100%; height:auto; border-radius:4px;">
+                                        <?php else: ?>
+                                            <img id="img_prev_prod" src="" style="display:none; max-width:100%; height:auto; border-radius:4px;">
+                                        <?php endif; ?>
+                                    </div>
+                                    <input type="hidden" name="foto_utama" id="foto_utama" value="<?php echo esc_attr($edit_data->foto_utama ?? ''); ?>">
+                                    <button type="button" class="dw-button dw-button-secondary btn_upload" id="btn_upl" style="width:100%; justify-content:center;">Pilih Foto Utama</button>
                                 </div>
-                                <input type="hidden" name="foto_utama" id="foto_utama" value="<?php echo esc_attr($edit_data->foto_utama ?? ''); ?>">
-                                <button type="button" class="dw-button dw-button-outline dw-button-sm" id="btn_upl" style="width:100%; justify-content:center;">Pilih Foto Utama</button>
                             </div>
                         </div>
 
                         <!-- OWNER BOX -->
                         <div class="dw-card">
                             <div class="dw-card-header"><h3 class="card-heading">Pemilik Toko</h3></div>
-                            <div class="dw-form-group">
-                                <?php if ($is_super_admin): ?>
-                                    <?php $list_pedagang = $wpdb->get_results("SELECT id, nama_toko FROM $table_pedagang WHERE status_akun='aktif'"); ?>
-                                    <select name="id_pedagang" class="dw-input select2">
-                                        <?php foreach($list_pedagang as $p): ?>
-                                            <option value="<?php echo $p->id; ?>" <?php selected($edit_data ? $edit_data->id_pedagang : '', $p->id); ?>>
-                                                <?php echo esc_html($p->nama_toko); ?>
-                                            </option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                <?php else: ?>
-                                    <input type="text" class="dw-input" value="<?php echo esc_attr($my_pedagang_data->nama_toko ?? '-'); ?>" readonly disabled style="background:#f9fafb; color:#64748b;">
-                                <?php endif; ?>
+                            <div class="dw-card-body">
+                                <div class="dw-form-group">
+                                    <?php if ($is_super_admin): ?>
+                                        <?php $list_pedagang = $wpdb->get_results("SELECT id, nama_toko FROM $table_pedagang WHERE status_akun='aktif'"); ?>
+                                        <select name="id_pedagang" class="dw-input select2">
+                                            <?php foreach($list_pedagang as $p): ?>
+                                                <option value="<?php echo $p->id; ?>" <?php selected($edit_data ? $edit_data->id_pedagang : '', $p->id); ?>>
+                                                    <?php echo esc_html($p->nama_toko); ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    <?php else: ?>
+                                        <input type="text" class="dw-input" value="<?php echo esc_attr($my_pedagang_data->nama_toko ?? '-'); ?>" readonly disabled style="background:#f9fafb; color:#64748b;">
+                                    <?php endif; ?>
+                                </div>
                             </div>
                         </div>
 
@@ -510,11 +526,14 @@ function dw_produk_page_info_render() {
             jQuery(document).ready(function($){
                 // Tab Switcher
                 $('.dw-form-tab').click(function(){
-                    $('.dw-form-tab').removeClass('active');
-                    $('.dw-tab-pane').removeClass('active');
-                    $(this).addClass('active');
-                    $('#'+$(this).data('target')).addClass('active');
+                    $('.dw-form-tab').removeClass('active').css('border-bottom', '2px solid transparent');
+                    $(this).addClass('active').css('border-bottom', '2px solid var(--dw-brand-blue)');
+                    $('.dw-tab-pane').hide();
+                    $('#'+$(this).data('target')).show();
                 });
+                
+                // Set default active tab styles
+                $('.dw-form-tab.active').css('border-bottom', '2px solid var(--dw-brand-blue)');
 
                 // Single Image
                 $('#btn_upl').click(function(e){
@@ -538,7 +557,7 @@ function dw_produk_page_info_render() {
                             att = att.toJSON();
                             if(urls.indexOf(att.url) === -1){
                                 urls.push(att.url);
-                                $('#galeri-container').append('<div class="g-item"><img src="'+att.url+'"><span class="rem-g" data-url="'+att.url+'">&times;</span></div>');
+                                $('#galeri-container').append('<div class="g-item" style="position:relative;"><img src="'+att.url+'" style="width:100px;height:100px;object-fit:cover;border-radius:8px;"><span class="rem-g" data-url="'+att.url+'" style="position:absolute;top:-8px;right:-8px;background:red;color:white;border-radius:50%;width:20px;height:20px;text-align:center;line-height:20px;cursor:pointer;">&times;</span></div>');
                             }
                         });
                         $('#galeri_urls').val(urls.join(','));
@@ -559,7 +578,7 @@ function dw_produk_page_info_render() {
                         '<td><input type="number" name="var_harga[]" class="dw-input" placeholder="0"></td>'+
                         '<td><input type="number" name="var_stok[]" class="dw-input" placeholder="0"></td>'+
                         '<td><input type="text" name="var_sku[]" class="dw-input"><input type="hidden" name="var_foto[]"></td>'+
-                        '<td style="text-align:center;"><button type="button" class="dw-button dw-button-danger dw-button-sm btn-del-var"><span class="dashicons dashicons-trash" style="margin:0;"></span></button></td>'+
+                        '<td style="text-align:center;"><button type="button" class="dw-button dw-button-secondary btn-del-var" style="color:red;border-color:red;"><span class="dashicons dashicons-trash" style="margin:0;"></span></button></td>'+
                     '</tr>';
                     $('#variasi-rows').append(row);
                 });
@@ -580,29 +599,32 @@ function dw_produk_page_info_render() {
                 $active_prod = $wpdb->get_var("SELECT COUNT(id) FROM $table_produk WHERE status='aktif' AND id_pedagang = " . ($is_super_admin ? "id_pedagang" : intval($my_pedagang_data->id ?? 0)));
                 $empty_prod = $wpdb->get_var("SELECT COUNT(id) FROM $table_produk WHERE stok <= 0 AND id_pedagang = " . ($is_super_admin ? "id_pedagang" : intval($my_pedagang_data->id ?? 0)));
                 ?>
-                <div class="dw-stat-box">
-                    <div class="dw-stat-icon blue"><span class="dashicons dashicons-products"></span></div>
-                    <div class="dw-stat-content"><h4><?php echo $total_prod; ?></h4><span>Total Produk</span></div>
+                <div class="dw-stat-card">
+                    <div class="dw-stat-icon-wrapper bg-blue"><span class="dashicons dashicons-products"></span></div>
+                    <h4 class="dw-stat-value"><?php echo $total_prod; ?></h4>
+                    <span class="dw-stat-label">Total Produk</span>
                 </div>
-                <div class="dw-stat-box">
-                    <div class="dw-stat-icon green"><span class="dashicons dashicons-cart"></span></div>
-                    <div class="dw-stat-content"><h4><?php echo $active_prod; ?></h4><span>Aktif Dijual</span></div>
+                <div class="dw-stat-card">
+                    <div class="dw-stat-icon-wrapper bg-green"><span class="dashicons dashicons-cart"></span></div>
+                    <h4 class="dw-stat-value"><?php echo $active_prod; ?></h4>
+                    <span class="dw-stat-label">Aktif Dijual</span>
                 </div>
-                <div class="dw-stat-box">
-                    <div class="dw-stat-icon red"><span class="dashicons dashicons-warning"></span></div>
-                    <div class="dw-stat-content"><h4><?php echo $empty_prod; ?></h4><span>Stok Habis</span></div>
+                <div class="dw-stat-card">
+                    <div class="dw-stat-icon-wrapper bg-orange"><span class="dashicons dashicons-warning"></span></div>
+                    <h4 class="dw-stat-value"><?php echo $empty_prod; ?></h4>
+                    <span class="dw-stat-label">Stok Habis</span>
                 </div>
             </div>
 
             <!-- TABLE CARD -->
             <div class="dw-card" style="padding:0; overflow:hidden;">
                 <!-- Toolbar -->
-                <div style="padding:15px 20px; background:var(--dw-gray-50); border-bottom:1px solid var(--dw-gray-200); display:flex; justify-content:space-between; align-items:center;">
-                    <h3 style="margin:0; font-size:16px; color:var(--dw-gray-800);">Daftar Produk</h3>
+                <div class="dw-card-header" style="display:flex; justify-content:space-between; align-items:center;">
+                    <h3 class="card-heading">Daftar Produk</h3>
                     <form method="get" style="display:flex; gap:10px;">
                         <input type="hidden" name="page" value="dw-produk">
-                        <input type="text" name="s" class="dw-input" placeholder="Cari produk..." value="<?php echo isset($_GET['s']) ? esc_attr($_GET['s']) : ''; ?>" style="background:white; width:250px;">
-                        <button type="submit" class="dw-button dw-button-outline">Cari</button>
+                        <input type="text" name="s" class="dw-input" placeholder="Cari produk..." value="<?php echo isset($_GET['s']) ? esc_attr($_GET['s']) : ''; ?>" style="width:250px;">
+                        <button type="submit" class="dw-button dw-button-secondary">Cari</button>
                     </form>
                 </div>
 
@@ -636,14 +658,14 @@ function dw_produk_page_info_render() {
                             ?>
                             <tr>
                                 <td>
-                                    <img src="<?php echo esc_url($img); ?>" style="width:50px; height:50px; border-radius:8px; object-fit:cover; border:1px solid var(--dw-gray-200);">
+                                    <img src="<?php echo esc_url($img); ?>" style="width:50px; height:50px; border-radius:8px; object-fit:cover; border:1px solid var(--dw-border-color);">
                                 </td>
                                 <td>
-                                    <strong style="font-size:15px; color:var(--dw-gray-800); display:block; margin-bottom:4px;"><?php echo esc_html($r->nama_produk); ?></strong>
-                                    <?php if($is_super_admin): ?><span style="font-size:12px; color:var(--dw-gray-500);">Toko: <?php echo esc_html($r->nama_toko); ?></span><?php endif; ?>
+                                    <strong style="font-size:15px; color:var(--dw-text-dark); display:block; margin-bottom:4px;"><?php echo esc_html($r->nama_produk); ?></strong>
+                                    <?php if($is_super_admin): ?><span style="font-size:12px; color:var(--dw-text-grey);">Toko: <?php echo esc_html($r->nama_toko); ?></span><?php endif; ?>
                                 </td>
-                                <td><span class="dw-pill gray" style="font-weight:600;"><?php echo esc_html($r->kategori); ?></span></td>
-                                <td style="font-weight:700; color:var(--dw-gray-800);">Rp <?php echo number_format($r->harga, 0, ',', '.'); ?></td>
+                                <td><span class="dw-badge status-neutral"><?php echo esc_html($r->kategori); ?></span></td>
+                                <td style="font-weight:700; color:var(--dw-text-dark);">Rp <?php echo number_format($r->harga, 0, ',', '.'); ?></td>
                                 <td>
                                     <?php if($r->stok <= 0): ?>
                                         <span style="color:var(--dw-danger); font-weight:700;">0 (Habis)</span>
@@ -652,24 +674,24 @@ function dw_produk_page_info_render() {
                                     <?php endif; ?>
                                 </td>
                                 <td>
-                                    <?php if($r->status == 'aktif'): ?><span class="dw-pill success">Aktif</span>
-                                    <?php elseif($r->status == 'habis'): ?><span class="dw-pill warning">Habis</span>
-                                    <?php else: ?><span class="dw-pill gray">Arsip</span><?php endif; ?>
+                                    <?php if($r->status == 'aktif'): ?><span class="dw-badge status-success">Aktif</span>
+                                    <?php elseif($r->status == 'habis'): ?><span class="dw-badge status-warning">Habis</span>
+                                    <?php else: ?><span class="dw-badge status-neutral">Arsip</span><?php endif; ?>
                                 </td>
-	                                <td style="text-align:right;">
-	                                    <div style="display:flex; gap:6px; justify-content:flex-end;">
-	                                        <?php if (current_user_can('manage_options')): ?>
-<a href="<?php echo add_query_arg(['action' => 'toggle_featured', 'id' => $r->id]); ?>" class="dw-button dw-button-outline dw-button-sm" title="<?php echo (isset($r->is_featured) && $r->is_featured) ? 'Unpin' : 'Pin to Top'; ?>">
-		                                                <span class="dashicons dashicons-<?php echo (isset($r->is_featured) && $r->is_featured) ? 'star-filled' : 'star-empty'; ?>"></span>
-		                                            </a>
-	                                        <?php endif; ?>
-	                                        <a href="<?php echo $edit_url; ?>" class="dw-button dw-button-outline dw-button-sm" title="Edit"><span class="dashicons dashicons-edit"></span></a>
-	                                        <a href="<?php echo $del_url; ?>" class="dw-button dw-button-danger dw-button-sm" onclick="return confirm('Hapus produk ini?');" title="Hapus"><span class="dashicons dashicons-trash"></span></a>
-	                                    </div>
-	                                </td>
+                                <td style="text-align:right;">
+                                    <div style="display:flex; gap:6px; justify-content:flex-end;">
+                                        <?php if (current_user_can('manage_options')): ?>
+                                            <a href="<?php echo add_query_arg(['action' => 'toggle_featured', 'id' => $r->id]); ?>" class="dw-button dw-button-secondary" style="padding: 6px 10px;" title="<?php echo (isset($r->is_featured) && $r->is_featured) ? 'Unpin' : 'Pin to Top'; ?>">
+                                                <span class="dashicons dashicons-<?php echo (isset($r->is_featured) && $r->is_featured) ? 'star-filled' : 'star-empty'; ?>" style="margin:0;"></span>
+                                            </a>
+                                        <?php endif; ?>
+                                        <a href="<?php echo $edit_url; ?>" class="dw-button dw-button-secondary" style="padding: 6px 10px;" title="Edit"><span class="dashicons dashicons-edit" style="margin:0;"></span></a>
+                                        <a href="<?php echo $del_url; ?>" class="dw-button dw-button-secondary" style="padding: 6px 10px; color:var(--dw-danger); border-color:var(--dw-danger);" onclick="return confirm('Hapus produk ini?');" title="Hapus"><span class="dashicons dashicons-trash" style="margin:0;"></span></a>
+                                    </div>
+                                </td>
                             </tr>
                             <?php endforeach; else: ?>
-                                <tr><td colspan="7" style="text-align:center; padding:50px; color:var(--dw-gray-500);">Belum ada data produk.</td></tr>
+                                <tr><td colspan="7" style="text-align:center; padding:50px; color:var(--dw-text-grey);">Belum ada data produk.</td></tr>
                             <?php endif; ?>
                         </tbody>
                     </table>
