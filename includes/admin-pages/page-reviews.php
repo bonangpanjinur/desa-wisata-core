@@ -17,6 +17,9 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
+// Include UI components
+require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin-ui-components.php';
+
 /**
  * --------------------------------------------------------------------------
  * 1. HANDLER: AKSI INDIVIDUAL (Approve/Reject/Trash via Link)
@@ -120,25 +123,7 @@ function dw_reviews_moderation_page_render() {
         ?>
 
         <!-- 1. STATS CARDS -->
-        <style>
-            .dw-stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 25px; margin-top: 20px; }
-            .dw-stat-card { background: #fff; padding: 20px; border-radius: 8px; border: 1px solid #c3c4c7; box-shadow: 0 1px 2px rgba(0,0,0,0.05); display: flex; align-items: center; justify-content: space-between; }
-            .dw-stat-content h3 { margin: 0 0 5px; font-size: 13px; color: #64748b; text-transform: uppercase; font-weight: 600; }
-            .dw-stat-number { font-size: 24px; font-weight: 700; color: #1e293b; line-height: 1; }
-            .dw-stat-icon { font-size: 24px; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; border-radius: 12px; }
-            
-            .card-total { border-bottom: 4px solid #3b82f6; } .icon-total { background: #eff6ff; color: #3b82f6; }
-            .card-pending { border-bottom: 4px solid #f59e0b; } .icon-pending { background: #fffbeb; color: #f59e0b; }
-            .card-approved { border-bottom: 4px solid #10b981; } .icon-approved { background: #f0fdf4; color: #10b981; }
-            .card-rejected { border-bottom: 4px solid #ef4444; } .icon-rejected { background: #fef2f2; color: #ef4444; }
-
-            /* Table Styles */
-            .dw-table-card { background: #fff; border: 1px solid #c3c4c7; border-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); padding: 0; overflow: hidden; }
-            .tablenav.top { padding: 10px 15px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; margin: 0; }
-            .wp-list-table { border: none; box-shadow: none; }
-            .wp-list-table thead th { border-bottom: 1px solid #e2e8f0; font-weight: 600; }
-            .wp-list-table td { vertical-align: middle; }
-        </style>
+        
 
         <div class="dw-stats-grid">
             <div class="dw-stat-card card-total">
@@ -192,7 +177,7 @@ function dw_reviews_moderation_page_render() {
         </h2>
 
         <!-- 3. TABLE WRAPPER -->
-        <div class="dw-table-card">
+        <div class="dw-modern-table-card">
             <form method="post">
                 <input type="hidden" name="page" value="<?php echo esc_attr($_REQUEST['page']); ?>" />
                 <?php 

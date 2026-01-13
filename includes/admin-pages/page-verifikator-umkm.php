@@ -7,6 +7,9 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
+// Include UI components
+require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin-ui-components.php';
+
 function dw_render_verifikator_umkm_page() {
     global $wpdb;
     $current_user_id = get_current_user_id();
@@ -15,7 +18,7 @@ function dw_render_verifikator_umkm_page() {
     $verifikator = $wpdb->get_row( $wpdb->prepare( "SELECT id, nama_lengkap, kode_referral FROM {$wpdb->prefix}dw_verifikator WHERE id_user = %d", $current_user_id ) );
 
     if ( ! $verifikator ) {
-        echo '<div class="wrap"><div class="notice notice-error"><p>Akses Ditolak. Akun Anda tidak terdaftar sebagai Verifikator.</p></div></div>';
+        echo '<div class="wrap dw-wrap"><div class="notice notice-error"><p>Akses Ditolak. Akun Anda tidak terdaftar sebagai Verifikator.</p></div></div>';
         return;
     }
 
@@ -40,7 +43,7 @@ function dw_render_verifikator_umkm_page() {
             // Update Stats Verifikator
             $wpdb->query( $wpdb->prepare("UPDATE {$wpdb->prefix}dw_verifikator SET total_verifikasi_sukses = total_verifikasi_sukses + 1 WHERE id = %d", $verifikator->id) );
             
-            echo '<div class="notice notice-success is-dismissible"><p>UMKM berhasil diverifikasi lapangan & diaktifkan.</p></div>';
+            echo dw_admin_render_alert('UMKM berhasil diverifikasi lapangan & diaktifkan.', 'success');
         }
     }
 
@@ -64,39 +67,9 @@ function dw_render_verifikator_umkm_page() {
     ?>
 
     <!-- STYLE DARI FILE SEBELUMNYA -->
-    <style>
-        .dw-admin-wrap { margin: 20px 20px 0 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        
-        /* Header & Info Card */
-        .dw-header-flex { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 25px; }
-        .dw-info-card { background: #e0f2fe; border: 1px solid #bae6fd; color: #0c4a6e; padding: 15px 20px; border-radius: 10px; margin-bottom: 20px; display: flex; align-items: center; gap: 15px; }
-        .dw-code-box { background: #fff; padding: 5px 12px; border-radius: 6px; font-weight: 800; font-family: monospace; letter-spacing: 1px; color: #0284c7; border: 1px solid #7dd3fc; }
+    
 
-        /* Filter */
-        .dw-filter-group { display: flex; gap: 15px; background: #fff; padding: 10px 20px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-        .dw-filter-item label { display: block; font-size: 11px; font-weight: bold; text-transform: uppercase; color: #94a3b8; margin-bottom: 5px; }
-        .dw-filter-item select { border: 1px solid #e2e8f0; border-radius: 6px; padding: 5px 10px; min-width: 150px; }
-
-        /* Table Styling */
-        .dw-main-card { background: #fff; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); overflow: hidden; }
-        .dw-table { width: 100%; border-collapse: collapse; }
-        .dw-table th { background: #f8fafc; padding: 15px 20px; text-align: left; font-weight: 600; color: #475569; border-bottom: 1px solid #e2e8f0; }
-        .dw-table td { padding: 15px 20px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
-        
-        /* Status Badges */
-        .status-badge { padding: 5px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; }
-        .status-pending { background: #fef3c7; color: #92400e; } /* Orange */
-        .status-verified { background: #dcfce7; color: #15803d; } /* Green */
-        .status-rejected { background: #fee2e2; color: #b91c1c; } /* Red */
-
-        /* Buttons */
-        .btn-action { padding: 8px 14px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; font-weight: 600; transition: 0.2s; text-decoration: none; display: inline-block; }
-        .btn-approve { background: #10b981; color: #fff; }
-        .btn-approve:hover { background: #059669; color: #fff; }
-        .btn-disabled { background: #f1f5f9; color: #94a3b8; cursor: not-allowed; }
-    </style>
-
-    <div class="wrap dw-admin-wrap">
+    <div class="wrap dw-wrap">
         
         <div class="dw-header-flex">
             <div>
@@ -128,7 +101,7 @@ function dw_render_verifikator_umkm_page() {
         </div>
 
         <div class="dw-main-card">
-            <table class="dw-table">
+            <table class="dw-modern-table">
                 <thead>
                     <tr>
                         <th>Nama UMKM & Pemilik</th>

@@ -10,6 +10,9 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
+// Include UI components
+require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin-ui-components.php';
+
 /**
  * Handle POST/GET actions for Banner CRUD
  */
@@ -67,12 +70,6 @@ function dw_handle_banner_actions() {
         wp_redirect(add_query_arg(array('page' => 'dw-banner', 'message' => $message), admin_url('admin.php')));
         exit;
     }
-
-    // 3. Handle Bulk Actions
-    if ( isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['ids']) ) {
-        // Bulk delete is usually handled within the List Table class, 
-        // but we can ensure it redirects correctly here if needed.
-    }
 }
 
 // Run handler
@@ -88,106 +85,108 @@ function dw_banner_page_render() {
     $action = isset($_GET['action']) ? $_GET['action'] : 'list';
     $id     = isset($_GET['id']) ? intval($_GET['id']) : 0;
 
-    // --- Notices ---
-    if ( isset($_GET['message']) ) {
-        $msg_code = $_GET['message'];
-        $notice   = '';
-        $type     = 'success';
-        
-        switch ($msg_code) {
-            case 'created': $notice = 'Banner berhasil ditambahkan.'; break;
-            case 'updated': $notice = 'Banner berhasil diperbarui.'; break;
-            case 'deleted': $notice = 'Banner berhasil dihapus.'; break;
-            case 'error': 
-                $notice = 'Terjadi kesalahan saat menyimpan data.'; 
-                $type = 'error';
-                break;
-        }
+    ?>
+    <div class="wrap dw-wrap">
+        <?php
+        // --- Notices ---
+        if ( isset($_GET['message']) ) {
+            $msg_code = $_GET['message'];
+            $notice   = '';
+            $type     = 'info';
+            
+            switch ($msg_code) {
+                case 'created': $notice = 'Banner berhasil ditambahkan.'; $type = 'success'; break;
+                case 'updated': $notice = 'Banner berhasil diperbarui.'; $type = 'success'; break;
+                case 'deleted': $notice = 'Banner berhasil dihapus.'; $type = 'success'; break;
+                case 'error': 
+                    $notice = 'Terjadi kesalahan saat menyimpan data.'; 
+                    $type = 'danger';
+                    break;
+            }
 
-        if ( $notice ) {
-            echo '<div class="notice notice-' . $type . ' is-dismissible"><p>' . esc_html($notice) . '</p></div>';
-        }
-    }
-
-    // --- FORM MODE ---
-    if ( $action === 'add' || ($action === 'edit' && $id > 0) ) {
-        wp_enqueue_media();
-
-        $item = null;
-        if ( $id > 0 ) {
-            $item = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE id = %d", $id));
-            if (!$item) {
-                echo '<div class="notice notice-error"><p>Banner tidak ditemukan.</p></div>';
-                return;
+            if ( $notice ) {
+                dw_admin_render_alert($notice, $type);
             }
         }
 
-        $judul     = $item ? $item->judul : '';
-        $gambar    = $item ? $item->gambar : '';
-        $link      = $item ? $item->link : '';
-        $status    = $item ? $item->status : 'aktif';
-        $prioritas = $item ? $item->prioritas : 10;
-        ?>
-        <div class="wrap">
-            <h1 class="wp-heading-inline"><?php echo $id > 0 ? 'Edit Banner' : 'Tambah Banner Baru'; ?></h1>
-            <a href="<?php echo admin_url('admin.php?page=dw-banner'); ?>" class="page-title-action">Kembali</a>
-            <hr class="wp-header-end">
+        // --- FORM MODE ---
+        if ( $action === 'add' || ($action === 'edit' && $id > 0) ) {
+            wp_enqueue_media();
 
-            <div class="card" style="max-width: 800px; margin-top: 20px; padding: 20px;">
-                <form method="post" action="">
-                    <input type="hidden" name="dw_action" value="save_banner">
-                    <input type="hidden" name="banner_id" value="<?php echo intval($id); ?>">
-                    <?php wp_nonce_field('dw_save_banner_nonce'); ?>
+            $item = null;
+            if ( $id > 0 ) {
+                $item = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE id = %d", $id));
+                if (!$item) {
+                    dw_admin_render_alert('Banner tidak ditemukan.', 'danger');
+                    return;
+                }
+            }
 
-                    <table class="form-table" role="presentation">
-                        <tr>
-                            <th scope="row"><label for="judul">Judul Banner</label></th>
-                            <td>
-                                <input type="text" name="judul" id="judul" value="<?php echo esc_attr($judul); ?>" class="regular-text" required>
-                                <p class="description">Judul untuk identifikasi internal.</p>
-                            </td>
-                        </tr>
-                        <tr>
-                            <th scope="row"><label for="gambar">Gambar Banner</label></th>
-                            <td>
-                                <div class="dw-image-upload-wrapper">
-                                    <input type="text" name="gambar" id="gambar" value="<?php echo esc_url($gambar); ?>" class="regular-text" placeholder="URL Gambar" required>
-                                    <button type="button" class="button" id="btn-upload-gambar">Pilih dari Media</button>
-                                </div>
-                                <p class="description">Rekomendasi: 1200x400 px atau rasio 3:1.</p>
-                                
-                                <div id="preview-gambar-container" style="margin-top: 15px; max-width: 100%; width: 400px; border: 1px solid #ccc; border-radius: 4px; overflow: hidden; background: #eee; display: <?php echo $gambar ? 'block' : 'none'; ?>;">
-                                    <img id="preview-gambar-img" src="<?php echo esc_url($gambar); ?>" style="width: 100%; height: auto; display: block;">
-                                </div>
-                            </td>
-                        </tr>
-                        <tr>
-                            <th scope="row"><label for="link">Link Tujuan</label></th>
-                            <td>
-                                <input type="url" name="link" id="link" value="<?php echo esc_url($link); ?>" class="regular-text" placeholder="https://...">
-                                <p class="description">Opsional. URL tujuan saat banner diklik.</p>
-                            </td>
-                        </tr>
-                        <tr>
-                            <th scope="row"><label for="prioritas">Urutan Prioritas</label></th>
-                            <td>
-                                <input type="number" name="prioritas" id="prioritas" value="<?php echo esc_attr($prioritas); ?>" class="small-text" min="0">
-                                <p class="description">Angka lebih kecil akan muncul lebih awal.</p>
-                            </td>
-                        </tr>
-                        <tr>
-                            <th scope="row"><label for="status">Status Publikasi</label></th>
-                            <td>
-                                <select name="status" id="status">
+            $judul     = $item ? $item->judul : '';
+            $gambar    = $item ? $item->gambar : '';
+            $link      = $item ? $item->link : '';
+            $status    = $item ? $item->status : 'aktif';
+            $prioritas = $item ? $item->prioritas : 10;
+            ?>
+            <div class="dw-card">
+                <div class="dw-card-header">
+                    <h3 class="card-heading"><?php echo $id > 0 ? 'Edit Banner' : 'Tambah Banner Baru'; ?></h3>
+                    <a href="<?php echo admin_url('admin.php?page=dw-banner'); ?>" class="dw-button-link">Kembali</a>
+                </div>
+                <div class="dw-card-body">
+                    <form method="post" action="">
+                        <input type="hidden" name="dw_action" value="save_banner">
+                        <input type="hidden" name="banner_id" value="<?php echo intval($id); ?>">
+                        <?php wp_nonce_field('dw_save_banner_nonce'); ?>
+
+                        <div class="dw-form-group">
+                            <label class="dw-label" for="judul">Judul Banner</label>
+                            <input type="text" name="judul" id="judul" value="<?php echo esc_attr($judul); ?>" class="dw-input" required>
+                            <p class="dw-help-text">Judul untuk identifikasi internal.</p>
+                        </div>
+
+                        <div class="dw-form-group">
+                            <label class="dw-label" for="gambar">Gambar Banner</label>
+                            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                                <input type="text" name="gambar" id="gambar" value="<?php echo esc_url($gambar); ?>" class="dw-input" placeholder="URL Gambar" required>
+                                <button type="button" class="dw-button dw-button-secondary" id="btn-upload-gambar">Pilih Media</button>
+                            </div>
+                            <p class="dw-help-text">Rekomendasi: 1200x400 px atau rasio 3:1.</p>
+                            
+                            <div id="preview-gambar-container" style="margin-top: 15px; max-width: 100%; width: 400px; border: 1px solid var(--dw-border-color); border-radius: 8px; overflow: hidden; background: #f8fafc; display: <?php echo $gambar ? 'block' : 'none'; ?>;">
+                                <img id="preview-gambar-img" src="<?php echo esc_url($gambar); ?>" style="width: 100%; height: auto; display: block;">
+                            </div>
+                        </div>
+
+                        <div class="dw-form-group">
+                            <label class="dw-label" for="link">Link Tujuan</label>
+                            <input type="url" name="link" id="link" value="<?php echo esc_url($link); ?>" class="dw-input" placeholder="https://...">
+                            <p class="dw-help-text">Opsional. URL tujuan saat banner diklik.</p>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div class="dw-form-group">
+                                <label class="dw-label" for="prioritas">Urutan Prioritas</label>
+                                <input type="number" name="prioritas" id="prioritas" value="<?php echo esc_attr($prioritas); ?>" class="dw-input" min="0">
+                                <p class="dw-help-text">Angka lebih kecil akan muncul lebih awal.</p>
+                            </div>
+
+                            <div class="dw-form-group">
+                                <label class="dw-label" for="status">Status Publikasi</label>
+                                <select name="status" id="status" class="dw-select">
                                     <option value="aktif" <?php selected($status, 'aktif'); ?>>Aktif (Tampil)</option>
                                     <option value="nonaktif" <?php selected($status, 'nonaktif'); ?>>Nonaktif (Sembunyi)</option>
                                 </select>
-                            </td>
-                        </tr>
-                    </table>
+                            </div>
+                        </div>
 
-                    <?php submit_button($id > 0 ? 'Simpan Perubahan' : 'Terbitkan Banner', 'primary'); ?>
-                </form>
+                        <div style="margin-top: 20px;">
+                            <button type="submit" class="dw-button dw-button-primary">
+                                <?php echo $id > 0 ? 'Simpan Perubahan' : 'Terbitkan Banner'; ?>
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
 
             <script>
@@ -214,7 +213,6 @@ function dw_banner_page_render() {
                     image_frame.open();
                 });
 
-                // Update preview when URL is pasted manually
                 $('#gambar').on('change input', function() {
                     var url = $(this).val();
                     if (url) {
@@ -226,60 +224,53 @@ function dw_banner_page_render() {
                 });
             });
             </script>
-        </div>
-        <?php
+            <?php
 
-    } else {
-        // --- LIST MODE ---
-        if ( ! class_exists('DW_Banner_List_Table') ) {
-            $list_table_path = plugin_dir_path(dirname(__FILE__)) . 'list-tables/class-dw-banner-list-table.php';
-            if ( file_exists($list_table_path) ) {
-                require_once $list_table_path;
+        } else {
+            // --- LIST MODE ---
+            if ( ! class_exists('DW_Banner_List_Table') ) {
+                $list_table_path = plugin_dir_path(dirname(__FILE__)) . 'list-tables/class-dw-banner-list-table.php';
+                if ( file_exists($list_table_path) ) {
+                    require_once $list_table_path;
+                }
+            }
+
+            if ( class_exists('DW_Banner_List_Table') ) {
+                $list_table = new DW_Banner_List_Table();
+                $list_table->prepare_items();
+                ?>
+                <div class="dw-card">
+                    <div class="dw-card-header">
+                        <h3 class="card-heading">Manajemen Banner</h3>
+                        <a href="<?php echo admin_url('admin.php?page=dw-banner&action=add'); ?>" class="dw-button dw-button-primary" style="text-decoration: none;">Tambah Baru</a>
+                    </div>
+                    <div class="dw-card-body">
+                        <form id="dw-banner-list" method="get">
+                            <input type="hidden" name="page" value="dw-banner" />
+                            <?php 
+                            $list_table->search_box('Cari Banner', 'search_id');
+                            $list_table->display(); 
+                            ?>
+                        </form>
+                    </div>
+                </div>
+                
+                <script>
+                jQuery(document).ready(function($){
+                    $('.dw-confirm-link').click(function(e){
+                        var message = $(this).data('confirm-message') || 'Apakah Anda yakin?';
+                        if(!confirm(message)) {
+                            e.preventDefault();
+                        }
+                    });
+                });
+                </script>
+                <?php
+            } else {
+                dw_admin_render_alert('Error: Class DW_Banner_List_Table tidak ditemukan.', 'danger');
             }
         }
-
-        if ( class_exists('DW_Banner_List_Table') ) {
-            $list_table = new DW_Banner_List_Table();
-            $list_table->prepare_items();
-            ?>
-            <div class="wrap">
-                <h1 class="wp-heading-inline">Manajemen Banner</h1>
-                <a href="<?php echo admin_url('admin.php?page=dw-banner&action=add'); ?>" class="page-title-action">Tambah Baru</a>
-                <hr class="wp-header-end">
-                
-                <form id="dw-banner-list" method="get">
-                    <input type="hidden" name="page" value="dw-banner" />
-                    <?php 
-                    $list_table->search_box('Cari Banner', 'search_id');
-                    $list_table->display(); 
-                    ?>
-                </form>
-            </div>
-            <style>
-                .column-status span {
-                    padding: 3px 8px;
-                    border-radius: 3px;
-                    font-size: 11px;
-                    font-weight: 600;
-                    text-transform: uppercase;
-                }
-                .column-status .aktif { background: #e7f6ed; color: #207b4d; }
-                .column-status .nonaktif { background: #fcf0f1; color: #d63638; }
-                .column-gambar img { border: 1px solid #ddd; padding: 2px; background: #fff; }
-            </style>
-            <script>
-            jQuery(document).ready(function($){
-                $('.dw-confirm-link').click(function(e){
-                    var message = $(this).data('confirm-message') || 'Apakah Anda yakin?';
-                    if(!confirm(message)) {
-                        e.preventDefault();
-                    }
-                });
-            });
-            </script>
-            <?php
-        } else {
-            echo '<div class="notice notice-error"><p>Error: Class <code>DW_Banner_List_Table</code> tidak ditemukan.</p></div>';
-        }
-    }
+        ?>
+    </div>
+    <?php
 }

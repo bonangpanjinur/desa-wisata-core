@@ -7,6 +7,9 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
+// Include UI components
+require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin-ui-components.php';
+
 function dw_komisi_page_render() {
     global $wpdb;
     
@@ -26,7 +29,7 @@ function dw_komisi_page_render() {
             current_time('mysql'), $type, $id
         ));
         
-        echo '<div class="notice notice-success is-dismissible"><p>Pembayaran berhasil ditandai lunas.</p></div>';
+        echo dw_admin_render_alert('Pembayaran berhasil ditandai lunas.', 'success');
     }
 
     // --- AMBIL DATA ---
@@ -87,7 +90,7 @@ function dw_komisi_page_render() {
     $active_tab = isset($_GET['tab']) ? $_GET['tab'] : 'desa';
     ?>
 
-    <div class="wrap">
+    <div class="wrap dw-wrap">
         <h1 class="wp-heading-inline"><span class="dashicons dashicons-money-alt"></span> Keuangan & Komisi</h1>
         <hr class="wp-header-end">
         
@@ -139,11 +142,11 @@ function dw_komisi_page_render() {
             
             <!-- TAB 1: DESA -->
             <?php if ($active_tab == 'desa'): ?>
-                <div class="dw-table-header">
+                <div class="dw-modern-table-header">
                     <h3>Tagihan Komisi Desa</h3>
                     <p class="description">Daftar komisi yang harus ditransfer ke Desa Wisata.</p>
                 </div>
-                <table class="wp-list-table widefat fixed striped">
+                <table class="dw-modern-table">
                     <thead>
                         <tr>
                             <th>Nama Desa</th>
@@ -192,11 +195,11 @@ function dw_komisi_page_render() {
 
             <!-- TAB 2: VERIFIKATOR -->
             <?php elseif ($active_tab == 'verifikator'): ?>
-                <div class="dw-table-header">
+                <div class="dw-modern-table-header">
                     <h3>Tagihan Komisi Verifikator</h3>
                     <p class="description">Daftar komisi untuk Verifikator UMKM/Pedagang.</p>
                 </div>
-                <table class="wp-list-table widefat fixed striped">
+                <table class="dw-modern-table">
                     <thead>
                         <tr>
                             <th>Nama Verifikator</th>
@@ -243,10 +246,10 @@ function dw_komisi_page_render() {
 
             <!-- TAB 3: RIWAYAT -->
             <?php elseif ($active_tab == 'riwayat'): ?>
-                <div class="dw-table-header">
+                <div class="dw-modern-table-header">
                     <h3>Riwayat Transfer Terakhir</h3>
                 </div>
-                <table class="wp-list-table widefat fixed striped">
+                <table class="dw-modern-table">
                     <thead>
                         <tr>
                             <th>ID Trx</th>
@@ -282,31 +285,6 @@ function dw_komisi_page_render() {
     </div>
 
     <!-- STYLE -->
-    <style>
-        .dw-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin: 20px 0; }
-        .dw-stat-card { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 1px 2px rgba(0,0,0,.1); display: flex; align-items: center; gap: 15px; }
-        .dw-stat-card.border-left-red { border-left: 4px solid #d63638; }
-        .dw-stat-card.border-left-orange { border-left: 4px solid #dba617; }
-        .dw-stat-card.border-left-green { border-left: 4px solid #00a32a; }
-        
-        .stat-icon span { font-size: 32px; width: 32px; height: 32px; color: #ccc; }
-        .stat-content h3 { margin: 0 0 5px; font-size: 13px; color: #666; text-transform: uppercase; }
-        .stat-number { font-size: 24px; font-weight: 700; margin: 0; color: #333; }
-        .stat-desc { font-size: 12px; color: #888; }
-
-        .dw-tab-container { background: #fff; padding: 20px; border: 1px solid #c3c4c7; border-top: none; }
-        .dw-table-header { margin-bottom: 20px; border-bottom: 1px solid #f0f0f1; padding-bottom: 10px; }
-        .dw-table-header h3 { margin: 0; }
-        
-        .dw-bank-info { font-size: 13px; line-height: 1.4; color: #444; background: #f9f9f9; padding: 8px; border-radius: 4px; border: 1px solid #eee; display: inline-block; }
-        .dw-count { background: #d63638; color: #fff; border-radius: 50%; padding: 2px 6px; font-size: 10px; vertical-align: top; margin-left: 3px; }
-        
-        .dw-badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
-        .dw-badge-blue { background: #e6f7ff; color: #1890ff; border: 1px solid #91d5ff; }
-        .dw-badge-orange { background: #fff7e6; color: #fa8c16; border: 1px solid #ffd591; }
-        .dw-badge-warning { background: #fffbe6; color: #faad14; border: 1px solid #ffe58f; padding: 4px 8px; }
-        
-        .btn-payout { display: inline-flex; align-items: center; gap: 5px; }
-    </style>
+    
     <?php
 }

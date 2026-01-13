@@ -6,6 +6,9 @@
 
 defined('ABSPATH') || exit;
 
+// Include UI components
+require_once plugin_dir_path( dirname( __FILE__ ) ) . "admin-ui-components.php";
+
 // 1. Pastikan class API Address tersedia
 $address_api_path = dirname(dirname(__FILE__)) . '/address-api.php';
 if (file_exists($address_api_path)) {
@@ -31,7 +34,7 @@ function dw_pedagang_page_render() {
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_pedagang'])) {
         
         if (!isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'dw_pedagang_action')) {
-            echo '<div class="notice notice-error is-dismissible"><p>Keamanan tidak valid (Nonce Failed).</p></div>'; 
+            echo dw_admin_render_alert('Keamanan tidak valid (Nonce Failed).', 'error'); 
             return;
         }
 
@@ -211,328 +214,21 @@ function dw_pedagang_page_render() {
     $users = get_users(['role__in' => ['administrator', 'pedagang', 'subscriber', 'customer']]);
     ?>
 
-    <style>
-        :root {
-            --dw-primary: #2563eb;
-            --dw-primary-hover: #1d4ed8;
-            --dw-success: #10b981;
-            --dw-warning: #f59e0b;
-            --dw-danger: #ef4444;
-            --dw-text-main: #1e293b;
-            --dw-text-muted: #64748b;
-            --dw-bg-body: #f8fafc;
-            --dw-border: #e2e8f0;
-        }
+    
 
-        .dw-admin-wrap {
-            max-width: 1200px;
-            margin: 20px 20px 0 0;
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            color: var(--dw-text-main);
-        }
-
-        /* Header */
-        .dw-admin-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 24px;
-            background: #fff;
-            padding: 20px 24px;
-            border-radius: 12px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-            border: 1px solid var(--dw-border);
-        }
-        .dw-header-title {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-        .dw-header-title .dashicons {
-            font-size: 28px;
-            width: 28px;
-            height: 28px;
-            color: var(--dw-primary);
-        }
-        .dw-header-title h1 {
-            font-size: 22px;
-            font-weight: 700;
-            margin: 0;
-            color: var(--dw-text-main);
-        }
-
-        /* Buttons */
-        .dw-btn-primary {
-            background: var(--dw-primary);
-            color: #fff;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            transition: all 0.2s;
-        }
-        .dw-btn-primary:hover {
-            background: var(--dw-primary-hover);
-            color: #fff;
-            transform: translateY(-1px);
-        }
-        .dw-btn-secondary {
-            background: #fff;
-            color: var(--dw-text-main);
-            border: 1px solid var(--dw-border);
-            padding: 10px 20px;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            transition: all 0.2s;
-        }
-        .dw-btn-secondary:hover {
-            background: var(--dw-bg-body);
-            border-color: #cbd5e1;
-            color: var(--dw-text-main);
-        }
-
-        /* Card System */
-        .dw-card {
-            background: #fff;
-            border: 1px solid var(--dw-border);
-            border-radius: 12px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-            overflow: hidden;
-            margin-bottom: 24px;
-        }
-        .dw-card-header {
-            padding: 18px 24px;
-            border-bottom: 1px solid var(--dw-border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .dw-card-header h3 {
-            margin: 0;
-            font-size: 16px;
-            font-weight: 700;
-        }
-        .dw-card-body {
-            padding: 24px;
-        }
-
-        /* Tabs */
-        .dw-tabs-nav {
-            display: flex;
-            gap: 8px;
-            margin-bottom: -1px;
-            padding: 0 10px;
-        }
-        .dw-tab-link {
-            padding: 12px 20px;
-            background: #f1f5f9;
-            border: 1px solid var(--dw-border);
-            border-bottom: none;
-            border-radius: 8px 8px 0 0;
-            cursor: pointer;
-            font-weight: 600;
-            color: var(--dw-text-muted);
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .dw-tab-link:hover {
-            background: #e2e8f0;
-            color: var(--dw-text-main);
-        }
-        .dw-tab-link.active {
-            background: #fff;
-            color: var(--dw-primary);
-            border-bottom: 2px solid #fff;
-            margin-bottom: -1px;
-            z-index: 2;
-        }
-        .dw-tab-pane {
-            display: none;
-        }
-        .dw-tab-pane.active {
-            display: block;
-        }
-
-        /* Form Controls */
-        .dw-form-group {
-            margin-bottom: 20px;
-        }
-        .dw-form-group label {
-            display: block;
-            font-weight: 600;
-            margin-bottom: 8px;
-            color: var(--dw-text-main);
-            font-size: 14px;
-        }
-        .dw-form-control {
-            width: 100%;
-            padding: 10px 14px;
-            border: 1px solid var(--dw-border);
-            border-radius: 8px;
-            font-size: 14px;
-            transition: border-color 0.2s;
-            background: #fff;
-        }
-        .dw-form-control:focus {
-            border-color: var(--dw-primary);
-            outline: none;
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-        }
-        .dw-form-control[readonly] {
-            background: #f8fafc;
-            cursor: not-allowed;
-        }
-
-        /* Grid */
-        .dw-row {
-            display: flex;
-            flex-wrap: wrap;
-            margin: 0 -10px;
-        }
-        .dw-col-6 {
-            flex: 0 0 50%;
-            max-width: 50%;
-            padding: 0 10px;
-        }
-        @media (max-width: 768px) {
-            .dw-col-6 {
-                flex: 0 0 100%;
-                max-width: 100%;
-            }
-        }
-
-        /* Badges */
-        .dw-badge {
-            display: inline-flex;
-            align-items: center;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-            line-height: 1;
-        }
-        .dw-badge-success { background: #dcfce7; color: #166534; }
-        .dw-badge-warning { background: #fef9c3; color: #854d0e; }
-        .dw-badge-danger { background: #fee2e2; color: #991b1b; }
-        .dw-badge-info { background: #e0f2fe; color: #0369a1; }
-
-        /* Toggle Switch */
-        .dw-toggle-switch {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            cursor: pointer;
-        }
-        .dw-toggle-switch input { display: none; }
-        .dw-toggle-switch .slider {
-            width: 40px;
-            height: 20px;
-            background: #cbd5e1;
-            border-radius: 20px;
-            position: relative;
-            transition: 0.3s;
-        }
-        .dw-toggle-switch .slider:before {
-            content: "";
-            position: absolute;
-            width: 16px;
-            height: 16px;
-            background: #fff;
-            border-radius: 50%;
-            top: 2px;
-            left: 2px;
-            transition: 0.3s;
-        }
-        .dw-toggle-switch input:checked + .slider { background: var(--dw-success); }
-        .dw-toggle-switch input:checked + .slider:before { transform: translateX(20px); }
-
-        /* Gallery */
-        #galeri-container {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-            gap: 12px;
-            margin-top: 15px;
-        }
-        .g-item {
-            position: relative;
-            aspect-ratio: 1;
-            border-radius: 8px;
-            overflow: hidden;
-            border: 1px solid var(--dw-border);
-        }
-        .g-item img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        .rem-g {
-            position: absolute;
-            top: 4px;
-            right: 4px;
-            background: rgba(239, 68, 68, 0.9);
-            color: #fff;
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: bold;
-        }
-
-        /* Help Text */
-        .dw-help-text {
-            font-size: 12px;
-            color: var(--dw-text-muted);
-            margin-top: 4px;
-        }
-
-        /* Table Modernization */
-        .wp-list-table.widefat {
-            border: none;
-            box-shadow: none;
-        }
-        .wp-list-table.widefat thead th {
-            background: #f8fafc;
-            padding: 15px;
-            font-weight: 700;
-            color: var(--dw-text-muted);
-            border-bottom: 2px solid var(--dw-border);
-        }
-        .wp-list-table.widefat tbody td {
-            padding: 15px;
-            vertical-align: middle;
-            border-bottom: 1px solid var(--dw-border);
-        }
-    </style>
-
-    <div class="wrap dw-admin-wrap">
-        <div class="dw-admin-header">
+    <div class="wrap dw-wrap">
+        <div class="dw-header">
             <div class="dw-header-title">
                 <span class="dashicons dashicons-store"></span>
                 <h1>Manajemen Toko & Pedagang</h1>
             </div>
             <div class="dw-header-actions">
                 <?php if ($action === 'list'): ?>
-                    <a href="?page=dw-pedagang&action=edit" class="dw-btn-primary">
+                    <a href="?page=dw-pedagang&action=edit" class="dw-button-primary">
                         <span class="dashicons dashicons-plus"></span> Tambah Pedagang Baru
                     </a>
                 <?php else: ?>
-                    <a href="?page=dw-pedagang" class="dw-btn-secondary">
+                    <a href="?page=dw-pedagang" class="dw-button-secondary">
                         <span class="dashicons dashicons-arrow-left-alt"></span> Kembali ke Daftar
                     </a>
                 <?php endif; ?>
@@ -794,7 +490,7 @@ function dw_pedagang_page_render() {
                                             </div>
                                             <div style="display:flex; gap:10px;">
                                                 <input type="text" name="foto_profil" id="foto_profil" value="<?php echo esc_attr($edit_data->foto_profil ?? ''); ?>" class="dw-form-control" readonly placeholder="URL Foto Profil">
-                                                <button type="button" class="dw-btn-secondary btn_upload" data-target="foto_profil" data-preview="#prev_foto_profil" style="padding:8px 15px;">
+                                                <button type="button" class="dw-button-secondary btn_upload" data-target="foto_profil" data-preview="#prev_foto_profil" style="padding:8px 15px;">
                                                     <span class="dashicons dashicons-upload" style="margin-top:4px;"></span>
                                                 </button>
                                             </div>
@@ -814,7 +510,7 @@ function dw_pedagang_page_render() {
                                             </div>
                                             <div style="display:flex; gap:10px;">
                                                 <input type="text" name="foto_sampul" id="foto_sampul" value="<?php echo esc_attr($edit_data->foto_sampul ?? ''); ?>" class="dw-form-control" readonly placeholder="URL Foto Sampul">
-                                                <button type="button" class="dw-btn-secondary btn_upload" data-target="foto_sampul" data-preview="#prev_foto_sampul" style="padding:8px 15px;">
+                                                <button type="button" class="dw-button-secondary btn_upload" data-target="foto_sampul" data-preview="#prev_foto_sampul" style="padding:8px 15px;">
                                                     <span class="dashicons dashicons-upload" style="margin-top:4px;"></span>
                                                 </button>
                                             </div>
@@ -828,7 +524,7 @@ function dw_pedagang_page_render() {
                                                     <img id="prev_url_ktp" src="<?php echo esc_url($edit_data->url_ktp ?? 'https://placehold.co/60x40?text=KTP'); ?>" style="width:100%; height:100%; object-fit:cover;">
                                                 </div>
                                                 <input type="text" name="url_ktp" id="url_ktp" value="<?php echo esc_attr($edit_data->url_ktp ?? ''); ?>" class="dw-form-control" readonly placeholder="URL Foto KTP">
-                                                <button type="button" class="dw-btn-secondary btn_upload" data-target="url_ktp" data-preview="#prev_url_ktp" style="padding:8px 15px;">
+                                                <button type="button" class="dw-button-secondary btn_upload" data-target="url_ktp" data-preview="#prev_url_ktp" style="padding:8px 15px;">
                                                     <span class="dashicons dashicons-upload" style="margin-top:4px;"></span>
                                                 </button>
                                             </div>
@@ -841,7 +537,7 @@ function dw_pedagang_page_render() {
                                     <div class="dw-form-group">
                                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                                             <label style="margin-bottom:0;">Galeri Toko (Foto Tambahan)</label>
-                                            <button type="button" class="dw-btn-secondary" id="btn_galeri" style="font-size:13px; padding:6px 12px;">
+                                            <button type="button" class="dw-button-secondary" id="btn_galeri" style="font-size:13px; padding:6px 12px;">
                                                 <span class="dashicons dashicons-images-alt2" style="font-size:16px; margin-top:4px;"></span> Tambah Foto Galeri
                                             </button>
                                         </div>
@@ -902,7 +598,7 @@ function dw_pedagang_page_render() {
                                             <p class="dw-help-text" style="margin-bottom:10px;">Upload gambar QRIS toko untuk mempermudah transaksi non-tunai.</p>
                                             <div style="display:flex; gap:10px;">
                                                 <input type="text" name="qris_image_url" id="qris_image_url" value="<?php echo esc_attr($edit_data->qris_image_url ?? ''); ?>" class="dw-form-control" readonly placeholder="URL Gambar QRIS">
-                                                <button type="button" class="dw-btn-secondary btn_upload" data-target="qris_image_url" data-preview="#prev_qris_image_url">
+                                                <button type="button" class="dw-button-secondary btn_upload" data-target="qris_image_url" data-preview="#prev_qris_image_url">
                                                     <span class="dashicons dashicons-upload" style="margin-top:4px;"></span>
                                                 </button>
                                             </div>
@@ -991,7 +687,7 @@ function dw_pedagang_page_render() {
                     </div>
                     <div class="dw-card-footer" style="padding: 20px; background: #f9f9f9; border-top: 1px solid #eee; text-align: right;">
                         <a href="<?php echo admin_url('admin.php?page=dw-pedagang'); ?>" class="button">Batal</a>
-                        <button type="submit" class="dw-btn-primary">Simpan Data Pedagang</button>
+                        <button type="submit" class="dw-button-primary">Simpan Data Pedagang</button>
                     </div>
                 </div>
             </form>

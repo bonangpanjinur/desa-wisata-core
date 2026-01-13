@@ -5,6 +5,9 @@
  */
 if ( ! defined( 'ABSPATH' ) ) exit;
 
+// Include UI components
+require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin-ui-components.php';
+
 function dw_logs_page_render() {
     if ( ! class_exists( 'DW_Logs_List_Table' ) ) {
         require_once DW_CORE_PLUGIN_DIR . 'includes/list-tables/class-dw-logs-list-table.php';
@@ -23,16 +26,7 @@ function dw_logs_page_render() {
         <h1 class="wp-heading-inline">Log Aktivitas & Audit Trail</h1>
         <hr class="wp-header-end">
         
-        <style>
-            .dw-stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin: 20px 0; }
-            .dw-stat-box { background: #fff; padding: 20px; border-radius: 8px; border: 1px solid #c3c4c7; box-shadow: 0 1px 2px rgba(0,0,0,0.05); display: flex; align-items: center; }
-            .dw-stat-icon { width: 48px; height: 48px; border-radius: 50%; background: #e0f2f1; color: #00695c; display: flex; align-items: center; justify-content: center; font-size: 24px; margin-right: 15px; }
-            .dw-stat-info h4 { margin: 0; color: #64748b; font-size: 13px; text-transform: uppercase; }
-            .dw-stat-info span { font-size: 24px; font-weight: 700; color: #1e293b; }
-            
-            .dw-table-container { background: #fff; border: 1px solid #c3c4c7; border-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); padding: 0; overflow: hidden; margin-top: 20px; }
-            .tablenav.top { padding: 10px 15px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; margin: 0; }
-        </style>
+        
 
         <div class="dw-stats-row">
             <div class="dw-stat-box">
@@ -49,7 +43,7 @@ function dw_logs_page_render() {
             </div>
         </div>
 
-        <div class="dw-table-container">
+        <div class="dw-modern-table-container">
             <div class="tablenav top">
                 <div class="alignleft actions">
                     <!-- Placeholder untuk filter log level jika diperlukan -->

@@ -8,6 +8,9 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
+// Include UI components
+require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin-ui-components.php';
+
 global $wpdb;
 $t_pembeli   = $wpdb->prefix . 'dw_pembeli';
 $t_transaksi = $wpdb->prefix . 'dw_transaksi';
@@ -180,71 +183,15 @@ foreach($users as $u) {
 ?>
 
 <!-- STYLE & UI -->
-<style>
-    :root { --dw-p: #2563eb; --dw-g: #10b981; --dw-o: #f59e0b; --dw-r: #ef4444; --dw-txt: #1e293b; --dw-gry: #64748b; --dw-bg: #f8fafc; --dw-bd: #e2e8f0; }
-    .dw-wrap { max-width: 1200px; margin: 20px 20px 0 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: var(--dw-txt); }
-    
-    .dw-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
-    .dw-head h1 { font-size: 24px; font-weight: 800; margin: 0; color: var(--dw-txt); }
-    .dw-head p { margin: 5px 0 0; color: var(--dw-gry); font-size: 14px; }
-    .dw-search { padding: 10px 15px; border: 1px solid var(--dw-bd); border-radius: 8px; width: 250px; }
 
-    .dw-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; margin-bottom: 30px; }
-    .dw-card { background: #fff; padding: 20px; border-radius: 12px; border: 1px solid var(--dw-bd); box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-    .dw-card h3 { margin: 0 0 5px; font-size: 11px; text-transform: uppercase; color: var(--dw-gry); font-weight: 700; }
-    .dw-card .val { font-size: 24px; font-weight: 700; }
-    .bl-blue { border-left: 4px solid var(--dw-p); } .bl-green { border-left: 4px solid var(--dw-g); } .bl-orange { border-left: 4px solid var(--dw-o); }
-
-    .dw-tbl-box { background: #fff; border-radius: 12px; border: 1px solid var(--dw-bd); overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-    .dw-tbl { width: 100%; border-collapse: collapse; }
-    .dw-tbl th { background: #f8fafc; padding: 15px 20px; text-align: left; font-size: 12px; font-weight: 600; color: var(--dw-gry); text-transform: uppercase; border-bottom: 1px solid var(--dw-bd); }
-    .dw-tbl td { padding: 15px 20px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; font-size: 14px; }
-    .dw-tbl tr:hover { background: #fcfcfc; }
-    
-    .u-flex { display: flex; align-items: center; gap: 12px; }
-    .u-ava { width: 36px; height: 36px; border-radius: 8px; object-fit: cover; background: #eee; }
-    .btn-small { padding: 6px 12px; font-size: 12px; border-radius: 6px; cursor: pointer; border: 1px solid var(--dw-bd); background: #fff; color: var(--dw-txt); transition: 0.2s; }
-    .btn-small:hover { background: var(--dw-bg); border-color: #cbd5e1; }
-
-    /* Modal */
-    .dw-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15,23,42,0.6); z-index: 9999; backdrop-filter: blur(2px); align-items: center; justify-content: center; }
-    .dw-m-content { background: #fff; width: 650px; max-width: 95%; max-height: 90vh; border-radius: 16px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); animation: slideUp 0.3s ease; }
-    @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-    
-    .dw-m-head { padding: 20px 24px; border-bottom: 1px solid var(--dw-bd); display: flex; justify-content: space-between; align-items: center; background: #fff; }
-    .dw-m-head h2 { margin: 0; font-size: 18px; font-weight: 700; }
-    
-    .dw-m-body { padding: 24px; overflow-y: auto; flex: 1; background: #fff; }
-    .dw-m-foot { padding: 16px 24px; background: #f8fafc; border-top: 1px solid var(--dw-bd); display: flex; justify-content: flex-end; gap: 10px; }
-
-    .f-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px; }
-    .f-group label { display: block; margin-bottom: 5px; font-size: 12px; font-weight: 600; color: var(--dw-gry); }
-    .f-input, .f-select, .f-area { width: 100%; padding: 10px; border: 1px solid var(--dw-bd); border-radius: 8px; font-size: 14px; box-sizing: border-box; }
-    .f-input:focus { outline: none; border-color: var(--dw-p); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
-    
-    /* Tabs */
-    .dw-tabs { display: flex; background: #f8fafc; border-bottom: 1px solid var(--dw-bd); padding: 0 24px; }
-    .dw-tab { background: none; border: none; padding: 15px 0; margin-right: 25px; font-weight: 600; color: var(--dw-gry); cursor: pointer; border-bottom: 2px solid transparent; }
-    .dw-tab.active { color: var(--dw-p); border-bottom-color: var(--dw-p); }
-    .tab-pane { display: none; } .tab-pane.active { display: block; }
-
-    .btn-p { background: var(--dw-p); color: #fff; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; }
-    .btn-p:hover { background: #1d4ed8; }
-    .btn-s { background: #fff; border: 1px solid var(--dw-bd); color: var(--dw-gry); padding: 10px 16px; border-radius: 8px; cursor: pointer; }
-    .btn-s:hover { background: var(--dw-bg); color: var(--dw-txt); }
-    .btn-w { background: #fff; border: 1px solid #f59e0b; color: #d97706; padding: 10px 16px; border-radius: 8px; cursor: pointer; }
-    .btn-w:hover { background: #fffbeb; }
-    
-    .notice-success { margin: 0 0 20px 0 !important; border-left-color: var(--dw-g) !important; }
-</style>
 
 <div class="wrap dw-wrap">
     
     <?php if(isset($_GET['msg']) && $_GET['msg'] == 'saved'): ?>
-        <div class="notice notice-success is-dismissible"><p><strong>Berhasil!</strong> Data pembeli telah disimpan.</p></div>
+        <?php echo dw_admin_render_alert('<strong>Berhasil!</strong> Data pembeli telah disimpan.', 'success'); ?>
     <?php endif; ?>
     <?php if(isset($_GET['msg']) && $_GET['msg'] == 'email_sent'): ?>
-        <div class="notice notice-success is-dismissible"><p><strong>Berhasil!</strong> Email reset password telah dikirim ke user.</p></div>
+        <?php echo dw_admin_render_alert('<strong>Berhasil!</strong> Email reset password telah dikirim ke user.', 'success'); ?>
     <?php endif; ?>
 
     <div class="dw-head">

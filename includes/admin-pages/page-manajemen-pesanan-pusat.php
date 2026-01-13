@@ -54,6 +54,9 @@ function dw_handle_admin_order_override() {
 // Jalankan handler segera setelah file dimuat
 dw_handle_admin_order_override();
 
+// Include UI components
+require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin-ui-components.php';
+
 function dw_manajemen_pesanan_pusat_render() {
     global $wpdb;
     
@@ -278,8 +281,14 @@ function dw_manajemen_pesanan_pusat_render() {
             </form>
         </div>
 
+<<<<<<< HEAD
         <!-- Orders Grid -->
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+=======
+        
+
+        <div class="dw-order-grid">
+>>>>>>> 8f35bfe1b0fa76d9bd39ff009bf998dedb914bc0
             <?php if ($orders): foreach ($orders as $order): 
                 $status = $order->status_pesanan;
                 $status_config = [

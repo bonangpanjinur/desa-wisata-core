@@ -9,6 +9,9 @@
 
 defined('ABSPATH') || exit;
 
+// Include UI components
+require_once plugin_dir_path( dirname( __FILE__ ) ) . "admin-ui-components.php";
+
 // 1. Pastikan class API Address tersedia
 $address_api_path = dirname(dirname(__FILE__)) . '/address-api.php';
 if (file_exists($address_api_path)) {
@@ -273,54 +276,9 @@ function dw_desa_page_render() {
 
     ?>
     <!-- CSS Styles -->
-    <style>
-        :root { --dw-primary: #2271b1; --dw-primary-dark: #135e96; --dw-success: #00a32a; --dw-warning: #dba617; --dw-danger: #d63638; --dw-gray-50: #f8fafc; --dw-gray-200: #e2e8f0; --dw-gray-700: #334155; --dw-radius: 6px; --dw-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-        .dw-container { margin: 20px 20px 0 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        .dw-modern-tabs { display: flex; gap: 5px; border-bottom: 1px solid var(--dw-gray-200); margin-bottom: 20px; }
-        .dw-modern-tab { text-decoration: none; color: var(--dw-gray-700); padding: 10px 15px; font-weight: 500; font-size: 14px; border: 1px solid transparent; border-bottom: none; border-radius: var(--dw-radius) var(--dw-radius) 0 0; display: flex; align-items: center; gap: 6px; background: #fff; }
-        .dw-modern-tab:hover { background: var(--dw-gray-50); }
-        .dw-modern-tab.active { border-color: var(--dw-gray-200); border-bottom-color: #fff; color: var(--dw-primary); font-weight: 600; margin-bottom: -1px; }
-        .dw-badge-notify { background: var(--dw-danger); color: white; font-size: 10px; padding: 1px 6px; border-radius: 10px; }
-        .dw-modern-card { background: white; border: 1px solid var(--dw-gray-200); border-radius: var(--dw-radius); box-shadow: var(--dw-shadow); padding: 0; margin-bottom: 20px; overflow: hidden; }
-        .dw-card-header { padding: 15px 20px; border-bottom: 1px solid var(--dw-gray-200); background: #fff; display: flex; justify-content: space-between; align-items: center; }
-        .dw-card-title { font-size: 16px; font-weight: 600; margin: 0; color: #1e293b; display: flex; align-items: center; gap: 8px; }
-        .dw-card-body { padding: 20px; }
-        .dw-form-grid { display: grid; grid-template-columns: 280px 1fr; gap: 20px; align-items: start; }
-        .dw-form-group { margin-bottom: 15px; }
-        .dw-form-group label { display: block; margin-bottom: 5px; font-weight: 500; color: var(--dw-gray-700); font-size: 13px; }
-        .dw-input { width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 14px; }
-        .dw-input:focus { border-color: var(--dw-primary); box-shadow: 0 0 0 1px var(--dw-primary); outline: none; }
-        .dw-input-group { display: flex; }
-        .dw-input-group input { border-top-right-radius: 0; border-bottom-right-radius: 0; border-right: none; }
-        .dw-input-group button { border-top-left-radius: 0; border-bottom-left-radius: 0; border: 1px solid #cbd5e1; background: #f1f5f9; color: var(--dw-gray-700); padding: 0 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-        .dw-btn { padding: 8px 16px; border-radius: 4px; font-weight: 500; font-size: 13px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 5px; border: 1px solid transparent; }
-        .dw-btn-primary { background: var(--dw-primary); color: white; border-color: var(--dw-primary); }
-        .dw-btn-outline { background: white; border-color: #cbd5e1; color: var(--dw-gray-700); }
-        .dw-btn-danger { background: #fff; border-color: #fca5a5; color: var(--dw-danger); }
-        .dw-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
-        .dw-stat-box { background: white; padding: 15px; border-radius: var(--dw-radius); border: 1px solid var(--dw-gray-200); display: flex; align-items: center; gap: 12px; }
-        .dw-stat-icon { width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
-        .dw-stat-icon.blue { background: #e0f2fe; color: #0284c7; }
-        .dw-stat-icon.green { background: #dcfce7; color: #16a34a; }
-        .dw-stat-icon.yellow { background: #fef9c3; color: #ca8a04; }
-        .dw-stat-icon.purple { background: #f3e8ff; color: #9333ea; }
-        .dw-stat-content h4 { margin: 0; font-size: 18px; font-weight: 700; color: #1e293b; }
-        .dw-stat-content span { font-size: 12px; color: #64748b; }
-        .dw-table { width: 100%; border-collapse: collapse; }
-        .dw-table th { text-align: left; padding: 12px 15px; background: var(--dw-gray-50); border-bottom: 1px solid var(--dw-gray-200); font-size: 12px; color: #64748b; text-transform: uppercase; font-weight: 600; }
-        .dw-table td { padding: 12px 15px; border-bottom: 1px solid var(--dw-gray-200); vertical-align: middle; color: #334155; }
-        .dw-table tr:hover { background: var(--dw-gray-50); }
-        .dw-pill { padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; display: inline-block; }
-        .dw-pill.success { background: #dcfce7; color: #166534; }
-        .dw-pill.warning { background: #fef9c3; color: #854d0e; }
-        .dw-pill.gray { background: #f1f5f9; color: #475569; }
-        .dw-pill.blue { background: #dbeafe; color: #1e40af; }
-        .img-preview { width: 100%; height: 140px; background: var(--dw-gray-50); border: 2px dashed #cbd5e1; border-radius: 6px; object-fit: cover; margin-bottom: 10px; display: block; }
-        .dw-text-muted { color: #64748b; font-size: 12px; }
-        @media(max-width: 900px) { .dw-form-grid { grid-template-columns: 1fr; } }
-    </style>
+    
 
-    <div class="wrap dw-container">
+    <div class="wrap dw-wrap">
         
         <!-- HEADER -->
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
@@ -328,7 +286,7 @@ function dw_desa_page_render() {
                 <span class="dashicons dashicons-admin-home" style="color:var(--dw-primary);"></span> Manajemen Desa Wisata
             </h1>
             <?php if (!$is_edit && $active_tab == 'data_desa'): ?>
-                <a href="?page=dw-desa&tab=data_desa&view=add" class="dw-btn dw-btn-primary">
+                <a href="?page=dw-desa&tab=data_desa&view=add" class="dw-button dw-button-primary">
                     <span class="dashicons dashicons-plus-alt2"></span> Tambah Desa
                 </a>
             <?php endif; ?>
@@ -387,13 +345,13 @@ function dw_desa_page_render() {
                     </div>
                 </div>
 
-                <div class="dw-modern-card">
+                <div class="dw-card">
                     <div class="dw-card-header">
-                        <h3 class="dw-card-title">Daftar Desa Wisata</h3>
+                        <h3 class="card-heading">Daftar Desa Wisata</h3>
                         <form method="get" style="display:flex; gap:10px;">
                             <input type="hidden" name="page" value="dw-desa">
                             <input type="text" name="s" placeholder="Cari nama desa..." class="dw-input" value="<?php echo isset($_GET['s']) ? esc_attr($_GET['s']) : ''; ?>" style="width: 200px;">
-                            <button class="dw-btn dw-btn-outline">Cari</button>
+                            <button class="dw-button dw-button-outline">Cari</button>
                         </form>
                     </div>
                     <div class="dw-card-body" style="padding:0;">
@@ -412,7 +370,7 @@ function dw_desa_page_render() {
                         $total_pages = ceil($total_items / $limit);
                         ?>
 
-                        <table class="dw-table">
+                        <table class="dw-modern-table">
                             <thead>
                                 <tr>
                                     <th width="60">Logo</th>
@@ -449,12 +407,12 @@ function dw_desa_page_render() {
                                         <?php else: ?><span class="dw-pill gray">Free</span><?php endif; ?>
                                     </td>
                                     <td style="text-align:right;">
-                                        <a href="?page=dw-desa&tab=data_desa&view=edit&id=<?php echo $r->id; ?>" class="dw-btn dw-btn-outline dw-btn-sm" title="Edit"><span class="dashicons dashicons-edit"></span></a>
+                                        <a href="?page=dw-desa&tab=data_desa&view=edit&id=<?php echo $r->id; ?>" class="dw-button dw-button-outline dw-button-sm" title="Edit"><span class="dashicons dashicons-edit"></span></a>
                                         <form method="post" style="display:inline-block;" onsubmit="return confirm('Yakin hapus desa ini? Data pedagang harus kosong.');">
                                             <?php wp_nonce_field('dw_desa_action'); ?>
                                             <input type="hidden" name="action_desa" value="delete">
                                             <input type="hidden" name="desa_id" value="<?php echo $r->id; ?>">
-                                            <button class="dw-btn dw-btn-danger dw-btn-sm" title="Hapus"><span class="dashicons dashicons-trash"></span></button>
+                                            <button class="dw-button dw-button-danger dw-button-sm" title="Hapus"><span class="dashicons dashicons-trash"></span></button>
                                         </form>
                                     </td>
                                 </tr>
@@ -481,14 +439,14 @@ function dw_desa_page_render() {
 
                     <!-- Sidebar -->
                     <div class="dw-sidebar">
-                        <div class="dw-modern-card">
-                            <div class="dw-card-header"><h3 class="dw-card-title">Media & Status</h3></div>
+                        <div class="dw-card">
+                            <div class="dw-card-header"><h3 class="card-heading">Media & Status</h3></div>
                             <div class="dw-card-body">
                                 <div class="dw-form-group">
                                     <label>Logo Desa</label>
                                     <img src="<?php echo !empty($edit_data->foto) ? esc_url($edit_data->foto) : ''; ?>" class="img-preview" id="preview_foto">
                                     <input type="hidden" name="foto_url" id="foto_url" value="<?php echo esc_attr($edit_data->foto); ?>">
-                                    <button type="button" class="dw-btn dw-btn-outline dw-btn-sm btn_upload" data-target="#foto_url" data-preview="#preview_foto" style="width:100%; justify-content:center;">Upload Logo</button>
+                                    <button type="button" class="dw-button dw-button-outline dw-button-sm btn_upload" data-target="#foto_url" data-preview="#preview_foto" style="width:100%; justify-content:center;">Upload Logo</button>
                                 </div>
                                 
                                 <div class="dw-form-group">
@@ -512,7 +470,7 @@ function dw_desa_page_render() {
                                     <label>Bukti Bayar Akses</label>
                                     <img src="<?php echo !empty($edit_data->bukti_bayar_akses) ? esc_url($edit_data->bukti_bayar_akses) : ''; ?>" class="img-preview" id="preview_bukti" style="height:100px;">
                                     <input type="hidden" name="bukti_bayar_akses_url" id="bukti_bayar_akses_url" value="<?php echo esc_attr($edit_data->bukti_bayar_akses); ?>">
-                                    <button type="button" class="dw-btn dw-btn-outline dw-btn-sm btn_upload" data-target="#bukti_bayar_akses_url" data-preview="#preview_bukti" style="width:100%; justify-content:center;">Upload Bukti</button>
+                                    <button type="button" class="dw-button dw-button-outline dw-button-sm btn_upload" data-target="#bukti_bayar_akses_url" data-preview="#preview_bukti" style="width:100%; justify-content:center;">Upload Bukti</button>
                                 </div>
 
                                 <div class="dw-form-group">
@@ -527,16 +485,16 @@ function dw_desa_page_render() {
                                     <div style="font-size:12px;">Saldo Mengendap: <strong style="color:var(--dw-warning);">Rp <?php echo number_format($edit_data->saldo_komisi, 0, ',', '.'); ?></strong></div>
                                 </div>
                                 <?php endif; ?>
-                                <button type="submit" class="dw-btn dw-btn-primary" style="width:100%; justify-content:center;">Simpan Data</button>
-                                <a href="?page=dw-desa" class="dw-btn dw-btn-outline" style="width:100%; justify-content:center; margin-top:10px;">Batal</a>
+                                <button type="submit" class="dw-button dw-button-primary" style="width:100%; justify-content:center;">Simpan Data</button>
+                                <a href="?page=dw-desa" class="dw-button dw-button-outline" style="width:100%; justify-content:center; margin-top:10px;">Batal</a>
                             </div>
                         </div>
                     </div>
 
                     <!-- Content -->
                     <div class="dw-content">
-                        <div class="dw-modern-card">
-                            <div class="dw-card-header"><h3 class="dw-card-title">Informasi Utama</h3></div>
+                        <div class="dw-card">
+                            <div class="dw-card-header"><h3 class="card-heading">Informasi Utama</h3></div>
                             <div class="dw-card-body">
                                 <div class="dw-form-group">
                                     <label>Admin Pengelola (User WP)</label>
@@ -590,8 +548,8 @@ function dw_desa_page_render() {
                             </div>
                         </div>
 
-                        <div class="dw-modern-card">
-                            <div class="dw-card-header"><h3 class="dw-card-title">Lokasi & Wilayah</h3></div>
+                        <div class="dw-card">
+                            <div class="dw-card-header"><h3 class="card-heading">Lokasi & Wilayah</h3></div>
                             <div class="dw-card-body">
                                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
                                     <div class="dw-form-group">
@@ -626,8 +584,8 @@ function dw_desa_page_render() {
                             </div>
                         </div>
 
-                        <div class="dw-modern-card">
-                            <div class="dw-card-header"><h3 class="dw-card-title">Rekening Pencairan Komisi</h3></div>
+                        <div class="dw-card">
+                            <div class="dw-card-header"><h3 class="card-heading">Rekening Pencairan Komisi</h3></div>
                             <div class="dw-card-body">
                                 <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:15px;">
                                     <div class="dw-form-group">
@@ -647,19 +605,19 @@ function dw_desa_page_render() {
                                     <label>QRIS (Opsional)</label>
                                     <div style="display:flex; gap:10px;">
                                         <input type="text" name="qris_url" id="qris_url" class="dw-input" value="<?php echo esc_attr($edit_data->qris_image_url_desa); ?>" readonly>
-                                        <button type="button" class="dw-btn dw-btn-outline btn_upload" data-target="#qris_url">Upload</button>
+                                        <button type="button" class="dw-button dw-button-outline btn_upload" data-target="#qris_url">Upload</button>
                                     </div>
                                 </div>
                             </div>
                         </div>
                         
-                        <div class="dw-modern-card">
-                            <div class="dw-card-header"><h3 class="dw-card-title">Sampul Halaman</h3></div>
+                        <div class="dw-card">
+                            <div class="dw-card-header"><h3 class="card-heading">Sampul Halaman</h3></div>
                             <div class="dw-card-body">
                                 <div class="dw-form-group">
                                     <img src="<?php echo !empty($edit_data->foto_sampul) ? esc_url($edit_data->foto_sampul) : ''; ?>" class="img-preview" id="preview_sampul" style="height:200px;">
                                     <input type="hidden" name="foto_sampul_url" id="foto_sampul_url" value="<?php echo esc_attr($edit_data->foto_sampul); ?>">
-                                    <button type="button" class="dw-btn dw-btn-outline btn_upload" data-target="#foto_sampul_url" data-preview="#preview_sampul">Upload Foto Sampul</button>
+                                    <button type="button" class="dw-button dw-button-outline btn_upload" data-target="#foto_sampul_url" data-preview="#preview_sampul">Upload Foto Sampul</button>
                                 </div>
                             </div>
                         </div>
@@ -672,8 +630,8 @@ function dw_desa_page_render() {
         <?php elseif($active_tab == 'verifikasi'): 
             $pending_verif = $wpdb->get_results("SELECT * FROM $table_desa WHERE status_akses_verifikasi = 'pending' ORDER BY updated_at ASC");
         ?>
-            <div class="dw-modern-card">
-                <div class="dw-card-header"><h3 class="dw-card-title">Antrean Verifikasi Upgrade Premium</h3></div>
+            <div class="dw-card">
+                <div class="dw-card-header"><h3 class="card-heading">Antrean Verifikasi Upgrade Premium</h3></div>
                 <div class="dw-card-body">
                     <?php if(empty($pending_verif)): ?>
                         <div style="text-align:center; padding:40px; color:#64748b;">
@@ -702,9 +660,9 @@ function dw_desa_page_render() {
                                         <input type="hidden" name="action_verify_desa" value="1">
                                         <input type="hidden" name="desa_id" value="<?php echo $p->id; ?>">
                                         <input type="hidden" name="decision" value="approve">
-                                        <button type="submit" class="dw-btn dw-btn-primary dw-btn-sm">Setujui Premium</button>
+                                        <button type="submit" class="dw-button dw-button-primary dw-button-sm">Setujui Premium</button>
                                     </form>
-                                    <button type="button" class="dw-btn dw-btn-outline dw-btn-sm" onclick="jQuery('#reject-box-<?php echo $p->id; ?>').toggle();">Tolak</button>
+                                    <button type="button" class="dw-button dw-button-outline dw-button-sm" onclick="jQuery('#reject-box-<?php echo $p->id; ?>').toggle();">Tolak</button>
                                 </div>
                                 <!-- Reject Form -->
                                 <div id="reject-box-<?php echo $p->id; ?>" style="display:none; margin-top:10px; background:#fef2f2; padding:10px; border-radius:4px; border:1px solid #fecaca;">
@@ -714,7 +672,7 @@ function dw_desa_page_render() {
                                         <input type="hidden" name="desa_id" value="<?php echo $p->id; ?>">
                                         <input type="hidden" name="decision" value="reject">
                                         <input type="text" name="alasan_penolakan" class="dw-input" placeholder="Alasan penolakan..." required style="padding:6px;">
-                                        <button type="submit" class="dw-btn dw-btn-danger dw-btn-sm">Kirim</button>
+                                        <button type="submit" class="dw-button dw-button-danger dw-button-sm">Kirim</button>
                                     </form>
                                 </div>
                             </div>
@@ -728,8 +686,8 @@ function dw_desa_page_render() {
             $settings = get_option('dw_settings', []);
             $harga = isset($settings['harga_premium_desa']) ? $settings['harga_premium_desa'] : 0;
         ?>
-            <div class="dw-modern-card" style="max-width:500px;">
-                <div class="dw-card-header"><h3 class="dw-card-title">Pengaturan Harga Premium</h3></div>
+            <div class="dw-card" style="max-width:500px;">
+                <div class="dw-card-header"><h3 class="card-heading">Pengaturan Harga Premium</h3></div>
                 <div class="dw-card-body">
                     <form method="post">
                         <?php wp_nonce_field('dw_desa_settings_save'); ?>
@@ -742,7 +700,7 @@ function dw_desa_page_render() {
                             </div>
                             <p class="dw-text-muted" style="margin-top:5px;">Biaya yang harus dibayar admin desa untuk fitur premium.</p>
                         </div>
-                        <button type="submit" class="dw-btn dw-btn-primary">Simpan Pengaturan</button>
+                        <button type="submit" class="dw-button dw-button-primary">Simpan Pengaturan</button>
                     </form>
                 </div>
             </div>

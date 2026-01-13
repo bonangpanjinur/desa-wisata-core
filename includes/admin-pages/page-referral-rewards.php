@@ -7,6 +7,9 @@
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
+
+// Include UI components
+require_once plugin_dir_path( dirname( __FILE__ ) ) . "admin-ui-components.php";
     exit;
 }
 
@@ -53,9 +56,9 @@ function dw_render_referral_rewards_page() {
         }
 
         if ( $fixed_count > 0 ) {
-            echo '<div class="notice notice-success is-dismissible"><p><strong>Sukses:</strong> Sinkronisasi selesai. ' . $fixed_count . ' data reward yang hilang berhasil dipulihkan.</p></div>';
+            echo dw_admin_render_alert('<strong>Sukses:</strong> Sinkronisasi selesai. ' . $fixed_count . ' data reward yang hilang berhasil dipulihkan.', 'success');
         } else {
-            echo '<div class="notice notice-info is-dismissible"><p>Data sudah sinkron. Tidak ada reward yang hilang.</p></div>';
+            echo dw_admin_render_alert('Data sudah sinkron. Tidak ada reward yang hilang.', 'info');
         }
     }
 
@@ -64,7 +67,7 @@ function dw_render_referral_rewards_page() {
         $new_bonus = intval($_POST['dw_referral_bonus_amount']);
         update_option('dw_referral_bonus_amount', $new_bonus);
         $current_bonus_setting = $new_bonus;
-        echo '<div class="notice notice-success is-dismissible"><p>Pengaturan bonus berhasil disimpan.</p></div>';
+        echo dw_admin_render_alert('Pengaturan bonus berhasil disimpan.', 'success');
     }
 
     // --- 3. PREPARE DATA TABLE ---
@@ -91,186 +94,7 @@ function dw_render_referral_rewards_page() {
 
     // --- 4. TAMPILAN UI/UX MODERN ---
     ?>
-    <style>
-        :root {
-            --dw-primary: #2271b1;
-            --dw-success: #00ba37;
-            --dw-text: #3c434a;
-            --dw-light-bg: #f6f7f7;
-            --dw-border: #c3c4c7;
-        }
-        .dw-wrap {
-            max-width: 1200px;
-            margin: 20px 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
-        }
-        
-        /* Stats Cards */
-        .dw-stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-        .dw-stat-card {
-            background: #fff;
-            border-radius: 8px;
-            padding: 24px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-            border: 1px solid #e2e4e7;
-            display: flex;
-            align-items: center;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-        .dw-stat-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-        }
-        .dw-stat-icon {
-            width: 48px;
-            height: 48px;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 24px;
-            margin-right: 16px;
-        }
-        .dw-stat-icon.blue { background: #e3f2fd; color: #2271b1; }
-        .dw-stat-icon.green { background: #e6fffa; color: #00ba37; }
-        
-        .dw-stat-content h3 {
-            margin: 0;
-            font-size: 13px;
-            font-weight: 600;
-            text-transform: uppercase;
-            color: #646970;
-            letter-spacing: 0.5px;
-        }
-        .dw-stat-value {
-            font-size: 28px;
-            font-weight: 700;
-            color: #1d2327;
-            line-height: 1.2;
-            margin-top: 4px;
-        }
-        .dw-stat-meta {
-            font-size: 12px;
-            color: #8c8f94;
-            margin-top: 2px;
-        }
-
-        /* Action Bar */
-        .dw-action-bar {
-            background: #fff;
-            border: 1px solid #e2e4e7;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 25px;
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            justify-content: space-between;
-            gap: 20px;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.02);
-        }
-        .dw-settings-form {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            background: #f8f9fa;
-            padding: 10px 15px;
-            border-radius: 6px;
-            border: 1px solid #eaecf0;
-        }
-        .dw-settings-form label { font-weight: 600; font-size: 13px; color: #1d2327; }
-        .dw-settings-form input[type="number"] {
-            width: 70px;
-            border-radius: 4px;
-            border: 1px solid #c3c4c7;
-            padding: 4px 8px;
-        }
-        .dw-search-box {
-            position: relative;
-        }
-        .dw-search-box input {
-            padding-left: 30px;
-            border-radius: 20px;
-            border: 1px solid #c3c4c7;
-            width: 250px;
-            font-size: 13px;
-        }
-        .dw-search-box .dashicons {
-            position: absolute;
-            left: 8px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: #8c8f94;
-        }
-
-        /* Table Styling */
-        .dw-table-wrapper {
-            background: #fff;
-            border-radius: 8px;
-            border: 1px solid #e2e4e7;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-            overflow: hidden;
-        }
-        .wp-list-table {
-            border: none;
-            box-shadow: none;
-        }
-        .wp-list-table thead th {
-            background: #f8f9fa;
-            border-bottom: 1px solid #e2e4e7;
-            font-weight: 600;
-            color: #1d2327;
-            padding: 15px 12px;
-            font-size: 13px;
-        }
-        .wp-list-table tbody td {
-            padding: 16px 12px;
-            vertical-align: middle;
-            color: #50575e;
-            border-bottom: 1px solid #f0f0f1;
-        }
-        .wp-list-table tbody tr:last-child td { border-bottom: none; }
-        .wp-list-table tbody tr:hover { background: #fafafa; }
-        
-        /* Badges & Chips */
-        .dw-badge {
-            display: inline-flex;
-            align-items: center;
-            padding: 4px 10px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: 600;
-            text-transform: uppercase;
-        }
-        .dw-badge-success { background: #e7f9ed; color: #00ba37; }
-        .dw-badge-warning { background: #fff8e5; color: #f5a623; }
-        .dw-badge-error { background: #fbeaea; color: #d63638; }
-        .dw-badge-blue { background: #e3f2fd; color: #2271b1; }
-        
-        .dw-code-chip {
-            font-family: 'Monaco', 'Consolas', monospace;
-            background: #f0f0f1;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            color: #2271b1;
-            border: 1px solid #dcdcde;
-            letter-spacing: 0.5px;
-        }
-        
-        .dw-user-info {
-            display: flex;
-            flex-direction: column;
-        }
-        .dw-user-name { font-weight: 600; color: #1d2327; margin-bottom: 2px; }
-        .dw-user-meta { font-size: 12px; color: #8c8f94; }
-
-    </style>
+    
 
     <div class="wrap dw-wrap">
         <h1 class="wp-heading-inline" style="font-size: 24px; margin-bottom: 20px;">

@@ -6,6 +6,9 @@
 
 if (!defined('ABSPATH')) exit;
 
+// Include UI components
+require_once plugin_dir_path( dirname( __FILE__ ) ) . "admin-ui-components.php";
+
 function dw_promosi_page_render() {
     global $wpdb;
     $table_promosi = $wpdb->prefix . 'dw_promosi';
@@ -105,7 +108,7 @@ function dw_promosi_page_render() {
     $quota_percent_item = ($item_settings['max_quota'] > 0) ? min(100, ($used_quota_item / $item_settings['max_quota']) * 100) : 0;
     ?>
 
-    <div class="wrap dw-admin-wrapper">
+    <div class="wrap dw-wrapper">
         <div class="dw-header">
             <div class="dw-header-title">
                 <div class="dw-icon-box bg-gradient-purple">
@@ -197,8 +200,8 @@ function dw_promosi_page_render() {
                 </div>
 
                 <!-- Table -->
-                <div class="dw-table-card">
-                    <table class="wp-list-table widefat fixed striped dw-table-premium">
+                <div class="dw-modern-table-card">
+                    <table class="wp-list-table widefat fixed striped dw-modern-table-premium">
                         <thead>
                             <tr>
                                 <th width="120">Tanggal</th>
@@ -266,8 +269,8 @@ function dw_promosi_page_render() {
                                 <td style="text-align:right;">
                                     <?php if($r->status == 'pending'): ?>
                                         <div class="dw-action-group">
-                                            <a href="<?php echo $approve_url; ?>" class="dw-btn-action success tooltip" title="Setujui" onclick="return confirm('Setujui iklan ini?');"><span class="dashicons dashicons-yes"></span></a>
-                                            <a href="<?php echo $reject_url; ?>" class="dw-btn-action danger tooltip" title="Tolak" onclick="return confirm('Tolak iklan ini?');"><span class="dashicons dashicons-no"></span></a>
+                                            <a href="<?php echo $approve_url; ?>" class="dw-button-action success tooltip" title="Setujui" onclick="return confirm('Setujui iklan ini?');"><span class="dashicons dashicons-yes"></span></a>
+                                            <a href="<?php echo $reject_url; ?>" class="dw-button-action danger tooltip" title="Tolak" onclick="return confirm('Tolak iklan ini?');"><span class="dashicons dashicons-no"></span></a>
                                         </div>
                                     <?php elseif($r->status == 'aktif'): ?>
                                         <span class="text-green small-caps"><span class="dashicons dashicons-visibility"></span> Live</span>
@@ -368,7 +371,7 @@ function dw_promosi_page_render() {
                                                 <td><input type="number" name="ad_packages[<?php echo $i; ?>][days]" value="<?php echo esc_attr($pkg['days']); ?>" required></td>
                                                 <td><input type="number" name="ad_packages[<?php echo $i; ?>][price]" value="<?php echo esc_attr($pkg['price']); ?>" required></td>
                                                 <td><input type="number" name="ad_packages[<?php echo $i; ?>][quota]" value="<?php echo esc_attr($pkg['quota']); ?>" required></td>
-                                                <td><button type="button" class="dw-btn-icon remove-row text-red"><span class="dashicons dashicons-no-alt"></span></button></td>
+                                                <td><button type="button" class="dw-button-icon remove-row text-red"><span class="dashicons dashicons-no-alt"></span></button></td>
                                             </tr>
                                             <?php endforeach; else: ?>
                                             <tr class="empty-row"><td colspan="5">Belum ada paket.</td></tr>
@@ -377,7 +380,7 @@ function dw_promosi_page_render() {
                                     </table>
                                 </div>
                                 <div class="setting-actions">
-                                    <button type="button" class="dw-btn-outline" id="add-package-btn"><span class="dashicons dashicons-plus-alt2"></span> Tambah Paket</button>
+                                    <button type="button" class="dw-button-outline" id="add-package-btn"><span class="dashicons dashicons-plus-alt2"></span> Tambah Paket</button>
                                 </div>
                             </div>
                         </div>
@@ -385,7 +388,7 @@ function dw_promosi_page_render() {
                     </div>
 
                     <div class="dw-form-footer">
-                        <button type="submit" class="dw-btn-primary large">Simpan Perubahan</button>
+                        <button type="submit" class="dw-button-primary large">Simpan Perubahan</button>
                     </div>
                 </form>
             </div>
@@ -393,183 +396,7 @@ function dw_promosi_page_render() {
         </div>
     </div>
 
-    <style>
-        /* === RESET & VARIABLES === */
-        :root {
-            --dw-primary: #4f46e5; /* Modern Indigo */
-            --dw-primary-hover: #4338ca;
-            --dw-bg: #f9fafb;
-            --dw-card-bg: #ffffff;
-            --dw-text-main: #111827;
-            --dw-text-sec: #6b7280;
-            --dw-border: #e5e7eb;
-            --dw-success: #10b981;
-            --dw-warning: #f59e0b;
-            --dw-danger: #ef4444;
-            --dw-info: #3b82f6;
-        }
-        
-        .dw-admin-wrapper { font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 20px 20px 0 0; color: var(--dw-text-main); }
-        .dw-admin-wrapper * { box-sizing: border-box; }
-        .dw-admin-wrapper h1, .dw-admin-wrapper h2, .dw-admin-wrapper h3 { margin: 0; }
-
-        /* === HEADER === */
-        .dw-header { margin-bottom: 30px; display: flex; align-items: center; justify-content: space-between; }
-        .dw-header-title { display: flex; align-items: center; gap: 15px; }
-        .dw-icon-box { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; color: #fff; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2); }
-        .bg-gradient-purple { background: linear-gradient(135deg, #6366f1, #8b5cf6); }
-        .dw-header h1 { font-size: 24px; font-weight: 700; color: var(--dw-text-main); letter-spacing: -0.02em; }
-        .subtitle { font-size: 14px; color: var(--dw-text-sec); margin-top: 4px; }
-
-        /* === TABS === */
-        .dw-tabs-wrapper { margin-bottom: 25px; border-bottom: 1px solid var(--dw-border); }
-        .dw-tabs-nav { display: flex; gap: 30px; }
-        .dw-tab-link { padding: 12px 0; font-size: 14px; font-weight: 600; color: var(--dw-text-sec); text-decoration: none; border-bottom: 2px solid transparent; transition: all 0.2s; display: flex; align-items: center; gap: 8px; }
-        .dw-tab-link:hover { color: var(--dw-primary); }
-        .dw-tab-link.active { color: var(--dw-primary); border-bottom-color: var(--dw-primary); }
-        .dw-tab-link span { font-size: 16px; }
-        
-        .dw-tab-content { display: none; animation: fadeIn 0.4s ease; }
-        .dw-tab-content.active { display: block; }
-
-        /* === STATS / MONITOR GRID === */
-        .dw-grid-monitor { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 30px; }
-        .dw-stat-card { background: var(--dw-card-bg); border-radius: 16px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); border: 1px solid var(--dw-border); position: relative; overflow: hidden; }
-        .dw-card-gradient-1 { border-top: 4px solid var(--dw-warning); }
-        .dw-card-gradient-2 { border-top: 4px solid var(--dw-primary); }
-        
-        .card-inner { display: flex; align-items: center; gap: 15px; margin-bottom: 20px; }
-        .card-icon { width: 42px; height: 42px; border-radius: 10px; background: #f3f4f6; display: flex; align-items: center; justify-content: center; color: var(--dw-text-sec); font-size: 20px; }
-        .card-info h3 { font-size: 14px; color: var(--dw-text-sec); font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; }
-        .card-numbers { display: flex; align-items: baseline; gap: 8px; }
-        .big-num { font-size: 28px; font-weight: 800; color: var(--dw-text-main); line-height: 1; }
-        .total-num { font-size: 13px; color: var(--dw-text-sec); font-weight: 500; }
-        
-        .dw-progress-wrapper { display: flex; flex-direction: column; gap: 6px; }
-        .dw-progress-bar { height: 8px; background: #f3f4f6; border-radius: 4px; overflow: hidden; width: 100%; }
-        .bar-fill { height: 100%; border-radius: 4px; background: var(--dw-warning); transition: width 0.5s ease; }
-        .dw-progress-bar.blue .bar-fill { background: var(--dw-primary); }
-        .progress-label { font-size: 12px; color: var(--dw-text-sec); font-weight: 500; text-align: right; }
-
-        /* === TOOLBAR & FILTERS === */
-        .dw-toolbar-modern { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: var(--dw-card-bg); padding: 10px 15px; border-radius: 12px; border: 1px solid var(--dw-border); box-shadow: 0 1px 2px rgba(0,0,0,0.02); }
-        .dw-filter-pills { display: flex; gap: 8px; }
-        .filter-pill { padding: 6px 14px; font-size: 13px; font-weight: 500; color: var(--dw-text-sec); text-decoration: none; border-radius: 20px; background: transparent; transition: all 0.2s; display: flex; align-items: center; gap: 6px; }
-        .filter-pill:hover { background: #f3f4f6; color: var(--dw-text-main); }
-        .filter-pill.active { background: var(--dw-text-main); color: #fff; }
-        .dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
-        .dot.orange { background: var(--dw-warning); } .dot.green { background: var(--dw-success); }
-        
-        .dw-search-modern { position: relative; }
-        .search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--dw-text-sec); }
-        .search-input-field { padding: 8px 10px 8px 34px; border: 1px solid var(--dw-border); border-radius: 8px; width: 220px; font-size: 13px; transition: all 0.2s; background: #f9fafb; }
-        .search-input-field:focus { width: 280px; border-color: var(--dw-primary); background: #fff; outline: none; box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1); }
-
-        /* === TABLE === */
-        .dw-table-card { background: var(--dw-card-bg); border-radius: 12px; border: 1px solid var(--dw-border); overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); }
-        .dw-table-premium { border: none; border-collapse: separate; border-spacing: 0; }
-        .dw-table-premium thead th { background: #f9fafb; color: var(--dw-text-sec); font-weight: 600; text-transform: uppercase; font-size: 11px; padding: 16px 20px; border-bottom: 1px solid var(--dw-border); letter-spacing: 0.05em; }
-        .dw-table-premium tbody td { padding: 16px 20px; border-bottom: 1px solid var(--dw-border); vertical-align: middle; color: var(--dw-text-main); }
-        .dw-table-premium tbody tr:last-child td { border-bottom: none; }
-        .dw-table-premium tbody tr:hover { background: #f9fafb; }
-        
-        /* Table Elements */
-        .date-badge { text-align: center; border: 1px solid var(--dw-border); border-radius: 8px; padding: 6px 10px; background: #fcfcfc; width: fit-content; min-width: 50px; }
-        .date-badge .day { display: block; font-size: 16px; font-weight: 700; line-height: 1; margin-bottom: 2px; }
-        .date-badge .month { display: block; font-size: 10px; text-transform: uppercase; color: var(--dw-text-sec); }
-        
-        .user-info { display: flex; align-items: center; gap: 12px; }
-        .user-avatar img { border-radius: 50%; width: 36px; height: 36px; border: 1px solid var(--dw-border); }
-        .user-details { display: flex; flex-direction: column; }
-        .meta-id { font-size: 11px; color: var(--dw-text-sec); }
-        
-        .ad-detail { display: flex; flex-direction: column; gap: 4px; }
-        .dw-badge-mini { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; width: fit-content; }
-        .dw-badge-mini.blue { background: #eff6ff; color: #1d4ed8; }
-        .dw-badge-mini.green { background: #ecfdf5; color: #047857; }
-        .dw-badge-mini.purple { background: #f5f3ff; color: #7c3aed; }
-        .target-name { font-weight: 500; font-size: 13px; }
-        
-        .cost-info { display: flex; flex-direction: column; }
-        .cost-info .price { font-weight: 700; color: var(--dw-text-main); }
-        .cost-info .duration { font-size: 12px; color: var(--dw-text-sec); display: flex; align-items: center; gap: 4px; }
-        
-        .dw-status-label { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
-        .dw-status-label.success { background: #ecfdf5; color: var(--dw-success); }
-        .dw-status-label.warning { background: #fffbeb; color: #b45309; }
-        .dw-status-label.danger { background: #fef2f2; color: var(--dw-danger); }
-        .dw-status-label.neutral { background: #f3f4f6; color: var(--dw-text-sec); }
-        
-        .dw-action-group { display: flex; gap: 6px; justify-content: flex-end; }
-        .dw-btn-action { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; transition: all 0.2s; border: 1px solid transparent; }
-        .dw-btn-action.success { background: #ecfdf5; color: var(--dw-success); border-color: #d1fae5; }
-        .dw-btn-action.success:hover { background: var(--dw-success); color: #fff; border-color: var(--dw-success); }
-        .dw-btn-action.danger { background: #fef2f2; color: var(--dw-danger); border-color: #fee2e2; }
-        .dw-btn-action.danger:hover { background: var(--dw-danger); color: #fff; border-color: var(--dw-danger); }
-        .text-green { color: var(--dw-success); font-weight: 600; font-size: 12px; display: flex; align-items: center; gap: 4px; justify-content: flex-end; }
-        .empty-state { text-align: center; padding: 40px !important; color: var(--dw-text-sec); font-size: 14px; }
-        .empty-state .dashicons { font-size: 32px; width: 32px; height: 32px; margin-bottom: 10px; display: block; margin-left: auto; margin-right: auto; opacity: 0.5; }
-
-        /* === SETTINGS LAYOUT === */
-        .dw-settings-layout { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 25px; margin-bottom: 30px; }
-        .dw-card-setting { background: var(--dw-card-bg); border: 1px solid var(--dw-border); border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-        .setting-header { padding: 20px; border-bottom: 1px solid var(--dw-border); display: flex; align-items: center; gap: 15px; background: #f9fafb; }
-        .header-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; }
-        .header-icon.yellow { background: #fffbeb; color: #f59e0b; }
-        .header-icon.purple { background: #f3f0ff; color: #7c3aed; }
-        .header-text h3 { font-size: 16px; font-weight: 700; color: var(--dw-text-main); margin-bottom: 2px; }
-        .header-text p { font-size: 12px; color: var(--dw-text-sec); margin: 0; }
-        .header-toggle { margin-left: auto; }
-        
-        .setting-body { padding: 20px; }
-        .dw-input-group { margin-bottom: 20px; }
-        .dw-input-group label { display: block; font-weight: 600; font-size: 13px; color: var(--dw-text-main); margin-bottom: 8px; }
-        .input-wrapper { display: flex; align-items: center; border: 1px solid var(--dw-border); border-radius: 8px; overflow: hidden; background: #fff; transition: all 0.2s; }
-        .input-wrapper:focus-within { border-color: var(--dw-primary); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1); }
-        .input-wrapper .prefix { background: #f3f4f6; padding: 10px 15px; font-size: 14px; font-weight: 500; color: var(--dw-text-sec); border-right: 1px solid var(--dw-border); }
-        .input-wrapper input { border: none; padding: 10px 15px; font-size: 14px; width: 100%; outline: none; box-shadow: none; background: transparent; }
-        .simple-input { width: 100%; padding: 10px 15px; border: 1px solid var(--dw-border); border-radius: 8px; font-size: 14px; outline: none; transition: all 0.2s; }
-        .simple-input:focus { border-color: var(--dw-primary); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1); }
-        
-        .dw-table-wrapper { border: 1px solid var(--dw-border); border-radius: 8px; overflow: hidden; margin-bottom: 15px; }
-        .dw-repeater-table { width: 100%; border-collapse: collapse; }
-        .dw-repeater-table th { background: #f9fafb; font-size: 11px; text-transform: uppercase; color: var(--dw-text-sec); font-weight: 600; padding: 10px 15px; text-align: left; border-bottom: 1px solid var(--dw-border); }
-        .dw-repeater-table td { padding: 10px 15px; border-bottom: 1px solid var(--dw-border); background: #fff; }
-        .dw-repeater-table tr:last-child td { border-bottom: none; }
-        .dw-repeater-table input { width: 100%; border: 1px solid var(--dw-border); border-radius: 6px; padding: 6px 10px; font-size: 13px; }
-        
-        .dw-btn-outline { border: 1px dashed var(--dw-border); background: transparent; width: 100%; padding: 10px; border-radius: 8px; color: var(--dw-text-sec); cursor: pointer; font-weight: 500; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px; }
-        .dw-btn-outline:hover { border-color: var(--dw-primary); color: var(--dw-primary); background: #f0f6fc; }
-        
-        /* FOOTER & BUTTONS */
-        .dw-form-footer { display: flex; justify-content: flex-end; padding-top: 20px; border-top: 1px solid var(--dw-border); margin-top: 20px; }
-        .dw-btn-primary { background: var(--dw-primary); color: #fff; border: none; padding: 10px 24px; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.3); }
-        .dw-btn-primary:hover { background: var(--dw-primary-hover); transform: translateY(-1px); box-shadow: 0 6px 8px -1px rgba(79, 70, 229, 0.4); }
-        .dw-btn-primary.large { padding: 12px 30px; font-size: 15px; }
-
-        /* TOGGLE SWITCH */
-        .dw-switch { position: relative; display: inline-block; width: 44px; height: 24px; }
-        .dw-switch input { opacity: 0; width: 0; height: 0; }
-        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #e5e7eb; transition: .4s; border-radius: 24px; }
-        .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
-        input:checked + .slider { background-color: var(--dw-success); }
-        input:checked + .slider:before { transform: translateX(20px); }
-
-        /* ALERTS */
-        .dw-alert { display: flex; align-items: center; gap: 15px; padding: 16px; border-radius: 10px; background: #fff; border: 1px solid; margin-bottom: 25px; animation: slideIn 0.3s ease; }
-        .dw-alert-success { background: #ecfdf5; border-color: #a7f3d0; color: #065f46; }
-        .dw-alert-error { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
-        .alert-icon { width: 32px; height: 32px; border-radius: 50%; background: rgba(255,255,255,0.5); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-        .dw-alert-dismiss { background: transparent; border: none; margin-left: auto; font-size: 20px; cursor: pointer; color: inherit; opacity: 0.7; }
-        
-        .dw-pagination-modern { margin-top: 20px; text-align: right; display: flex; justify-content: flex-end; gap: 5px; }
-        .dw-pagination-modern .page-numbers { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--dw-border); color: var(--dw-text-sec); text-decoration: none; font-size: 13px; font-weight: 500; transition: all 0.2s; background: #fff; }
-        .dw-pagination-modern .page-numbers.current { background: var(--dw-primary); color: #fff; border-color: var(--dw-primary); }
-        .dw-pagination-modern .page-numbers:hover:not(.current) { background: #f3f4f6; color: var(--dw-text-main); }
-
-        @keyframes slideIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-    </style>
+    
 
     <script>
     function switchTab(evt, tabId) {
@@ -597,7 +424,7 @@ function dw_promosi_page_render() {
                 <td><input type="number" name="ad_packages[${index}][days]" required></td>
                 <td><input type="number" name="ad_packages[${index}][price]" required></td>
                 <td><input type="number" name="ad_packages[${index}][quota]" required></td>
-                <td><button type="button" class="dw-btn-icon remove-row text-red"><span class="dashicons dashicons-no-alt"></span></button></td>
+                <td><button type="button" class="dw-button-icon remove-row text-red"><span class="dashicons dashicons-no-alt"></span></button></td>
             </tr>`;
             $('#package-rows').append(row);
             $('.empty-row').remove();

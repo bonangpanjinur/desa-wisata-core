@@ -7,6 +7,9 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
+// Include UI components
+require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin-ui-components.php';
+
 function dw_render_page_verifikator_list() {
 global $wpdb;
 // FIX: Sesuaikan nama tabel dengan activation.php (prefix 'dw_')
@@ -157,80 +160,26 @@ $region_nonce = wp_create_nonce('dw_region_nonce');
 ?>
 
 <!-- STYLE CSS -->
-<style>
-    :root { --v-primary: #2271b1; --v-success: #00ba37; --v-warning: #f5a623; --v-danger: #d63638; --v-border: #c3c4c7; --v-text: #3c434a; --v-muted: #646970; }
-    .v-wrap { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: var(--v-text); margin: 20px 20px 0 0; }
-    
-    /* Stats */
-    .v-grid-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 25px; }
-    .v-card { background: #fff; border: 1px solid var(--v-border); border-radius: 4px; padding: 20px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); display: flex; flex-direction: column; }
-    .v-card h3 { margin: 0 0 5px 0; font-size: 11px; text-transform: uppercase; color: var(--v-muted); font-weight: 600; }
-    .v-card .val { font-size: 22px; font-weight: 500; color: var(--v-text); line-height: 1.2; }
-    .v-card.highlight { border-left: 4px solid var(--v-primary); }
-    
-    /* Header */
-    .v-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-    .v-title h1 { margin: 0; font-size: 24px; font-weight: 600; display: inline-block; }
-    .v-search { padding: 6px 10px; border: 1px solid #8c8f94; border-radius: 4px; width: 250px; font-size: 14px; }
-    .v-btn { background: var(--v-primary); color: #fff; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 500; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; transition: 0.1s; vertical-align: middle; }
-    .v-btn:hover { background: #135e96; color: #fff; }
-    .v-btn-sec { background: #f6f7f7; border: 1px solid var(--v-primary); color: var(--v-primary); }
-    
-    /* Table */
-    .v-table-container { background: #fff; border: 1px solid var(--v-border); box-shadow: 0 1px 1px rgba(0,0,0,0.04); }
-    .v-table { width: 100%; border-collapse: collapse; }
-    .v-table th { background: #fff; padding: 15px; text-align: left; font-size: 13px; font-weight: 600; color: var(--v-text); border-bottom: 1px solid var(--v-border); white-space: nowrap; }
-    .v-table td { padding: 12px 15px; border-bottom: 1px solid #f0f0f1; vertical-align: top; font-size: 13px; }
-    .v-table tr:hover { background-color: #fcfcfc; }
-    .v-badge { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; border: 1px solid transparent; }
-    .vb-active { background: #edfaef; color: #00ba37; border-color: #00ba37; }
-    .vb-pending { background: #fcf9e8; color: #f5a623; border-color: #f5a623; }
-    .vb-inactive { background: #fbeaea; color: #d63638; border-color: #d63638; }
-    .v-code { font-family: monospace; background: #f0f0f1; padding: 3px 6px; border-radius: 3px; font-weight: 600; font-size: 12px; cursor: pointer; border: 1px solid #dcdcde; display: inline-block; margin-top: 3px; }
-    .v-stats-row { display: flex; align-items: center; gap: 15px; font-size: 12px; margin-top: 5px; }
-    
-    /* Modal */
-    .v-modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 100000; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
-    .v-modal-box { background: #fff; width: 700px; max-width: 95%; max-height: 90vh; display: flex; flex-direction: column; box-shadow: 0 5px 15px rgba(0,0,0,0.3); border-radius: 4px; animation: popIn 0.2s ease-out; }
-    @keyframes popIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
-    .v-modal-header { padding: 15px 20px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; background: #fff; border-radius: 4px 4px 0 0; }
-    .v-modal-header h2 { margin: 0; font-size: 18px; color: #23282d; }
-    .v-close { font-size: 20px; cursor: pointer; color: #666; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; }
-    .v-close:hover { color: #d63638; }
-    .v-modal-body { padding: 20px; overflow-y: auto; flex: 1; background: #fff; }
-    .v-modal-footer { padding: 15px 20px; border-top: 1px solid #ddd; background: #f6f7f7; text-align: right; border-radius: 0 0 4px 4px; display: flex; justify-content: flex-end; gap: 10px; }
-    
-    /* Form */
-    .v-form-group { margin-bottom: 15px; }
-    .v-form-group label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 13px; color: #23282d; }
-    .v-input, .v-select, .v-textarea { width: 100%; padding: 0 8px; height: 36px; line-height: 1.5; border: 1px solid #8c8f94; border-radius: 4px; box-sizing: border-box; color: #2c3338; }
-    .v-textarea { height: auto; padding: 8px; }
-    .v-input:focus, .v-select:focus, .v-textarea:focus { border-color: var(--v-primary); box-shadow: 0 0 0 1px var(--v-primary); outline: none; }
-    .v-row { display: flex; gap: 20px; }
-    .v-col { flex: 1; }
-    .v-input-group { display: flex; }
-    .v-input-group input { border-top-right-radius: 0; border-bottom-right-radius: 0; border-right: none; }
-    .v-input-group button { border-top-left-radius: 0; border-bottom-left-radius: 0; border: 1px solid #8c8f94; background: #f0f0f1; cursor: pointer; padding: 0 10px; color: #50575e; }
-</style>
+
 
 <div class="wrap v-wrap">
     
     <!-- NOTIFIKASI -->
     <?php if(isset($_GET['msg'])): ?>
         <?php if($_GET['msg'] == 'success_add'): ?>
-            <div class="notice notice-success is-dismissible"><p><strong>Sukses:</strong> Verifikator berhasil ditambahkan.</p></div>
+            <?php echo dw_admin_render_alert('<strong>Sukses:</strong> Verifikator berhasil ditambahkan.', 'success'); ?>
         <?php elseif($_GET['msg'] == 'success_edit'): ?>
-            <div class="notice notice-success is-dismissible"><p><strong>Sukses:</strong> Data Verifikator berhasil diperbarui.</p></div>
+            <?php echo dw_admin_render_alert('<strong>Sukses:</strong> Data Verifikator berhasil diperbarui.', 'success'); ?>
         <?php elseif($_GET['msg'] == 'success_delete'): ?>
-            <div class="notice notice-success is-dismissible"><p><strong>Sukses:</strong> Data Verifikator berhasil dihapus.</p></div>
+            <?php echo dw_admin_render_alert('<strong>Sukses:</strong> Data Verifikator berhasil dihapus.', 'success'); ?>
         <?php elseif($_GET['msg'] == 'error_exist_user'): ?>
-            <div class="notice notice-error is-dismissible"><p><strong>Gagal:</strong> User WordPress ini sudah terdaftar sebagai verifikator.</p></div>
+            <?php echo dw_admin_render_alert('<strong>Gagal:</strong> User WordPress ini sudah terdaftar sebagai verifikator.', 'error'); ?>
         <?php elseif($_GET['msg'] == 'error_role'): ?>
-            <div class="notice notice-error is-dismissible"><p><strong>Ditolak:</strong> User yang dipilih tidak memiliki role <code>verifikator_umkm</code>. Mohon periksa menu Users.</p></div>
+            <?php echo dw_admin_render_alert('<strong>Ditolak:</strong> User yang dipilih tidak memiliki role <code>verifikator_umkm</code>. Mohon periksa menu Users.', 'error'); ?>
         <?php elseif($_GET['msg'] == 'error_exist_ref'): ?>
-            <div class="notice notice-error is-dismissible"><p><strong>Gagal:</strong> Kode Referral sudah digunakan.</p></div>
+            <?php echo dw_admin_render_alert('<strong>Gagal:</strong> Kode Referral sudah digunakan.', 'error'); ?>
         <?php elseif($_GET['msg'] == 'error_empty'): ?>
-            <div class="notice notice-error is-dismissible"><p><strong>Gagal:</strong> Semua kolom wajib harus diisi.</p></div>
+            <?php echo dw_admin_render_alert('<strong>Gagal:</strong> Semua kolom wajib harus diisi.', 'error'); ?>
         <?php endif; ?>
     <?php endif; ?>
 

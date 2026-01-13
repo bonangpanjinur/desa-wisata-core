@@ -10,6 +10,9 @@
 
 if (!defined('ABSPATH')) exit;
 
+// Include UI components
+require_once plugin_dir_path( dirname( __FILE__ ) ) . "admin-ui-components.php";
+
 function dw_wisata_page_render() {
     // --- INTEGRASI FITUR PREMIUM: MEDIA UPLOADER ---
     if ( ! did_action( 'wp_enqueue_media' ) ) {
@@ -578,22 +581,7 @@ function dw_wisata_page_render() {
             </div>
 
             <!-- Styles untuk Tabel Cantik -->
-            <style>
-                .dw-card-table { background:#fff; border:1px solid #c3c4c7; border-radius:4px; box-shadow:0 1px 1px rgba(0,0,0,.04); overflow:hidden; }
-                .dw-thumb-wisata { width:60px; height:60px; border-radius:6px; object-fit:cover; border:1px solid #eee; background:#f9f9f9; display:block; }
-                
-                .dw-badge { display:inline-block; padding:4px 8px; border-radius:12px; font-size:11px; font-weight:600; line-height:1; }
-                .dw-badge-active { background:#dcfce7; color:#166534; border:1px solid #bbf7d0; }
-                .dw-badge-nonaktif { background:#fee2e2; color:#991b1b; border:1px solid #fecaca; }
-                
-                .dw-price-tag { font-weight:700; color:#1e293b; font-size:13px; }
-                .dw-price-free { color:#166534; background:#dcfce7; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; }
-                
-                .dw-rating-pill { background:#fffbeb; color:#b45309; border:1px solid #fcd34d; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; display:inline-flex; align-items:center; gap:3px; }
-                .dw-category-tag { background:#f1f5f9; color:#475569; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:500; border:1px solid #e2e8f0; }
-                
-                .column-foto { width: 80px; text-align:center; }
-            </style>
+            
 
             <!-- Table -->
             <div class="dw-card-table">

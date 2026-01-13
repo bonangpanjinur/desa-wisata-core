@@ -6,6 +6,9 @@
  */
 
 if (!defined('ABSPATH')) {
+
+// Include UI components
+require_once plugin_dir_path( dirname( __FILE__ ) ) . "admin-ui-components.php";
     exit;
 }
 
@@ -76,9 +79,9 @@ function dw_ojek_management_page_render() {
             $updated = $wpdb->update($table_ojek, $data, ['id' => $post_id], null, ['%d']);
             
             if ($updated !== false) {
-                $message = '<div class="notice notice-success is-dismissible"><p>Data Ojek berhasil diperbarui.</p></div>';
+                $message = dw_admin_render_alert('Data Ojek berhasil diperbarui.', 'success');
             } else {
-                $message = '<div class="notice notice-error is-dismissible"><p>Gagal memperbarui data. DB Error: '. $wpdb->last_error .'</p></div>';
+                $message = dw_admin_render_alert('Gagal memperbarui data. DB Error: '. $wpdb->last_error .'', 'error');
             }
         } else {
             // --- INSERT ---
@@ -91,7 +94,7 @@ function dw_ojek_management_page_render() {
                 echo "<script>window.location.href='$redirect_url';</script>";
                 exit;
             } else {
-                $message = '<div class="notice notice-error is-dismissible"><p>Gagal menyimpan data baru. DB Error: '. $wpdb->last_error .'</p></div>';
+                $message = dw_admin_render_alert('Gagal menyimpan data baru. DB Error: '. $wpdb->last_error .'', 'error');
             }
         }
     }
@@ -160,114 +163,7 @@ function dw_ojek_management_page_render() {
         wp_enqueue_media();
         ?>
         
-        <style>
-            /* UI Reset & Base Styles */
-            .dw-wrap { max-width: 1200px; margin: 20px auto; }
-            .dw-header { 
-                display: flex; align-items: center; justify-content: space-between; 
-                margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #dcdcde;
-            }
-            .dw-header h1 { margin: 0; font-size: 24px; color: #1d2327; font-weight: 600; }
-            
-            /* TABS STYLING */
-            .dw-tabs-container { margin-bottom: 20px; }
-            .dw-tabs-nav {
-                display: flex;
-                border-bottom: 1px solid #c3c4c7;
-                background: #fff;
-                margin: 0; padding: 0 10px;
-                border-radius: 4px 4px 0 0;
-            }
-            .dw-tab-link {
-                padding: 15px 20px;
-                font-weight: 600;
-                color: #50575e;
-                cursor: pointer;
-                border-bottom: 3px solid transparent;
-                transition: all 0.2s ease;
-                font-size: 14px;
-                display: flex; align-items: center; gap: 8px;
-            }
-            .dw-tab-link:hover { color: #2271b1; background: #f6f7f7; }
-            .dw-tab-link.active { color: #2271b1; border-bottom-color: #2271b1; }
-            .dw-tab-link .dashicons { font-size: 18px; width: 18px; height: 18px; margin-right: 4px; }
-
-            .dw-tab-body {
-                background: #fff;
-                border: 1px solid #c3c4c7;
-                border-top: 0;
-                padding: 30px;
-                border-radius: 0 0 4px 4px;
-                box-shadow: 0 1px 1px rgba(0,0,0,0.04);
-            }
-            .dw-tab-content { display: none; animation: dwFadeIn 0.3s ease; }
-            .dw-tab-content.active { display: block; }
-            
-            @keyframes dwFadeIn {
-                from { opacity: 0; transform: translateY(5px); }
-                to { opacity: 1; transform: translateY(0); }
-            }
-
-            /* Form Layout */
-            .dw-layout-grid { display: grid; grid-template-columns: 3fr 1fr; gap: 20px; }
-            .dw-form-row { margin-bottom: 20px; }
-            .dw-form-row label { display: block; margin-bottom: 8px; font-weight: 600; color: #2c3338; font-size: 13px; }
-            
-            .dw-input-control {
-                width: 100%; height: 40px; padding: 0 12px;
-                border: 1px solid #8c8f94; border-radius: 4px;
-                font-size: 14px; box-sizing: border-box;
-                transition: border-color 0.15s ease;
-            }
-            .dw-input-control:focus { border-color: #2271b1; box-shadow: 0 0 0 1px #2271b1; outline: none; }
-            textarea.dw-input-control { height: auto; padding: 12px; }
-            select.dw-input-control:disabled { background-color: #f6f7f7; color: #a7aaad; border-color: #dcdcde; }
-
-            /* Right Sidebar Card */
-            .dw-sidebar-card {
-                background: #fff; border: 1px solid #c3c4c7;
-                padding: 20px; border-radius: 4px;
-                box-shadow: 0 1px 1px rgba(0,0,0,0.04);
-                position: sticky; top: 40px;
-            }
-            .dw-card-header { 
-                font-weight: 700; font-size: 14px; text-transform: uppercase; color: #1d2327; 
-                padding-bottom: 10px; margin-bottom: 15px; border-bottom: 1px solid #f0f0f1;
-                display: flex; align-items: center; justify-content: space-between;
-            }
-
-            /* Image Upload Grid */
-            .dw-img-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-            .dw-img-wrapper {
-                background: #f6f7f7; border: 2px dashed #c3c4c7; border-radius: 6px;
-                padding: 10px; text-align: center; height: 180px; 
-                display: flex; align-items: center; justify-content: center;
-                flex-direction: column; overflow: hidden; position: relative;
-                transition: border-color 0.2s;
-            }
-            .dw-img-wrapper:hover { border-color: #2271b1; background: #fff; }
-            .dw-img-wrapper.has-image { border-style: solid; border-color: #dcdcde; background: #fff; padding: 0; }
-            .dw-img-wrapper img { max-width: 100%; max-height: 100%; object-fit: contain; }
-            .dw-img-placeholder { color: #a7aaad; display: flex; flex-direction: column; align-items: center; gap: 8px; }
-            
-            /* Buttons */
-            .dw-btn-full { width: 100%; text-align: center; justify-content: center; margin-bottom: 10px; height: 42px !important; font-size: 14px !important; }
-            .dw-btn-group { display: flex; gap: 10px; }
-            .dw-btn-outline { 
-                flex: 1; text-align: center; justify-content: center; display: flex; align-items: center;
-                border: 1px solid #c3c4c7; background: #fff; color: #2271b1; height: 36px; border-radius: 4px; text-decoration: none; font-weight: 500; 
-            }
-            .dw-btn-outline:hover { border-color: #2271b1; background: #f0f6fc; }
-            .dw-btn-danger { color: #d63638; border-color: #d63638; }
-            .dw-btn-danger:hover { background: #d63638; color: #fff; border-color: #d63638; }
-
-            @media (max-width: 960px) {
-                .dw-layout-grid { grid-template-columns: 1fr; }
-                .dw-tabs-container { order: 2; }
-                .dw-sidebar-card { order: 1; margin-bottom: 20px; position: static; }
-                .dw-img-grid { grid-template-columns: 1fr; }
-            }
-        </style>
+        
         
         <div class="wrap dw-wrap">
             <div class="dw-header">
@@ -462,14 +358,14 @@ function dw_ojek_management_page_render() {
                             
                             <hr style="margin: 20px 0; border: 0; border-top: 1px solid #f0f0f1;">
                             
-                            <button type="submit" class="button button-primary button-large dw-btn-full">
+                            <button type="submit" class="button button-primary button-large dw-button-full">
                                 <span class="dashicons dashicons-saved" style="margin-top:4px; margin-right:5px;"></span> Simpan Perubahan
                             </button>
                             
-                            <div class="dw-btn-group">
-                                <a href="<?php echo admin_url('admin.php?page=' . $current_page_slug); ?>" class="dw-btn-outline">Batal</a>
+                            <div class="dw-button-group">
+                                <a href="<?php echo admin_url('admin.php?page=' . $current_page_slug); ?>" class="dw-button-outline">Batal</a>
                                 <?php if ($view == 'edit' && $url_id > 0) : ?>
-                                    <a href="<?php echo wp_nonce_url(admin_url('admin.php?page=' . $current_page_slug . '&action=delete&id=' . $url_id), 'delete_ojek_' . $url_id); ?>" class="dw-btn-outline dw-btn-danger" onclick="return confirm('Hapus permanen data ini?');">Hapus</a>
+                                    <a href="<?php echo wp_nonce_url(admin_url('admin.php?page=' . $current_page_slug . '&action=delete&id=' . $url_id), 'delete_ojek_' . $url_id); ?>" class="dw-button-outline dw-button-danger" onclick="return confirm('Hapus permanen data ini?');">Hapus</a>
                                 <?php endif; ?>
                             </div>
                         </div>
@@ -558,9 +454,9 @@ function dw_ojek_management_page_render() {
             <hr class="wp-header-end">
 
             <?php if(isset($_GET['msg']) && $_GET['msg']=='added'): ?>
-                <div class="notice notice-success is-dismissible"><p>Ojek berhasil ditambahkan.</p></div>
+                <?php echo dw_admin_render_alert('Ojek berhasil ditambahkan.', 'success'); ?>
             <?php elseif(isset($_GET['msg']) && $_GET['msg']=='deleted'): ?>
-                <div class="notice notice-success is-dismissible"><p>Data berhasil dihapus.</p></div>
+                <?php echo dw_admin_render_alert('Data berhasil dihapus.', 'success'); ?>
             <?php endif; ?>
 
             <form method="post">

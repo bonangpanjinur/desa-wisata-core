@@ -8,6 +8,9 @@
 
 defined('ABSPATH') || exit;
 
+// Include UI components
+require_once plugin_dir_path( dirname( __FILE__ ) ) . "admin-ui-components.php";
+
 /**
  * 1. HANDLER: SIMPAN & HAPUS
  * Fungsi ini menangani logika database.
@@ -265,105 +268,9 @@ function dw_produk_page_info_render() {
     ?>
 
     <!-- STYLE CSS MODERN (TETAP SAMA) -->
-    <style>
-        :root {
-            --dw-primary: #2563eb; 
-            --dw-primary-dark: #1d4ed8; 
-            --dw-success: #16a34a; 
-            --dw-warning: #d97706; 
-            --dw-danger: #dc2626; 
-            --dw-gray-50: #f8fafc;
-            --dw-gray-100: #f1f5f9; 
-            --dw-gray-200: #e2e8f0; 
-            --dw-gray-300: #cbd5e1;
-            --dw-gray-700: #334155; 
-            --dw-gray-800: #1e293b;
-            --dw-radius: 8px; 
-            --dw-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-        }
+    
 
-        .dw-container { margin: 20px 20px 0 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        
-        /* Modern Cards */
-        .dw-modern-card { background: white; border-radius: var(--dw-radius); box-shadow: var(--dw-shadow); padding: 25px; margin-bottom: 20px; border: 1px solid var(--dw-gray-200); }
-        .dw-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid var(--dw-gray-100); }
-        .dw-card-title { font-size: 18px; font-weight: 700; color: var(--dw-gray-800); margin: 0; display:flex; align-items:center; gap:8px; }
-
-        /* Buttons */
-        .dw-btn { padding: 9px 18px; border-radius: 6px; font-weight: 600; font-size: 14px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s; border: 1px solid transparent; }
-        .dw-btn-primary { background: var(--dw-primary); color: white; } 
-        .dw-btn-primary:hover { background: var(--dw-primary-dark); color: white; transform: translateY(-1px); box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2); }
-        .dw-btn-outline { background: white; border-color: var(--dw-gray-300); color: var(--dw-gray-700); } 
-        .dw-btn-outline:hover { background: var(--dw-gray-50); border-color: var(--dw-gray-400); color: var(--dw-gray-800); }
-        .dw-btn-sm { padding: 6px 12px; font-size: 12px; } 
-        .dw-btn-danger { background: white; border-color: #fca5a5; color: var(--dw-danger); } 
-        .dw-btn-danger:hover { background: #fef2f2; border-color: var(--dw-danger); }
-
-        /* Inputs */
-        .dw-input { width: 100%; padding: 10px 12px; border: 1px solid var(--dw-gray-300); border-radius: 6px; font-size: 14px; transition: 0.2s; }
-        .dw-input:focus { border-color: var(--dw-primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); outline: none; }
-        .dw-form-group { margin-bottom: 20px; } 
-        .dw-form-group label { display: block; margin-bottom: 8px; font-weight: 600; color: var(--dw-gray-700); font-size: 13px; }
-        
-        .dw-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-        .dw-edit-layout { display: grid; grid-template-columns: 2fr 1fr; gap: 25px; }
-        
-        /* Image Preview */
-        .dw-img-preview { width: 100%; height: 220px; background: #f8fafc; border: 2px dashed var(--dw-gray-300); border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; margin-bottom: 12px; position: relative; transition: border-color 0.2s; }
-        .dw-img-preview:hover { border-color: var(--dw-primary); }
-        .dw-img-preview img { width: 100%; height: 100%; object-fit: cover; }
-        .dw-img-preview.empty::after { content: 'Tidak ada gambar'; color: #94a3b8; font-size: 13px; font-weight: 500; display: flex; flex-direction: column; align-items: center; gap: 5px; }
-        .dw-img-preview.empty::before { content: '\f128'; font-family: dashicons; font-size: 32px; color: #cbd5e1; }
-
-        /* Status Pills */
-        .dw-pill { padding: 4px 10px; border-radius: 99px; font-size: 11px; font-weight: 700; text-transform: uppercase; display: inline-block; letter-spacing: 0.5px; }
-        .dw-pill.success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; } 
-        .dw-pill.warning { background: #fef9c3; color: #854d0e; border: 1px solid #fde047; } 
-        .dw-pill.gray { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
-
-        /* Tabs Internal Form */
-        .dw-form-tabs { display: flex; border-bottom: 1px solid var(--dw-gray-200); margin-bottom: 0; background: #f8fafc; border-radius: var(--dw-radius) var(--dw-radius) 0 0; }
-        .dw-form-tab { padding: 15px 25px; cursor: pointer; font-weight: 600; color: var(--dw-gray-700); border-right: 1px solid var(--dw-gray-200); border-bottom: 1px solid var(--dw-gray-200); background: #f8fafc; transition:0.2s; display: flex; align-items: center; gap: 8px; font-size: 14px; }
-        .dw-form-tab:first-child { border-top-left-radius: var(--dw-radius); }
-        .dw-form-tab:hover { background: #fff; color: var(--dw-primary); } 
-        .dw-form-tab.active { background: #fff; border-bottom-color: transparent; color: var(--dw-primary); border-top: 3px solid var(--dw-primary); margin-top: -1px; }
-        .dw-tab-pane { display: none; padding: 30px; animation: fadeIn 0.3s; } 
-        .dw-tab-pane.active { display: block; }
-        
-        /* Gallery */
-        .g-item { position: relative; width: 100px; height: 100px; border-radius: 8px; overflow: hidden; border: 1px solid var(--dw-gray-200); box-shadow: 0 1px 2px rgba(0,0,0,0.05); transition: transform 0.2s; }
-        .g-item:hover { transform: scale(1.05); }
-        .g-item img { width: 100%; height: 100%; object-fit: cover; }
-        .rem-g { position: absolute; top: 4px; right: 4px; background: rgba(220, 38, 38, 0.9); color: white; border-radius: 50%; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 14px; transition: background 0.2s; }
-        .rem-g:hover { background: #ef4444; }
-
-        /* Stats Cards */
-        .dw-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; margin-bottom: 25px; }
-        .dw-stat-box { 
-            background: white; padding: 25px; border-radius: var(--dw-radius); border: 1px solid var(--dw-gray-200); 
-            display: flex; align-items: center; gap: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); transition: transform 0.2s, box-shadow 0.2s;
-        }
-        .dw-stat-box:hover { transform: translateY(-2px); box-shadow: var(--dw-shadow); }
-        .dw-stat-icon { width: 56px; height: 56px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 28px; flex-shrink: 0; }
-        .dw-stat-icon.blue { background: #e0f2fe; color: #0284c7; } 
-        .dw-stat-icon.green { background: #dcfce7; color: #16a34a; } 
-        .dw-stat-icon.red { background: #fee2e2; color: #dc2626; }
-        .dw-stat-content h4 { margin: 0 0 4px; font-size: 26px; font-weight: 800; color: var(--dw-gray-800); line-height: 1; } 
-        .dw-stat-content span { font-size: 13px; font-weight: 600; color: var(--dw-gray-500); text-transform: uppercase; letter-spacing: 0.5px; }
-
-        /* Modern Table */
-        .dw-table-wrapper { overflow-x: auto; border-radius: var(--dw-radius); border: 1px solid var(--dw-gray-200); background: white; }
-        .dw-table { width: 100%; border-collapse: collapse; }
-        .dw-table th { background: var(--dw-gray-50); text-align: left; padding: 14px 20px; font-size: 12px; font-weight: 700; text-transform: uppercase; color: var(--dw-gray-700); border-bottom: 1px solid var(--dw-gray-200); letter-spacing: 0.5px; }
-        .dw-table td { padding: 16px 20px; border-bottom: 1px solid var(--dw-gray-200); font-size: 14px; vertical-align: middle; color: var(--dw-gray-700); }
-        .dw-table tr:last-child td { border-bottom: none; }
-        .dw-table tr:hover { background: #f8fafc; }
-
-        @media (max-width: 960px) { .dw-edit-layout { grid-template-columns: 1fr; } }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-    </style>
-
-    <div class="wrap dw-container">
+    <div class="wrap dw-wrap">
         <!-- HEADER -->
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
             <div>
@@ -371,7 +278,7 @@ function dw_produk_page_info_render() {
                 <p style="margin: 5px 0 0; color: #64748b; font-size: 14px;">Kelola katalog produk, stok, variasi, dan harga.</p>
             </div>
             <?php if (!$is_edit): ?>
-                <a href="?page=dw-produk&action=new" class="dw-btn dw-btn-primary">
+                <a href="?page=dw-produk&action=new" class="dw-button dw-button-primary">
                     <span class="dashicons dashicons-plus-alt2" style="font-size: 18px;"></span> Tambah Produk
                 </a>
             <?php endif; ?>
@@ -388,13 +295,13 @@ function dw_produk_page_info_render() {
                 <?php if($edit_data): ?><input type="hidden" name="produk_id" value="<?php echo $edit_data->id; ?>"><?php endif; ?>
 
                 <div style="margin-bottom: 20px;">
-                    <a href="?page=dw-produk" class="dw-btn dw-btn-outline"><span class="dashicons dashicons-arrow-left-alt"></span> Kembali</a>
+                    <a href="?page=dw-produk" class="dw-button dw-button-outline"><span class="dashicons dashicons-arrow-left-alt"></span> Kembali</a>
                 </div>
 
                 <div class="dw-edit-layout">
                     <!-- LEFT COLUMN -->
                     <div class="dw-main-col">
-                        <div class="dw-modern-card" style="padding:0; overflow:hidden;">
+                        <div class="dw-card" style="padding:0; overflow:hidden;">
                             <!-- Internal Tabs -->
                             <div class="dw-form-tabs">
                                 <div class="dw-form-tab active" data-target="tab-info">
@@ -470,7 +377,7 @@ function dw_produk_page_info_render() {
                                         ?>
                                     </div>
                                     <input type="hidden" name="galeri_urls" id="galeri_urls" value="<?php echo esc_attr(implode(',', $galeri_urls)); ?>">
-                                    <button type="button" class="dw-btn dw-btn-outline" id="btn_galeri">
+                                    <button type="button" class="dw-button dw-button-outline" id="btn_galeri">
                                         <span class="dashicons dashicons-plus-alt2"></span> Tambah Foto Galeri
                                     </button>
                                 </div>
@@ -483,7 +390,7 @@ function dw_produk_page_info_render() {
                                     <p class="description" style="margin-bottom:15px;">Gunakan jika produk memiliki pilihan warna atau ukuran. Kosongkan jika produk tunggal.</p>
                                     
                                     <div class="dw-table-wrapper">
-                                        <table class="dw-table">
+                                        <table class="dw-modern-table">
                                             <thead>
                                                 <tr>
                                                     <th>Nama Variasi</th>
@@ -503,14 +410,14 @@ function dw_produk_page_info_render() {
                                                             <input type="text" name="var_sku[]" class="dw-input" value="<?php echo esc_attr($var->sku); ?>">
                                                             <input type="hidden" name="var_foto[]" value="<?php echo esc_attr($var->foto); ?>">
                                                         </td>
-                                                        <td style="text-align:center;"><button type="button" class="dw-btn dw-btn-danger dw-btn-sm btn-del-var"><span class="dashicons dashicons-trash" style="margin:0;"></span></button></td>
+                                                        <td style="text-align:center;"><button type="button" class="dw-button dw-button-danger dw-button-sm btn-del-var"><span class="dashicons dashicons-trash" style="margin:0;"></span></button></td>
                                                     </tr>
                                                 <?php endforeach; endif; ?>
                                             </tbody>
                                         </table>
                                     </div>
                                     <div style="margin-top:15px;">
-                                        <button type="button" class="dw-btn dw-btn-primary dw-btn-sm" id="btn-add-var">
+                                        <button type="button" class="dw-button dw-button-primary dw-button-sm" id="btn-add-var">
                                             <span class="dashicons dashicons-plus"></span> Tambah Baris Variasi
                                         </button>
                                     </div>
@@ -523,8 +430,8 @@ function dw_produk_page_info_render() {
                     <div class="dw-sidebar-col">
                         
                         <!-- PUBLISH BOX -->
-                        <div class="dw-modern-card">
-                            <div class="dw-card-header"><h3 class="dw-card-title">Penerbitan</h3></div>
+                        <div class="dw-card">
+                            <div class="dw-card-header"><h3 class="card-heading">Penerbitan</h3></div>
                             <div class="dw-form-group">
                                 <label>Status</label>
                                 <select name="status" class="dw-input">
@@ -533,14 +440,14 @@ function dw_produk_page_info_render() {
                                     <option value="arsip" <?php selected($edit_data->status ?? '', 'arsip'); ?>>Arsip (Sembunyikan)</option>
                                 </select>
                             </div>
-                            <button type="submit" class="dw-btn dw-btn-primary" style="width:100%; justify-content:center; margin-top:10px;">
+                            <button type="submit" class="dw-button dw-button-primary" style="width:100%; justify-content:center; margin-top:10px;">
                                 <span class="dashicons dashicons-saved"></span> Simpan Produk
                             </button>
                         </div>
 
                         <!-- CATEGORY BOX -->
-                        <div class="dw-modern-card">
-                            <div class="dw-card-header"><h3 class="dw-card-title">Kategori</h3></div>
+                        <div class="dw-card">
+                            <div class="dw-card-header"><h3 class="card-heading">Kategori</h3></div>
                             <div class="dw-form-group">
                                 <select name="kategori" class="dw-input">
                                     <option value="">-- Pilih Kategori --</option>
@@ -561,8 +468,8 @@ function dw_produk_page_info_render() {
                         </div>
 
                         <!-- IMAGE BOX -->
-                        <div class="dw-modern-card">
-                            <div class="dw-card-header"><h3 class="dw-card-title">Foto Utama</h3></div>
+                        <div class="dw-card">
+                            <div class="dw-card-header"><h3 class="card-heading">Foto Utama</h3></div>
                             <div class="dw-form-group">
                                 <div class="dw-img-preview <?php echo empty($edit_data->foto_utama) ? 'empty' : ''; ?>">
                                     <?php if(!empty($edit_data->foto_utama)): ?>
@@ -572,13 +479,13 @@ function dw_produk_page_info_render() {
                                     <?php endif; ?>
                                 </div>
                                 <input type="hidden" name="foto_utama" id="foto_utama" value="<?php echo esc_attr($edit_data->foto_utama ?? ''); ?>">
-                                <button type="button" class="dw-btn dw-btn-outline dw-btn-sm" id="btn_upl" style="width:100%; justify-content:center;">Pilih Foto Utama</button>
+                                <button type="button" class="dw-button dw-button-outline dw-button-sm" id="btn_upl" style="width:100%; justify-content:center;">Pilih Foto Utama</button>
                             </div>
                         </div>
 
                         <!-- OWNER BOX -->
-                        <div class="dw-modern-card">
-                            <div class="dw-card-header"><h3 class="dw-card-title">Pemilik Toko</h3></div>
+                        <div class="dw-card">
+                            <div class="dw-card-header"><h3 class="card-heading">Pemilik Toko</h3></div>
                             <div class="dw-form-group">
                                 <?php if ($is_super_admin): ?>
                                     <?php $list_pedagang = $wpdb->get_results("SELECT id, nama_toko FROM $table_pedagang WHERE status_akun='aktif'"); ?>
@@ -652,7 +559,7 @@ function dw_produk_page_info_render() {
                         '<td><input type="number" name="var_harga[]" class="dw-input" placeholder="0"></td>'+
                         '<td><input type="number" name="var_stok[]" class="dw-input" placeholder="0"></td>'+
                         '<td><input type="text" name="var_sku[]" class="dw-input"><input type="hidden" name="var_foto[]"></td>'+
-                        '<td style="text-align:center;"><button type="button" class="dw-btn dw-btn-danger dw-btn-sm btn-del-var"><span class="dashicons dashicons-trash" style="margin:0;"></span></button></td>'+
+                        '<td style="text-align:center;"><button type="button" class="dw-button dw-button-danger dw-button-sm btn-del-var"><span class="dashicons dashicons-trash" style="margin:0;"></span></button></td>'+
                     '</tr>';
                     $('#variasi-rows').append(row);
                 });
@@ -688,19 +595,19 @@ function dw_produk_page_info_render() {
             </div>
 
             <!-- TABLE CARD -->
-            <div class="dw-modern-card" style="padding:0; overflow:hidden;">
+            <div class="dw-card" style="padding:0; overflow:hidden;">
                 <!-- Toolbar -->
                 <div style="padding:15px 20px; background:var(--dw-gray-50); border-bottom:1px solid var(--dw-gray-200); display:flex; justify-content:space-between; align-items:center;">
                     <h3 style="margin:0; font-size:16px; color:var(--dw-gray-800);">Daftar Produk</h3>
                     <form method="get" style="display:flex; gap:10px;">
                         <input type="hidden" name="page" value="dw-produk">
                         <input type="text" name="s" class="dw-input" placeholder="Cari produk..." value="<?php echo isset($_GET['s']) ? esc_attr($_GET['s']) : ''; ?>" style="background:white; width:250px;">
-                        <button type="submit" class="dw-btn dw-btn-outline">Cari</button>
+                        <button type="submit" class="dw-button dw-button-outline">Cari</button>
                     </form>
                 </div>
 
                 <div class="dw-table-wrapper" style="border:none; border-radius:0;">
-                    <table class="dw-table">
+                    <table class="dw-modern-table">
                         <thead>
                             <tr>
                                 <th width="80">Foto</th>
@@ -752,12 +659,12 @@ function dw_produk_page_info_render() {
 	                                <td style="text-align:right;">
 	                                    <div style="display:flex; gap:6px; justify-content:flex-end;">
 	                                        <?php if (current_user_can('manage_options')): ?>
-	                                            <a href="<?php echo add_query_arg(['action' => 'toggle_featured', 'id' => $r->id]); ?>" class="dw-btn dw-btn-outline dw-btn-sm" title="<?php echo $r->is_featured ? 'Unpin' : 'Pin to Top'; ?>">
-	                                                <span class="dashicons dashicons-<?php echo $r->is_featured ? 'star-filled' : 'star-empty'; ?>"></span>
-	                                            </a>
+<a href="<?php echo add_query_arg(['action' => 'toggle_featured', 'id' => $r->id]); ?>" class="dw-button dw-button-outline dw-button-sm" title="<?php echo (isset($r->is_featured) && $r->is_featured) ? 'Unpin' : 'Pin to Top'; ?>">
+		                                                <span class="dashicons dashicons-<?php echo (isset($r->is_featured) && $r->is_featured) ? 'star-filled' : 'star-empty'; ?>"></span>
+		                                            </a>
 	                                        <?php endif; ?>
-	                                        <a href="<?php echo $edit_url; ?>" class="dw-btn dw-btn-outline dw-btn-sm" title="Edit"><span class="dashicons dashicons-edit"></span></a>
-	                                        <a href="<?php echo $del_url; ?>" class="dw-btn dw-btn-danger dw-btn-sm" onclick="return confirm('Hapus produk ini?');" title="Hapus"><span class="dashicons dashicons-trash"></span></a>
+	                                        <a href="<?php echo $edit_url; ?>" class="dw-button dw-button-outline dw-button-sm" title="Edit"><span class="dashicons dashicons-edit"></span></a>
+	                                        <a href="<?php echo $del_url; ?>" class="dw-button dw-button-danger dw-button-sm" onclick="return confirm('Hapus produk ini?');" title="Hapus"><span class="dashicons dashicons-trash"></span></a>
 	                                    </div>
 	                                </td>
                             </tr>
