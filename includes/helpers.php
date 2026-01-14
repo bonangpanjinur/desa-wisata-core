@@ -10,6 +10,8 @@
  * 1. Added: Fitur Verifikator UMKM & Kode Unik.
  * 2. Added: Saldo Balance User & Komisi Dinamis.
  * 3. Integrated: Semua fungsi original JWT, Stock, Relasi v3.4, & Monetisasi tetap utuh.
+ * * --- UPDATE FASE 6 ---
+ * 4. Added: Helper Role Checks (dw_is_pedagang, dw_is_ojek).
  *
  * @package DesaWisataCore
  */
@@ -25,12 +27,58 @@ use Firebase\JWT\SignatureInvalidException;
 use Firebase\JWT\BeforeValidException;
 
 // =============================================================================
-// HELPER INTERNAL: KUOTA PEDAGANG
+// HELPER ROLE CHECKS (FASE 6 ADDITIONS)
 // =============================================================================
 
 /**
- * Helper untuk memeriksa sisa kuota transaksi pedagang.
+ * Cek apakah user saat ini adalah Pedagang
  */
+if ( ! function_exists( 'dw_is_pedagang' ) ) {
+    function dw_is_pedagang( $user_id = 0 ) {
+        if ( ! $user_id ) {
+            $user_id = get_current_user_id();
+        }
+        if ( ! $user_id ) return false;
+
+        $user = get_userdata( $user_id );
+        return in_array( 'pedagang', (array) $user->roles ) || in_array( 'administrator', (array) $user->roles );
+    }
+}
+
+/**
+ * Cek apakah user saat ini adalah Ojek
+ */
+if ( ! function_exists( 'dw_is_ojek' ) ) {
+    function dw_is_ojek( $user_id = 0 ) {
+        if ( ! $user_id ) {
+            $user_id = get_current_user_id();
+        }
+        if ( ! $user_id ) return false;
+
+        $user = get_userdata( $user_id );
+        return in_array( 'dw_ojek', (array) $user->roles ) || in_array( 'administrator', (array) $user->roles );
+    }
+}
+
+/**
+ * Log Helper Sederhana (Untuk Debugging ke error_log)
+ */
+if ( ! function_exists( 'dw_log' ) ) {
+    function dw_log( $message ) {
+        if ( WP_DEBUG === true ) {
+            if ( is_array( $message ) || is_object( $message ) ) {
+                error_log( print_r( $message, true ) );
+            } else {
+                error_log( $message );
+            }
+        }
+    }
+}
+
+// =============================================================================
+// HELPER INTERNAL: KUOTA PEDAGANG & CONTEXT
+// =============================================================================
+
 /**
  * Mengambil konteks admin (user, role, context_id) secara sentral.
  */
@@ -68,6 +116,9 @@ function dw_get_admin_context() {
     ];
 }
 
+/**
+ * Helper untuk memeriksa sisa kuota transaksi pedagang.
+ */
 function dw_check_pedagang_kuota($user_id) {
     global $wpdb;
     
