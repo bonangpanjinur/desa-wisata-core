@@ -3,9 +3,17 @@
  * File: includes/admin-pages/page-komisi.php
  * * Admin Page: Laporan Komisi & Payout
  * * Menampilkan data komisi admin, desa, dan verifikator serta fitur payout.
+ * * Refaktor UI: Menggunakan 'admin-style.css' (Clean Style).
  */
 
 defined( 'ABSPATH' ) || exit;
+
+// Include UI components
+if ( defined( 'DW_CORE_PLUGIN_DIR' ) ) {
+    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-ui-components.php';
+} else {
+    require_once plugin_dir_path( dirname( dirname( __FILE__ ) ) ) . 'includes/admin-ui-components.php';
+}
 
 function dw_render_komisi_page() {
     global $wpdb;
@@ -15,9 +23,9 @@ function dw_render_komisi_page() {
         wp_die( __( 'Anda tidak memiliki izin untuk mengakses halaman ini.', 'desa-wisata-core' ) );
     }
 
-    $t_ledger      = $wpdb->prefix . 'dw_payout_ledger';
-    $t_desa        = $wpdb->prefix . 'dw_desa';
-    $t_verifikator = $wpdb->prefix . 'dw_verifikator';
+    $t_ledger        = $wpdb->prefix . 'dw_payout_ledger';
+    $t_desa          = $wpdb->prefix . 'dw_desa';
+    $t_verifikator   = $wpdb->prefix . 'dw_verifikator';
 
     // --- 2. Handle Action: Mark as Paid ---
     if ( isset($_POST['dw_action']) && $_POST['dw_action'] == 'mark_paid' && check_admin_referer('dw_payout_action') ) {
@@ -90,17 +98,27 @@ function dw_render_komisi_page() {
     // Tab Handling
     $active_tab = isset($_GET['tab']) ? $_GET['tab'] : 'desa';
 
+    // Helper counts for badges
+    $count_desa_pending = count($unpaid_desa);
+    $count_verif_pending = count($unpaid_verif);
+    
+    // Calculate totals for stats cards
+    $total_tagihan_desa = array_sum(array_column($unpaid_desa, 'total_tagihan'));
+    $total_tagihan_verif = array_sum(array_column($unpaid_verif, 'total_tagihan'));
+    $total_platform = $platform_revenue_paid + $platform_revenue_unpaid;
+
     ?>
     <div class="wrap dw-admin-wrapper">
-        <!-- Header -->
+        
+        <!-- Header Page -->
         <div class="dw-page-header">
             <div class="dw-header-title">
                 <h1><?php echo esc_html( get_admin_page_title() ); ?></h1>
                 <p class="dw-subtitle">Laporan pendapatan komisi platform dan manajemen payout ke mitra.</p>
             </div>
             <div class="dw-header-actions">
-                <button type="button" class="button button-secondary" onclick="window.print();">
-                    <span class="dashicons dashicons-printer" style="margin-top: 3px;"></span> Cetak Laporan
+                <button type="button" class="dw-button dw-button-secondary" onclick="window.print();">
+                    <span class="dashicons dashicons-printer" style="margin-right: 8px;"></span> Cetak Laporan
                 </button>
             </div>
         </div>
@@ -108,224 +126,245 @@ function dw_render_komisi_page() {
         <div class="dw-content-body">
             <?php settings_errors('dw_komisi'); ?>
 
-            <!-- Statistics Grid (3 Columns) -->
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 25px;">
+            <!-- Statistics Grid -->
+            <div class="dw-stats-grid">
+                
                 <!-- Card Desa -->
-                <div class="dw-card" style="border-left: 4px solid #2271b1; margin-bottom: 0;">
-                    <div style="display: flex; align-items: center; justify-content: space-between;">
-                        <div>
-                            <h3 style="margin: 0 0 5px; color: #646970; font-size: 13px; text-transform: uppercase;">Tagihan Desa</h3>
-                            <p style="font-size: 24px; font-weight: bold; margin: 0; color: #1d2327;">
-                                Rp <?php echo number_format(array_sum(array_column($unpaid_desa, 'total_tagihan')), 0, ',', '.'); ?>
-                            </p>
-                            <p class="description" style="margin: 5px 0 0;"><?php echo count($unpaid_desa); ?> Desa menunggu transfer</p>
-                        </div>
-                        <span class="dashicons dashicons-admin-home" style="font-size: 40px; width: 40px; height: 40px; color: #dcdcde;"></span>
+                <div class="dw-stat-card">
+                    <div class="dw-stat-icon-wrapper bg-blue">
+                        <span class="dashicons dashicons-admin-home"></span>
+                    </div>
+                    <div class="dw-stat-content">
+                        <h3 class="dw-stat-value">Rp <?php echo number_format($total_tagihan_desa, 0, ',', '.'); ?></h3>
+                        <p class="dw-stat-label">Tagihan Desa (<?php echo $count_desa_pending; ?> Pending)</p>
                     </div>
                 </div>
 
                 <!-- Card Verifikator -->
-                <div class="dw-card" style="border-left: 4px solid #dba617; margin-bottom: 0;">
-                    <div style="display: flex; align-items: center; justify-content: space-between;">
-                        <div>
-                            <h3 style="margin: 0 0 5px; color: #646970; font-size: 13px; text-transform: uppercase;">Tagihan Verifikator</h3>
-                            <p style="font-size: 24px; font-weight: bold; margin: 0; color: #1d2327;">
-                                Rp <?php echo number_format(array_sum(array_column($unpaid_verif, 'total_tagihan')), 0, ',', '.'); ?>
-                            </p>
-                            <p class="description" style="margin: 5px 0 0;"><?php echo count($unpaid_verif); ?> Verifikator menunggu transfer</p>
-                        </div>
-                        <span class="dashicons dashicons-groups" style="font-size: 40px; width: 40px; height: 40px; color: #dcdcde;"></span>
+                <div class="dw-stat-card">
+                    <div class="dw-stat-icon-wrapper bg-orange">
+                        <span class="dashicons dashicons-groups"></span>
+                    </div>
+                    <div class="dw-stat-content">
+                        <h3 class="dw-stat-value">Rp <?php echo number_format($total_tagihan_verif, 0, ',', '.'); ?></h3>
+                        <p class="dw-stat-label">Tagihan Verifikator (<?php echo $count_verif_pending; ?> Pending)</p>
                     </div>
                 </div>
 
                 <!-- Card Platform -->
-                <div class="dw-card" style="border-left: 4px solid #00a32a; margin-bottom: 0;">
-                    <div style="display: flex; align-items: center; justify-content: space-between;">
-                        <div>
-                            <h3 style="margin: 0 0 5px; color: #646970; font-size: 13px; text-transform: uppercase;">Pendapatan Platform</h3>
-                            <p style="font-size: 24px; font-weight: bold; margin: 0; color: #1d2327;">
-                                Rp <?php echo number_format($platform_revenue_paid + $platform_revenue_unpaid, 0, ',', '.'); ?>
-                            </p>
-                            <p class="description" style="margin: 5px 0 0;">Akumulasi Net (Bersih)</p>
-                        </div>
-                        <span class="dashicons dashicons-chart-line" style="font-size: 40px; width: 40px; height: 40px; color: #dcdcde;"></span>
+                <div class="dw-stat-card">
+                    <div class="dw-stat-icon-wrapper bg-green">
+                        <span class="dashicons dashicons-chart-line"></span>
+                    </div>
+                    <div class="dw-stat-content">
+                        <h3 class="dw-stat-value">Rp <?php echo number_format($total_platform, 0, ',', '.'); ?></h3>
+                        <p class="dw-stat-label">Pendapatan Platform (Net)</p>
                     </div>
                 </div>
+
             </div>
             
-            <!-- Tabs -->
-            <nav class="nav-tab-wrapper" style="margin-bottom: 0; border-bottom: none;">
-                <a href="?page=dw-komisi&tab=desa" class="nav-tab <?php echo $active_tab == 'desa' ? 'nav-tab-active' : ''; ?>" style="background: <?php echo $active_tab == 'desa' ? '#fff' : '#f0f0f1'; ?>; border-bottom: 1px solid <?php echo $active_tab == 'desa' ? '#fff' : '#c3c4c7'; ?>;">
-                    Komisi Desa <?php if(count($unpaid_desa)>0) echo '<span class="update-plugins count-<?php echo count($unpaid_desa); ?>"><span class="plugin-count">'.count($unpaid_desa).'</span></span>'; ?>
+            <!-- Tabs Navigation -->
+            <nav class="nav-tab-wrapper" style="margin-bottom: 24px;">
+                <a href="?page=dw-komisi&tab=desa" class="nav-tab <?php echo $active_tab == 'desa' ? 'nav-tab-active' : ''; ?>">
+                    <span class="dashicons dashicons-admin-home" style="margin-right: 4px;"></span> Komisi Desa 
+                    <?php if($count_desa_pending > 0) echo '<span class="dw-badge status-warning" style="margin-left:5px;">'.$count_desa_pending.'</span>'; ?>
                 </a>
-                <a href="?page=dw-komisi&tab=verifikator" class="nav-tab <?php echo $active_tab == 'verifikator' ? 'nav-tab-active' : ''; ?>" style="background: <?php echo $active_tab == 'verifikator' ? '#fff' : '#f0f0f1'; ?>; border-bottom: 1px solid <?php echo $active_tab == 'verifikator' ? '#fff' : '#c3c4c7'; ?>;">
-                    Komisi Verifikator <?php if(count($unpaid_verif)>0) echo '<span class="update-plugins count-<?php echo count($unpaid_verif); ?>"><span class="plugin-count">'.count($unpaid_verif).'</span></span>'; ?>
+                <a href="?page=dw-komisi&tab=verifikator" class="nav-tab <?php echo $active_tab == 'verifikator' ? 'nav-tab-active' : ''; ?>">
+                    <span class="dashicons dashicons-groups" style="margin-right: 4px;"></span> Komisi Verifikator 
+                    <?php if($count_verif_pending > 0) echo '<span class="dw-badge status-warning" style="margin-left:5px;">'.$count_verif_pending.'</span>'; ?>
                 </a>
-                <a href="?page=dw-komisi&tab=riwayat" class="nav-tab <?php echo $active_tab == 'riwayat' ? 'nav-tab-active' : ''; ?>" style="background: <?php echo $active_tab == 'riwayat' ? '#fff' : '#f0f0f1'; ?>; border-bottom: 1px solid <?php echo $active_tab == 'riwayat' ? '#fff' : '#c3c4c7'; ?>;">
-                    Riwayat Transfer
+                <a href="?page=dw-komisi&tab=riwayat" class="nav-tab <?php echo $active_tab == 'riwayat' ? 'nav-tab-active' : ''; ?>">
+                    <span class="dashicons dashicons-backup" style="margin-right: 4px;"></span> Riwayat Transfer
                 </a>
             </nav>
 
             <!-- Main Content Card -->
-            <div class="dw-card" style="margin-top: -1px; border-top-left-radius: 0;">
+            <div class="dw-card">
                 
                 <!-- TAB 1: DESA -->
                 <?php if ($active_tab == 'desa'): ?>
-                    <div style="padding-bottom: 15px; border-bottom: 1px solid #f0f0f1; margin-bottom: 15px;">
-                        <h3 style="margin: 0;">Tagihan Komisi Desa</h3>
-                        <p class="description" style="margin: 5px 0 0;">Daftar komisi yang harus ditransfer ke Desa Wisata.</p>
+                    <div class="dw-card-header">
+                        <h3>Daftar Tagihan Desa</h3>
+                        <span class="dw-badge status-info">Total: <?php echo $count_desa_pending; ?> Desa</span>
                     </div>
-                    
-                    <?php if(empty($unpaid_desa)): ?>
-                        <div style="padding: 40px; text-align: center; color: #646970;">
-                            <span class="dashicons dashicons-yes-alt" style="font-size: 48px; width: 48px; height: 48px; color: #c3e6cb; display: block; margin: 0 auto 10px;"></span>
-                            <p>Semua tagihan desa sudah lunas! 🎉</p>
-                        </div>
-                    <?php else: ?>
-                        <table class="wp-list-table widefat fixed striped">
-                            <thead>
-                                <tr>
-                                    <th>Nama Desa</th>
-                                    <th>Info Rekening (Tujuan Transfer)</th>
-                                    <th style="text-align:center;">Jml Transaksi</th>
-                                    <th style="text-align:right;">Total Tagihan</th>
-                                    <th style="text-align:right;">Aksi</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach($unpaid_desa as $row): ?>
-                                    <tr>
-                                        <td><strong><?php echo esc_html($row->nama_desa); ?></strong></td>
-                                        <td>
-                                            <?php if($row->nama_bank_desa && $row->no_rekening_desa): ?>
-                                                <div style="line-height: 1.4;">
-                                                    <strong><?php echo esc_html($row->nama_bank_desa); ?></strong><br>
-                                                    <?php echo esc_html($row->no_rekening_desa); ?><br>
-                                                    <span style="font-size:12px; color:#646970;">a.n <?php echo esc_html($row->atas_nama_rekening_desa); ?></span>
-                                                </div>
-                                            <?php else: ?>
-                                                <span style="background:#f6e05e; color:#744210; padding:2px 6px; border-radius:4px; font-size:11px;">Belum set rekening</span>
-                                            <?php endif; ?>
-                                        </td>
-                                        <td style="text-align:center;"><?php echo $row->jumlah_transaksi; ?></td>
-                                        <td style="text-align:right; font-weight:bold; color:#d63638;">
-                                            Rp <?php echo number_format($row->total_tagihan, 0, ',', '.'); ?>
-                                        </td>
-                                        <td style="text-align:right;">
-                                            <form method="post" onsubmit="return confirm('Konfirmasi: Anda sudah mentransfer Rp <?php echo number_format($row->total_tagihan); ?> ke <?php echo esc_js($row->nama_desa); ?>?');">
-                                                <?php wp_nonce_field('dw_payout_action'); ?>
-                                                <input type="hidden" name="dw_action" value="mark_paid">
-                                                <input type="hidden" name="payable_type" value="desa">
-                                                <input type="hidden" name="payable_id" value="<?php echo $row->payable_to_id; ?>">
-                                                <button type="submit" class="button button-primary">
-                                                    <span class="dashicons dashicons-yes" style="margin-top:3px;"></span> Tandai Lunas
-                                                </button>
-                                            </form>
-                                        </td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    <?php endif; ?>
+                    <div class="dw-card-body">
+                        <?php if(empty($unpaid_desa)): ?>
+                            <div style="padding: 40px; text-align: center; color: var(--dw-text-grey);">
+                                <span class="dashicons dashicons-yes-alt" style="font-size: 48px; width: 48px; height: 48px; color: var(--dw-success); display: block; margin: 0 auto 15px;"></span>
+                                <h3 style="margin: 0 0 5px; color: var(--dw-text-dark);">Semua Lunas!</h3>
+                                <p style="margin: 0;">Tidak ada tagihan desa yang perlu dibayar saat ini.</p>
+                            </div>
+                        <?php else: ?>
+                            <div class="dw-table-wrapper">
+                                <table class="dw-modern-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Nama Desa</th>
+                                            <th>Info Rekening (Tujuan)</th>
+                                            <th class="text-center">Jml Transaksi</th>
+                                            <th class="text-right">Total Tagihan</th>
+                                            <th class="text-right">Aksi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach($unpaid_desa as $row): ?>
+                                            <tr>
+                                                <td style="font-weight: 600; color: var(--dw-text-dark);">
+                                                    <?php echo esc_html($row->nama_desa); ?>
+                                                </td>
+                                                <td>
+                                                    <?php if($row->nama_bank_desa && $row->no_rekening_desa): ?>
+                                                        <div style="line-height: 1.5;">
+                                                            <span class="dw-badge status-info" style="margin-bottom: 4px; font-size: 11px;"><?php echo esc_html($row->nama_bank_desa); ?></span><br>
+                                                            <span style="font-family: monospace; font-size: 14px; color: var(--dw-text-dark);"><?php echo esc_html($row->no_rekening_desa); ?></span><br>
+                                                            <span style="font-size:12px; color: var(--dw-text-grey);">a.n <?php echo esc_html($row->atas_nama_rekening_desa); ?></span>
+                                                        </div>
+                                                    <?php else: ?>
+                                                        <span class="dw-badge status-warning">Belum set rekening</span>
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td class="text-center">
+                                                    <span class="dw-badge status-neutral"><?php echo $row->jumlah_transaksi; ?></span>
+                                                </td>
+                                                <td class="text-right">
+                                                    <span style="color: var(--dw-danger); font-weight: 700;">
+                                                        Rp <?php echo number_format($row->total_tagihan, 0, ',', '.'); ?>
+                                                    </span>
+                                                </td>
+                                                <td class="text-right">
+                                                    <form method="post" onsubmit="return confirm('Konfirmasi: Anda sudah mentransfer Rp <?php echo number_format($row->total_tagihan); ?> ke <?php echo esc_js($row->nama_desa); ?>?');">
+                                                        <?php wp_nonce_field('dw_payout_action'); ?>
+                                                        <input type="hidden" name="dw_action" value="mark_paid">
+                                                        <input type="hidden" name="payable_type" value="desa">
+                                                        <input type="hidden" name="payable_id" value="<?php echo $row->payable_to_id; ?>">
+                                                        <button type="submit" class="dw-button dw-button-primary">
+                                                            <span class="dashicons dashicons-yes" style="margin-right:6px;"></span> Tandai Lunas
+                                                        </button>
+                                                    </form>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php endif; ?>
+                    </div>
 
                 <!-- TAB 2: VERIFIKATOR -->
                 <?php elseif ($active_tab == 'verifikator'): ?>
-                    <div style="padding-bottom: 15px; border-bottom: 1px solid #f0f0f1; margin-bottom: 15px;">
-                        <h3 style="margin: 0;">Tagihan Komisi Verifikator</h3>
-                        <p class="description" style="margin: 5px 0 0;">Daftar komisi untuk Verifikator UMKM/Pedagang.</p>
+                    <div class="dw-card-header">
+                        <h3>Daftar Tagihan Verifikator</h3>
+                        <span class="dw-badge status-warning">Total: <?php echo $count_verif_pending; ?> Orang</span>
                     </div>
-
-                    <?php if(empty($unpaid_verif)): ?>
-                        <div style="padding: 40px; text-align: center; color: #646970;">
-                            <span class="dashicons dashicons-yes-alt" style="font-size: 48px; width: 48px; height: 48px; color: #c3e6cb; display: block; margin: 0 auto 10px;"></span>
-                            <p>Semua tagihan verifikator aman! 🎉</p>
-                        </div>
-                    <?php else: ?>
-                        <table class="wp-list-table widefat fixed striped">
-                            <thead>
-                                <tr>
-                                    <th>Nama Verifikator</th>
-                                    <th>Kontak (WA)</th>
-                                    <th style="text-align:center;">Jml Transaksi</th>
-                                    <th style="text-align:right;">Total Tagihan</th>
-                                    <th style="text-align:right;">Aksi</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach($unpaid_verif as $row): ?>
-                                    <tr>
-                                        <td><strong><?php echo esc_html($row->nama_lengkap); ?></strong></td>
-                                        <td>
-                                            <?php if($row->nomor_wa): ?>
-                                                <a href="https://wa.me/<?php echo preg_replace('/^0/', '62', preg_replace('/[^0-9]/', '', $row->nomor_wa)); ?>" target="_blank" class="button button-small">
-                                                    <span class="dashicons dashicons-whatsapp" style="margin-top:3px;"></span> <?php echo esc_html($row->nomor_wa); ?>
-                                                </a>
-                                            <?php else: ?>
-                                                -
-                                            <?php endif; ?>
-                                        </td>
-                                        <td style="text-align:center;"><?php echo $row->jumlah_transaksi; ?></td>
-                                        <td style="text-align:right; font-weight:bold; color:#dba617;">
-                                            Rp <?php echo number_format($row->total_tagihan, 0, ',', '.'); ?>
-                                        </td>
-                                        <td style="text-align:right;">
-                                            <form method="post" onsubmit="return confirm('Konfirmasi: Anda sudah mentransfer Rp <?php echo number_format($row->total_tagihan); ?> ke <?php echo esc_js($row->nama_lengkap); ?>?');">
-                                                <?php wp_nonce_field('dw_payout_action'); ?>
-                                                <input type="hidden" name="dw_action" value="mark_paid">
-                                                <input type="hidden" name="payable_type" value="verifikator">
-                                                <input type="hidden" name="payable_id" value="<?php echo $row->payable_to_id; ?>">
-                                                <button type="submit" class="button button-primary">
-                                                    <span class="dashicons dashicons-yes" style="margin-top:3px;"></span> Tandai Lunas
-                                                </button>
-                                            </form>
-                                        </td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    <?php endif; ?>
+                    <div class="dw-card-body">
+                        <?php if(empty($unpaid_verif)): ?>
+                            <div style="padding: 40px; text-align: center; color: var(--dw-text-grey);">
+                                <span class="dashicons dashicons-yes-alt" style="font-size: 48px; width: 48px; height: 48px; color: var(--dw-success); display: block; margin: 0 auto 15px;"></span>
+                                <h3 style="margin: 0 0 5px; color: var(--dw-text-dark);">Semua Aman!</h3>
+                                <p style="margin: 0;">Tidak ada tagihan verifikator yang pending.</p>
+                            </div>
+                        <?php else: ?>
+                            <div class="dw-table-wrapper">
+                                <table class="dw-modern-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Nama Verifikator</th>
+                                            <th>Kontak (WA)</th>
+                                            <th class="text-center">Jml Transaksi</th>
+                                            <th class="text-right">Total Tagihan</th>
+                                            <th class="text-right">Aksi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach($unpaid_verif as $row): ?>
+                                            <tr>
+                                                <td style="font-weight: 600; color: var(--dw-text-dark);">
+                                                    <?php echo esc_html($row->nama_lengkap); ?>
+                                                </td>
+                                                <td>
+                                                    <?php if($row->nomor_wa): ?>
+                                                        <a href="https://wa.me/<?php echo preg_replace('/^0/', '62', preg_replace('/[^0-9]/', '', $row->nomor_wa)); ?>" target="_blank" class="dw-button dw-button-secondary" style="padding: 6px 12px; font-size: 12px;">
+                                                            <span class="dashicons dashicons-whatsapp" style="margin-right:6px; color: var(--dw-success);"></span> <?php echo esc_html($row->nomor_wa); ?>
+                                                        </a>
+                                                    <?php else: ?>
+                                                        <span class="dw-badge status-neutral">-</span>
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td class="text-center">
+                                                    <span class="dw-badge status-neutral"><?php echo $row->jumlah_transaksi; ?></span>
+                                                </td>
+                                                <td class="text-right">
+                                                    <span style="color: var(--dw-warning); font-weight: 700;">
+                                                        Rp <?php echo number_format($row->total_tagihan, 0, ',', '.'); ?>
+                                                    </span>
+                                                </td>
+                                                <td class="text-right">
+                                                    <form method="post" onsubmit="return confirm('Konfirmasi: Anda sudah mentransfer Rp <?php echo number_format($row->total_tagihan); ?> ke <?php echo esc_js($row->nama_lengkap); ?>?');">
+                                                        <?php wp_nonce_field('dw_payout_action'); ?>
+                                                        <input type="hidden" name="dw_action" value="mark_paid">
+                                                        <input type="hidden" name="payable_type" value="verifikator">
+                                                        <input type="hidden" name="payable_id" value="<?php echo $row->payable_to_id; ?>">
+                                                        <button type="submit" class="dw-button dw-button-primary">
+                                                            <span class="dashicons dashicons-yes" style="margin-right:6px;"></span> Tandai Lunas
+                                                        </button>
+                                                    </form>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php endif; ?>
+                    </div>
 
                 <!-- TAB 3: RIWAYAT -->
                 <?php elseif ($active_tab == 'riwayat'): ?>
-                    <div style="padding-bottom: 15px; border-bottom: 1px solid #f0f0f1; margin-bottom: 15px;">
-                        <h3 style="margin: 0;">Riwayat Transfer Terakhir</h3>
+                    <div class="dw-card-header">
+                        <h3>Riwayat Transfer Terakhir</h3>
                     </div>
-
-                    <?php if(empty($paid_history)): ?>
-                        <div style="padding: 40px; text-align: center; color: #646970;">
-                            <p>Belum ada riwayat transfer.</p>
-                        </div>
-                    <?php else: ?>
-                        <table class="wp-list-table widefat fixed striped">
-                            <thead>
-                                <tr>
-                                    <th>ID Trx</th>
-                                    <th>Penerima</th>
-                                    <th>Tipe</th>
-                                    <th>Jumlah Transfer</th>
-                                    <th>Tanggal Transfer</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach($paid_history as $row): ?>
-                                    <tr>
-                                        <td>#<?php echo $row->id; ?></td>
-                                        <td><strong><?php echo esc_html($row->nama_penerima); ?></strong></td>
-                                        <td>
-                                            <?php if($row->payable_to_type == 'desa'): ?>
-                                                <span style="background:#e6fffa; color:#234e52; padding:2px 8px; border-radius:4px; font-size:11px;">Desa</span>
-                                            <?php else: ?>
-                                                <span style="background:#fffaf0; color:#9c4221; padding:2px 8px; border-radius:4px; font-size:11px;">Verifikator</span>
-                                            <?php endif; ?>
-                                        </td>
-                                        <td style="color: #10b981; font-weight: 600;">Rp <?php echo number_format($row->amount, 0, ',', '.'); ?></td>
-                                        <td><?php echo date('d M Y H:i', strtotime($row->paid_at)); ?></td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    <?php endif; ?>
-
+                    <div class="dw-card-body">
+                        <?php if(empty($paid_history)): ?>
+                            <div style="padding: 40px; text-align: center; color: var(--dw-text-grey);">
+                                <p style="margin: 0;">Belum ada riwayat transfer yang tercatat.</p>
+                            </div>
+                        <?php else: ?>
+                            <div class="dw-table-wrapper">
+                                <table class="dw-modern-table">
+                                    <thead>
+                                        <tr>
+                                            <th>ID Trx</th>
+                                            <th>Penerima</th>
+                                            <th>Tipe</th>
+                                            <th>Jumlah Transfer</th>
+                                            <th>Tanggal Transfer</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach($paid_history as $row): ?>
+                                            <tr>
+                                                <td style="color: var(--dw-text-grey); font-family: monospace;">#<?php echo $row->id; ?></td>
+                                                <td><strong><?php echo esc_html($row->nama_penerima); ?></strong></td>
+                                                <td>
+                                                    <?php if($row->payable_to_type == 'desa'): ?>
+                                                        <span class="dw-badge status-info">Desa</span>
+                                                    <?php else: ?>
+                                                        <span class="dw-badge status-warning">Verifikator</span>
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td style="color: var(--dw-success); font-weight: 700;">
+                                                    Rp <?php echo number_format($row->amount, 0, ',', '.'); ?>
+                                                </td>
+                                                <td style="color: var(--dw-text-grey);">
+                                                    <?php echo date('d M Y H:i', strtotime($row->paid_at)); ?>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php endif; ?>
+                    </div>
                 <?php endif; ?>
 
             </div>
