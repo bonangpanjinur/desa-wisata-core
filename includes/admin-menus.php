@@ -2,7 +2,7 @@
 /**
  * File Name:   includes/admin-menus.php
  * Description: Mengatur menu admin dan meload halaman admin.
- * UPDATE: Penyesuaian pemanggilan fungsi render untuk halaman Pedagang.
+ * UPDATE: Perbaikan menu Komisi untuk memanggil dw_render_komisi_page() sesuai file page-komisi.php.
  * @package DesaWisataCore
  */
 
@@ -98,7 +98,11 @@ function dw_render_pembeli() {
 
 function dw_render_komisi() { 
     require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-komisi.php';
-    if (function_exists('dw_komisi_page_render')) dw_komisi_page_render(); 
+    if (function_exists('dw_render_komisi_page')) {
+         dw_render_komisi_page(); 
+    } elseif (function_exists('dw_komisi_page_render')) {
+         dw_komisi_page_render(); 
+    }
 }
 
 function dw_render_paket() { 
@@ -112,7 +116,13 @@ function dw_render_paket() {
 
 function dw_render_verifikasi_paket() { 
     require_once DW_CORE_PLUGIN_DIR . 'includes/admin-pages/page-verifikasi-paket.php';
-    if (function_exists('dw_render_page_verifikasi_paket')) dw_render_page_verifikasi_paket(); 
+    
+    // Perbaikan: Panggil fungsi yang benar 'dw_render_verifikasi_paket_page'
+    if (function_exists('dw_render_verifikasi_paket_page')) {
+        dw_render_verifikasi_paket_page(); 
+    } elseif (function_exists('dw_render_page_verifikasi_paket')) {
+        dw_render_page_verifikasi_paket(); 
+    }
 }
 
 function dw_render_promosi() { 
@@ -254,7 +264,10 @@ function dw_register_admin_menus() {
     // --- ADMIN SETTINGS ---
     if (current_user_can('manage_options')) {
         add_submenu_page('dw-dashboard', 'Paket & Kuota', 'Paket & Kuota', 'manage_options', 'dw-paket-transaksi', 'dw_render_paket');
-        // Verifikasi Paket dipindah ke Pusat Verifikasi
+        
+        // Perbaikan: Menu Verifikasi Paket Ditambahkan Kembali
+        add_submenu_page('dw-dashboard', 'Verifikasi Paket', 'Verifikasi Paket', 'manage_options', 'dw-verifikasi-paket', 'dw_render_verifikasi_paket');
+        
         add_submenu_page('dw-dashboard', 'Payout Komisi', 'Payout Komisi', 'manage_options', 'dw-komisi', 'dw_render_komisi');
         add_submenu_page('dw-dashboard', 'Promosi/Iklan', 'Promosi/Iklan', 'manage_options', 'dw-promosi', 'dw_render_promosi');
         add_submenu_page('dw-dashboard', 'Banner Promo', 'Banner Promo', 'manage_options', 'dw-banner', 'dw_render_banner');
