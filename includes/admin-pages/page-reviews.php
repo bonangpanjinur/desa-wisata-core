@@ -1,24 +1,18 @@
 <?php
 /**
- * File Name:   page-reviews.php
- * File Folder: includes/admin-pages/
- * File Path:   includes/admin-pages/page-reviews.php
- *
- * Halaman Admin untuk Moderasi Ulasan (Reviews Management).
- *
- * FITUR LENGKAP:
- * - Statistik Ringkasan (Cards).
- * - Filter Tab (Semua, Pending, Disetujui, Ditolak).
- * - Tampilan Tabel Modern.
- * - Handler Aksi Row & Bulk.
- *
- * @package DesaWisataCore
+ * File: includes/admin-pages/page-reviews.php
+ * * Admin Page: Moderasi Ulasan
+ * * Halaman Admin untuk Moderasi Ulasan (Reviews Management).
  */
 
-if ( ! defined( 'ABSPATH' ) ) exit;
+defined( 'ABSPATH' ) || exit;
 
 // Include UI components
-require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin-ui-components.php';
+if ( defined( 'DW_CORE_PLUGIN_DIR' ) ) {
+    require_once DW_CORE_PLUGIN_DIR . 'includes/admin-ui-components.php';
+} else {
+    require_once plugin_dir_path( dirname( dirname( __FILE__ ) ) ) . 'includes/admin-ui-components.php';
+}
 
 /**
  * --------------------------------------------------------------------------
@@ -39,7 +33,7 @@ function dw_reviews_handle_row_actions() {
     if ($action === 'reject' && wp_verify_nonce($nonce, 'dw-reject-review_' . $review_id)) $valid_nonce = true;
     if ($action === 'trash' && wp_verify_nonce($nonce, 'dw-trash-review_' . $review_id)) $valid_nonce = true;
 
-    if (!$valid_nonce) return; // Fail silently atau wp_die jika mau strict
+    if (!$valid_nonce) return;
 
     if (!current_user_can('moderate_comments')) wp_die('Akses ditolak.');
 
@@ -62,7 +56,7 @@ function dw_reviews_handle_row_actions() {
 
     if ($message) {
         add_settings_error('dw_reviews_notices', 'action_done', $message, $msg_type);
-        set_transient('settings_errors', get_settings_errors(), 30);
+        set_transient('settings_errors_dw_reviews', get_settings_errors(), 30);
         
         // Hapus cache hitungan pending
         wp_cache_delete('dw_pending_reviews_count', 'desa_wisata_core');
@@ -74,7 +68,6 @@ function dw_reviews_handle_row_actions() {
 }
 add_action('admin_init', 'dw_reviews_handle_row_actions');
 
-
 /**
  * --------------------------------------------------------------------------
  * 2. RENDER HALAMAN UTAMA
@@ -85,114 +78,128 @@ function dw_reviews_moderation_page_render() {
     
     // Pastikan class List Table dimuat
     if (!class_exists('DW_Reviews_List_Table')) {
-        require_once DW_CORE_PLUGIN_DIR . 'includes/list-tables/class-dw-reviews-list-table.php';
+        if ( defined( 'DW_CORE_PLUGIN_DIR' ) ) {
+            require_once DW_CORE_PLUGIN_DIR . 'includes/list-tables/class-dw-reviews-list-table.php';
+        } else {
+            require_once plugin_dir_path( dirname( dirname( __FILE__ ) ) ) . 'includes/list-tables/class-dw-reviews-list-table.php';
+        }
     }
 
     // --- A. HITUNG STATISTIK ---
     $table_name = $wpdb->prefix . 'dw_ulasan';
-    $stats = $wpdb->get_row("
-        SELECT 
-            COUNT(*) as total,
-            SUM(CASE WHEN status_moderasi = 'pending' THEN 1 ELSE 0 END) as pending,
-            SUM(CASE WHEN status_moderasi = 'disetujui' THEN 1 ELSE 0 END) as approved,
-            SUM(CASE WHEN status_moderasi = 'ditolak' THEN 1 ELSE 0 END) as rejected
-        FROM $table_name
-    ");
+    // Gunakan table prefix yang benar, fallback jika tabel belum ada (untuk safety display)
+    $count_total = 0;
+    $count_pending = 0;
+    $count_approved = 0;
+    $count_rejected = 0;
 
-    $count_total = (int) ($stats->total ?? 0);
-    $count_pending = (int) ($stats->pending ?? 0);
-    $count_approved = (int) ($stats->approved ?? 0);
-    $count_rejected = (int) ($stats->rejected ?? 0);
+    // Check if table exists first to avoid fatal errors on fresh install
+    if ( $wpdb->get_var("SHOW TABLES LIKE '$table_name'") == $table_name ) {
+        $stats = $wpdb->get_row("
+            SELECT 
+                COUNT(*) as total,
+                SUM(CASE WHEN status_moderasi = 'pending' THEN 1 ELSE 0 END) as pending,
+                SUM(CASE WHEN status_moderasi = 'disetujui' THEN 1 ELSE 0 END) as approved,
+                SUM(CASE WHEN status_moderasi = 'ditolak' THEN 1 ELSE 0 END) as rejected
+            FROM $table_name
+        ");
+
+        if ($stats) {
+            $count_total = (int) $stats->total;
+            $count_pending = (int) $stats->pending;
+            $count_approved = (int) $stats->approved;
+            $count_rejected = (int) $stats->rejected;
+        }
+    }
 
     // --- B. SETUP LIST TABLE ---
-    $reviewsListTable = new DW_Reviews_List_Table();
-    $reviewsListTable->prepare_items();
+    $list_table = new DW_Reviews_List_Table();
+    $list_table->prepare_items();
 
     ?>
-    <div class="wrap dw-wrap">
-        <h1 class="wp-heading-inline">Moderasi Ulasan & Rating</h1>
-        <hr class="wp-header-end">
+    <div class="wrap dw-admin-wrapper">
+        <div class="dw-page-header">
+            <div class="dw-header-title">
+                <h1><?php echo esc_html( get_admin_page_title() ); ?></h1>
+                <p class="dw-subtitle">Moderasi ulasan dan rating produk dari pembeli.</p>
+            </div>
+        </div>
 
         <?php
         // Tampilkan Notifikasi
-        $errors = get_transient('settings_errors');
+        $errors = get_transient('settings_errors_dw_reviews');
         if ($errors) {
+            echo '<div class="dw-content-body" style="padding-bottom:0;">';
             settings_errors('dw_reviews_notices');
-            delete_transient('settings_errors');
+            echo '</div>';
+            delete_transient('settings_errors_dw_reviews');
         }
         ?>
 
-        <!-- 1. STATS CARDS -->
-        
+        <div class="dw-content-body">
+            
+            <!-- 1. STATS CARDS (GRID LAYOUT) -->
+            <div class="dw-stats-grid">
+                
+                <!-- Total -->
+                <div class="dw-stat-card card-total">
+                    <div class="dw-stat-icon-wrapper bg-blue">
+                        <span class="dashicons dashicons-format-chat"></span>
+                    </div>
+                    <div class="dw-stat-content">
+                        <h3 class="dw-stat-value"><?php echo number_format($count_total); ?></h3>
+                        <p class="dw-stat-label">Total Ulasan</p>
+                    </div>
+                </div>
 
-        <div class="dw-stats-grid">
-            <div class="dw-stat-card card-total">
-                <div class="dw-stat-content">
-                    <h3>Total Ulasan</h3>
-                    <div class="dw-stat-number"><?php echo number_format($count_total); ?></div>
+                <!-- Pending -->
+                <div class="dw-stat-card card-pending">
+                    <div class="dw-stat-icon-wrapper bg-orange">
+                        <span class="dashicons dashicons-clock"></span>
+                    </div>
+                    <div class="dw-stat-content">
+                        <h3 class="dw-stat-value"><?php echo number_format($count_pending); ?></h3>
+                        <p class="dw-stat-label">Menunggu Moderasi</p>
+                    </div>
                 </div>
-                <div class="dw-stat-icon icon-total"><span class="dashicons dashicons-format-chat"></span></div>
+
+                <!-- Disetujui -->
+                <div class="dw-stat-card card-approved">
+                    <div class="dw-stat-icon-wrapper bg-green">
+                        <span class="dashicons dashicons-yes-alt"></span>
+                    </div>
+                    <div class="dw-stat-content">
+                        <h3 class="dw-stat-value"><?php echo number_format($count_approved); ?></h3>
+                        <p class="dw-stat-label">Disetujui</p>
+                    </div>
+                </div>
+
+                <!-- Ditolak -->
+                <div class="dw-stat-card card-rejected">
+                    <div class="dw-stat-icon-wrapper bg-purple">
+                        <span class="dashicons dashicons-dismiss"></span>
+                    </div>
+                    <div class="dw-stat-content">
+                        <h3 class="dw-stat-value"><?php echo number_format($count_rejected); ?></h3>
+                        <p class="dw-stat-label">Ditolak</p>
+                    </div>
+                </div>
+
             </div>
-            <div class="dw-stat-card card-pending">
-                <div class="dw-stat-content">
-                    <h3>Menunggu Moderasi</h3>
-                    <div class="dw-stat-number"><?php echo number_format($count_pending); ?></div>
-                </div>
-                <div class="dw-stat-icon icon-pending"><span class="dashicons dashicons-clock"></span></div>
-            </div>
-            <div class="dw-stat-card card-approved">
-                <div class="dw-stat-content">
-                    <h3>Disetujui</h3>
-                    <div class="dw-stat-number"><?php echo number_format($count_approved); ?></div>
-                </div>
-                <div class="dw-stat-icon icon-approved"><span class="dashicons dashicons-yes-alt"></span></div>
-            </div>
-            <div class="dw-stat-card card-rejected">
-                <div class="dw-stat-content">
-                    <h3>Ditolak</h3>
-                    <div class="dw-stat-number"><?php echo number_format($count_rejected); ?></div>
-                </div>
-                <div class="dw-stat-icon icon-rejected"><span class="dashicons dashicons-dismiss"></span></div>
+
+            <!-- 2. FILTER TABS & TABLE -->
+            <div class="dw-card">
+                <form method="get">
+                    <input type="hidden" name="page" value="<?php echo esc_attr($_REQUEST['page']); ?>" />
+                    
+                    <?php 
+                    $list_table->views();
+                    $list_table->search_box( 'Cari Review', 'search_id' );
+                    $list_table->display(); 
+                    ?>
+                </form>
             </div>
         </div>
-
-        <!-- 2. FILTER TABS (Manual Links) -->
-        <h2 class="nav-tab-wrapper" style="margin-bottom: 0; border-bottom: none;">
-            <?php 
-            $current_status = $_GET['status'] ?? 'all'; 
-            $base_url = admin_url('admin.php?page=dw-reviews');
-            ?>
-            <a href="<?php echo $base_url; ?>" class="nav-tab <?php echo $current_status == 'all' ? 'nav-tab-active' : ''; ?>">
-                Semua <span class="count">(<?php echo $count_total; ?>)</span>
-            </a>
-            <a href="<?php echo add_query_arg('status', 'pending', $base_url); ?>" class="nav-tab <?php echo $current_status == 'pending' ? 'nav-tab-active' : ''; ?>">
-                Pending <span class="count" style="color: #d97706;">(<?php echo $count_pending; ?>)</span>
-            </a>
-            <a href="<?php echo add_query_arg('status', 'disetujui', $base_url); ?>" class="nav-tab <?php echo $current_status == 'disetujui' ? 'nav-tab-active' : ''; ?>">
-                Disetujui <span class="count" style="color: #059669;">(<?php echo $count_approved; ?>)</span>
-            </a>
-            <a href="<?php echo add_query_arg('status', 'ditolak', $base_url); ?>" class="nav-tab <?php echo $current_status == 'ditolak' ? 'nav-tab-active' : ''; ?>">
-                Ditolak <span class="count" style="color: #dc2626;">(<?php echo $count_rejected; ?>)</span>
-            </a>
-        </h2>
-
-        <!-- 3. TABLE WRAPPER -->
-        <div class="dw-modern-table-card">
-            <form method="post">
-                <input type="hidden" name="page" value="<?php echo esc_attr($_REQUEST['page']); ?>" />
-                <?php 
-                // Jika ada filter status, kirim ke list table (perlu modif di prepare_items jika belum support)
-                // Di sini kita asumsikan DW_Reviews_List_Table sudah membaca $_GET['status']
-                // Jika belum, kita inject hidden input atau list table membacanya sendiri.
-                $reviewsListTable->display(); 
-                ?>
-            </form>
-        </div>
-
-        <p class="description" style="margin-top: 15px;">
-            <span class="dashicons dashicons-info"></span> Ulasan yang disetujui akan tampil di halaman publik (Detail Produk / Wisata). Ulasan yang ditolak akan disembunyikan.
-        </p>
     </div>
     <?php
 }
-?>

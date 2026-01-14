@@ -1,11 +1,11 @@
 <?php
 /**
- * File Name:   page-settings.php
- * Description: Halaman Pengaturan Plugin Terintegrasi v3.6.
- * Fitur: Identitas, Pembayaran (QRIS), WhatsApp, dan Sistem Referral & Reward.
+ * File: includes/admin-pages/page-settings.php
+ * * Admin Page: Pengaturan Sistem
+ * * Menggunakan Tab Navigasi modern dan Card wrapper.
  */
 
-if ( ! defined( 'ABSPATH' ) ) exit;
+defined( 'ABSPATH' ) || exit;
 
 // Include UI components
 require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin-ui-components.php';
@@ -41,6 +41,8 @@ function dw_settings_save_handler() {
     } elseif ( $tab === 'notification' ) {
         update_option( 'dw_default_order_sound_url', esc_url_raw( $_POST['dw_default_order_sound_url'] ) );
         update_option( 'dw_default_order_sound_type', sanitize_text_field( $_POST['dw_default_order_sound_type'] ) );
+    } elseif ( $tab === 'api' ) {
+        // Placeholder for API settings if needed in future
     }
 
     add_settings_error( 'dw_settings_notices', 'saved', 'Pengaturan berhasil disimpan.', 'success' );
@@ -49,48 +51,51 @@ function dw_settings_save_handler() {
 }
 add_action( 'admin_init', 'dw_settings_save_handler' );
 
-/**
- * Render Halaman Pengaturan
- */
 function dw_admin_settings_page_handler() {
-    $active_tab = isset($_GET['tab']) ? sanitize_key($_GET['tab']) : 'general';
-    $errors = get_transient('settings_errors'); 
-    if($errors) { 
+    // Cek user capability
+    if ( ! current_user_can( 'manage_options' ) ) {
+        return;
+    }
+
+    $active_tab = isset( $_GET['tab'] ) ? sanitize_text_field( $_GET['tab'] ) : 'general';
+    
+    // Retrieve errors/notices from transient
+    $errors = get_transient('settings_errors');
+    if($errors) {
         foreach($errors as $error) {
             add_settings_error($error['setting'], $error['code'], $error['message'], $error['type']);
         }
-        settings_errors('dw_settings_notices'); 
-        delete_transient('settings_errors'); 
+        delete_transient('settings_errors');
     }
     ?>
-    <div class="wrap dw-wrap">
-        <h1 class="wp-heading-inline" style="font-weight: 800;">Pengaturan Sistem Desa Wisata</h1>
-        <hr class="wp-header-end">
-
-        
-
-        <div class="dw-settings-container">
-            <!-- Sidebar Nav -->
-            <div class="dw-sidebar-nav">
-                <a href="?page=dw-settings&tab=general" class="dw-nav-item <?php echo $active_tab == 'general' ? 'active' : ''; ?>">
-                    <span class="dashicons dashicons-admin-generic"></span> Umum
-                </a>
-                <a href="?page=dw-settings&tab=payment" class="dw-nav-item <?php echo $active_tab == 'payment' ? 'active' : ''; ?>">
-                    <span class="dashicons dashicons-money-alt"></span> Pembayaran
-                </a>
-                <a href="?page=dw-settings&tab=referral" class="dw-nav-item <?php echo $active_tab == 'referral' ? 'active' : ''; ?>">
-                    <span class="dashicons dashicons-share-alt"></span> Referral & Reward
-                </a>
-                <a href="?page=dw-settings&tab=whatsapp" class="dw-nav-item <?php echo $active_tab == 'whatsapp' ? 'active' : ''; ?>">
-                    <span class="dashicons dashicons-whatsapp"></span> Notifikasi WA
-                </a>
-                <a href="?page=dw-settings&tab=notification" class="dw-nav-item <?php echo $active_tab == 'notification' ? 'active' : ''; ?>">
-                    <span class="dashicons dashicons-megaphone"></span> Nada Pesanan
-                </a>
+    <div class="wrap dw-admin-wrapper">
+        <!-- Header Section -->
+        <div class="dw-page-header">
+            <div class="dw-header-title">
+                <h1><?php echo esc_html( get_admin_page_title() ); ?></h1>
+                <p class="dw-subtitle">Konfigurasi utama sistem Desa Wisata & Marketplace.</p>
             </div>
+            <div class="dw-header-actions">
+                <!-- Actions optional -->
+            </div>
+        </div>
 
-            <!-- Content Area -->
-            <div class="dw-settings-content">
+        <!-- Body Section -->
+        <div class="dw-content-body">
+            <?php settings_errors('dw_settings_notices'); ?>
+
+            <!-- Navigation Tabs -->
+            <nav class="nav-tab-wrapper" style="margin-bottom: 20px;">
+                <a href="?page=dw-settings&tab=general" class="nav-tab <?php echo $active_tab == 'general' ? 'nav-tab-active' : ''; ?>">Umum</a>
+                <a href="?page=dw-settings&tab=payment" class="nav-tab <?php echo $active_tab == 'payment' ? 'nav-tab-active' : ''; ?>">Pembayaran & Komisi</a>
+                <a href="?page=dw-settings&tab=referral" class="nav-tab <?php echo $active_tab == 'referral' ? 'nav-tab-active' : ''; ?>">Referral & Reward</a>
+                <a href="?page=dw-settings&tab=whatsapp" class="nav-tab <?php echo $active_tab == 'whatsapp' ? 'nav-tab-active' : ''; ?>">Notifikasi (WA)</a>
+                <a href="?page=dw-settings&tab=notification" class="nav-tab <?php echo $active_tab == 'notification' ? 'nav-tab-active' : ''; ?>">Nada Pesanan</a>
+                <a href="?page=dw-settings&tab=api" class="nav-tab <?php echo $active_tab == 'api' ? 'nav-tab-active' : ''; ?>">API & Integrasi</a>
+            </nav>
+
+            <!-- Settings Form in Card -->
+            <div class="dw-card">
                 <form method="post">
                     <input type="hidden" name="active_tab" value="<?php echo esc_attr($active_tab); ?>">
                     <?php wp_nonce_field( 'dw_save_settings_action', 'dw_save_settings_nonce_field' ); ?>
@@ -98,47 +103,68 @@ function dw_admin_settings_page_handler() {
                     <?php if ($active_tab == 'general'): ?>
                         <div class="dw-form-section">
                             <h3><span class="dashicons dashicons-admin-site"></span> Identitas Aplikasi</h3>
-                            <div class="dw-input-group">
-                                <label>Nama Aplikasi / Platform</label>
-                                <input type="text" name="dw_app_name" value="<?php echo esc_attr(get_option('dw_app_name', 'Desa Wisata')); ?>">
-                            </div>
-                            <div class="dw-input-group">
-                                <label>Nomor WhatsApp Admin Utama</label>
-                                <input type="text" name="dw_admin_phone" value="<?php echo esc_attr(get_option('dw_admin_phone')); ?>" placeholder="62812xxxx">
-                                <p class="dw-help-text">Gunakan format kode negara (62). Nomor ini akan menerima notifikasi pendaftaran sistem.</p>
-                            </div>
-                            <div class="dw-input-group">
-                                <label>Alamat Kantor / Sekretariat</label>
-                                <textarea name="dw_company_address" rows="3"><?php echo esc_textarea(get_option('dw_company_address')); ?></textarea>
-                            </div>
+                            <table class="form-table" role="presentation">
+                                <tbody>
+                                    <tr>
+                                        <th scope="row"><label for="dw_app_name">Nama Aplikasi / Platform</label></th>
+                                        <td>
+                                            <input name="dw_app_name" type="text" id="dw_app_name" value="<?php echo esc_attr(get_option('dw_app_name', 'Desa Wisata')); ?>" class="regular-text">
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th scope="row"><label for="dw_admin_phone">Nomor WhatsApp Admin Utama</label></th>
+                                        <td>
+                                            <input name="dw_admin_phone" type="text" id="dw_admin_phone" value="<?php echo esc_attr(get_option('dw_admin_phone')); ?>" class="regular-text" placeholder="62812xxxx">
+                                            <p class="description">Gunakan format kode negara (62). Nomor ini akan menerima notifikasi pendaftaran sistem.</p>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th scope="row"><label for="dw_company_address">Alamat Kantor / Sekretariat</label></th>
+                                        <td>
+                                            <textarea name="dw_company_address" id="dw_company_address" rows="3" class="large-text code"><?php echo esc_textarea(get_option('dw_company_address')); ?></textarea>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
 
                     <?php elseif ($active_tab == 'payment'): ?>
                         <div class="dw-form-section">
                             <h3><span class="dashicons dashicons-bank"></span> Rekening Admin</h3>
-                            <div class="dw-input-group">
-                                <label>Nama Bank</label>
-                                <input type="text" name="dw_bank_name" value="<?php echo esc_attr(get_option('dw_bank_name')); ?>" placeholder="Contoh: BANK BRI">
-                            </div>
-                            <div class="dw-input-group">
-                                <label>Nomor Rekening</label>
-                                <input type="text" name="dw_bank_account" value="<?php echo esc_attr(get_option('dw_bank_account')); ?>">
-                            </div>
-                            <div class="dw-input-group">
-                                <label>Atas Nama</label>
-                                <input type="text" name="dw_bank_holder" value="<?php echo esc_attr(get_option('dw_bank_holder')); ?>">
-                            </div>
+                            <table class="form-table" role="presentation">
+                                <tbody>
+                                    <tr>
+                                        <th scope="row"><label for="dw_bank_name">Nama Bank</label></th>
+                                        <td><input name="dw_bank_name" type="text" id="dw_bank_name" value="<?php echo esc_attr(get_option('dw_bank_name')); ?>" class="regular-text" placeholder="Contoh: BANK BRI"></td>
+                                    </tr>
+                                    <tr>
+                                        <th scope="row"><label for="dw_bank_account">Nomor Rekening</label></th>
+                                        <td><input name="dw_bank_account" type="text" id="dw_bank_account" value="<?php echo esc_attr(get_option('dw_bank_account')); ?>" class="regular-text"></td>
+                                    </tr>
+                                    <tr>
+                                        <th scope="row"><label for="dw_bank_holder">Atas Nama</label></th>
+                                        <td><input name="dw_bank_holder" type="text" id="dw_bank_holder" value="<?php echo esc_attr(get_option('dw_bank_holder')); ?>" class="regular-text"></td>
+                                    </tr>
+                                </tbody>
+                            </table>
                             
-                            <div class="dw-input-group" style="margin-top: 30px; border-top: 1px solid #f1f5f9; padding-top: 25px;">
-                                <label>QRIS Platform</label>
-                                <div style="display:flex; gap:10px; align-items:center; margin-bottom: 15px;">
-                                    <input type="text" name="dw_qris_image_url" id="dw_qris_field" value="<?php echo esc_attr(get_option('dw_qris_image_url')); ?>" placeholder="URL Gambar QRIS">
-                                    <button type="button" class="button" id="btn_upl_qris_admin">Pilih Gambar</button>
-                                </div>
-                                <div class="dw-qris-preview">
-                                    <img id="prev_qris_admin" src="<?php echo esc_url(get_option('dw_qris_image_url') ?: 'https://placehold.co/200x200?text=No+QRIS'); ?>" style="max-width:200px; height:auto; display:block; border-radius: 8px;">
-                                </div>
-                            </div>
+                            <h3 style="margin-top: 30px; border-top: 1px solid #f1f5f9; padding-top: 25px;">QRIS Platform</h3>
+                            <table class="form-table" role="presentation">
+                                <tbody>
+                                    <tr>
+                                        <th scope="row"><label for="dw_qris_field">URL Gambar QRIS</label></th>
+                                        <td>
+                                            <div style="display:flex; gap:10px; align-items:center; margin-bottom: 15px;">
+                                                <input type="text" name="dw_qris_image_url" id="dw_qris_field" value="<?php echo esc_attr(get_option('dw_qris_image_url')); ?>" class="regular-text" placeholder="URL Gambar QRIS">
+                                                <button type="button" class="button" id="btn_upl_qris_admin">Pilih Gambar</button>
+                                            </div>
+                                            <div class="dw-qris-preview">
+                                                <img id="prev_qris_admin" src="<?php echo esc_url(get_option('dw_qris_image_url') ?: 'https://placehold.co/200x200?text=No+QRIS'); ?>" style="max-width:200px; height:auto; display:block; border-radius: 8px;">
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
                         <script>
                         jQuery(document).ready(function($){
@@ -157,88 +183,116 @@ function dw_admin_settings_page_handler() {
                     <?php elseif ($active_tab == 'referral'): ?>
                         <div class="dw-form-section">
                             <h3><span class="dashicons dashicons-awards"></span> Referral & Reward Kuota</h3>
-                            <p class="dw-help-text" style="margin-bottom: 25px;">Atur hadiah otomatis untuk pedagang yang berhasil mengajak pembeli baru bergabung.</p>
+                            <p class="description" style="margin-bottom: 25px;">Atur hadiah otomatis untuk pedagang yang berhasil mengajak pembeli baru bergabung.</p>
                             
-                            <div class="dw-input-group">
-                                <label>Hadiah Kuota Transaksi (Bonus)</label>
-                                <input type="number" name="dw_bonus_quota_referral" value="<?php echo esc_attr(get_option('dw_bonus_quota_referral', 5)); ?>" min="0">
-                                <p class="dw-help-text">Jumlah kuota transaksi GRATIS yang diberikan kepada Pedagang setiap kali ada 1 Pembeli baru mendaftar melalui link referral mereka.</p>
-                            </div>
-
-                            <div class="dw-input-group">
-                                <label>Prefix Kode Referral Pedagang</label>
-                                <input type="text" name="dw_prefix_referral_pedagang" value="<?php echo esc_attr(get_option('dw_prefix_referral_pedagang', 'TOKO')); ?>" placeholder="Contoh: TOKO">
-                                <p class="dw-help-text">Awalan kode referral otomatis untuk pedagang (Misal: TOKO-XXXX). Gunakan maksimal 5 karakter.</p>
-                            </div>
-
-                            <div class="dw-input-group">
-                                <label>Metode Verifikasi Reward</label>
-                                <select name="dw_ref_auto_verify">
-                                    <?php $current_verify = get_option('dw_ref_auto_verify', 'auto'); ?>
-                                    <option value="auto" <?php selected($current_verify, 'auto'); ?>>Berikan Kuota Otomatis (Instan)</option>
-                                    <option value="manual" <?php selected($current_verify, 'manual'); ?>>Tinjau Manual Oleh Admin</option>
-                                </select>
-                            </div>
-
-                            <div class="dw-input-group" style="margin-top: 30px; border-top: 1px solid #f1f5f9; padding-top: 25px;">
-                                <label>Poin Referral Pembeli</label>
-                                <input type="number" name="dw_buyer_referral_points" value="<?php echo esc_attr(get_option('dw_buyer_referral_points', 10)); ?>" min="0">
-                                <p class="dw-help-text">Jumlah poin yang diberikan kepada Pembeli lama setiap kali ada Pembeli baru mendaftar menggunakan kode referral mereka.</p>
-                            </div>
+                            <table class="form-table" role="presentation">
+                                <tbody>
+                                    <tr>
+                                        <th scope="row"><label for="dw_bonus_quota_referral">Hadiah Kuota Transaksi (Bonus)</label></th>
+                                        <td>
+                                            <input name="dw_bonus_quota_referral" type="number" id="dw_bonus_quota_referral" value="<?php echo esc_attr(get_option('dw_bonus_quota_referral', 5)); ?>" min="0" class="small-text">
+                                            <p class="description">Jumlah kuota transaksi GRATIS yang diberikan kepada Pedagang setiap kali ada 1 Pembeli baru mendaftar melalui link referral mereka.</p>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th scope="row"><label for="dw_prefix_referral_pedagang">Prefix Kode Referral Pedagang</label></th>
+                                        <td>
+                                            <input name="dw_prefix_referral_pedagang" type="text" id="dw_prefix_referral_pedagang" value="<?php echo esc_attr(get_option('dw_prefix_referral_pedagang', 'TOKO')); ?>" class="regular-text" placeholder="Contoh: TOKO">
+                                            <p class="description">Awalan kode referral otomatis untuk pedagang (Misal: TOKO-XXXX). Gunakan maksimal 5 karakter.</p>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th scope="row"><label for="dw_ref_auto_verify">Metode Verifikasi Reward</label></th>
+                                        <td>
+                                            <select name="dw_ref_auto_verify" id="dw_ref_auto_verify">
+                                                <?php $current_verify = get_option('dw_ref_auto_verify', 'auto'); ?>
+                                                <option value="auto" <?php selected($current_verify, 'auto'); ?>>Berikan Kuota Otomatis (Instan)</option>
+                                                <option value="manual" <?php selected($current_verify, 'manual'); ?>>Tinjau Manual Oleh Admin</option>
+                                            </select>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th scope="row"><label for="dw_buyer_referral_points">Poin Referral Pembeli</label></th>
+                                        <td>
+                                            <input name="dw_buyer_referral_points" type="number" id="dw_buyer_referral_points" value="<?php echo esc_attr(get_option('dw_buyer_referral_points', 10)); ?>" min="0" class="small-text">
+                                            <p class="description">Jumlah poin yang diberikan kepada Pembeli lama setiap kali ada Pembeli baru mendaftar menggunakan kode referral mereka.</p>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
 
                     <?php elseif ($active_tab == 'whatsapp'): ?>
                         <div class="dw-form-section">
                             <h3><span class="dashicons dashicons-whatsapp"></span> Integrasi WhatsApp Gateway</h3>
-                            <div class="dw-input-group">
-                                <label>API URL Endpoint</label>
-                                <input type="text" name="dw_wa_api_url" value="<?php echo esc_attr(get_option('dw_wa_api_url')); ?>" placeholder="https://api.fonnte.com/send">
-                            </div>
-                            <div class="dw-input-group">
-                                <label>API Key / Token</label>
-                                <input type="password" name="dw_wa_api_key" value="<?php echo esc_attr(get_option('dw_wa_api_key')); ?>">
-                            </div>
-                            <div class="dw-input-group">
-                                <label>Sender Number / ID</label>
-                                <input type="text" name="dw_wa_sender" value="<?php echo esc_attr(get_option('dw_wa_sender')); ?>">
-                            </div>
+                            <table class="form-table" role="presentation">
+                                <tbody>
+                                    <tr>
+                                        <th scope="row"><label for="dw_wa_api_url">API URL Endpoint</label></th>
+                                        <td><input name="dw_wa_api_url" type="text" id="dw_wa_api_url" value="<?php echo esc_attr(get_option('dw_wa_api_url')); ?>" class="regular-text" placeholder="https://api.fonnte.com/send"></td>
+                                    </tr>
+                                    <tr>
+                                        <th scope="row"><label for="dw_wa_api_key">API Key / Token</label></th>
+                                        <td><input name="dw_wa_api_key" type="password" id="dw_wa_api_key" value="<?php echo esc_attr(get_option('dw_wa_api_key')); ?>" class="regular-text"></td>
+                                    </tr>
+                                    <tr>
+                                        <th scope="row"><label for="dw_wa_sender">Sender Number / ID</label></th>
+                                        <td><input name="dw_wa_sender" type="text" id="dw_wa_sender" value="<?php echo esc_attr(get_option('dw_wa_sender')); ?>" class="regular-text"></td>
+                                    </tr>
+                                </tbody>
+                            </table>
 
-                            <div class="dw-input-group" style="margin-top: 30px; border-top: 1px solid #f1f5f9; padding-top: 25px;">
-                                <label>Link YouTube Nada Peringatan Pesanan (Global)</label>
-                                <input type="text" name="dw_order_notification_youtube" value="<?php echo esc_attr(get_option('dw_order_notification_youtube')); ?>" placeholder="https://www.youtube.com/watch?v=xxxx">
-                                <p class="dw-help-text">Masukkan link YouTube untuk nada peringatan saat ada pesanan masuk di dashboard toko (Default jika pedagang tidak mengatur sendiri).</p>
-                            </div>
+                            <h3 style="margin-top: 30px; border-top: 1px solid #f1f5f9; padding-top: 25px;">Notifikasi Pesanan</h3>
+                            <table class="form-table" role="presentation">
+                                <tbody>
+                                    <tr>
+                                        <th scope="row"><label for="dw_order_notification_youtube">Link YouTube Nada Peringatan (Global)</label></th>
+                                        <td>
+                                            <input name="dw_order_notification_youtube" type="text" id="dw_order_notification_youtube" value="<?php echo esc_attr(get_option('dw_order_notification_youtube')); ?>" class="regular-text" placeholder="https://www.youtube.com/watch?v=xxxx">
+                                            <p class="description">Masukkan link YouTube untuk nada peringatan saat ada pesanan masuk di dashboard toko (Default jika pedagang tidak mengatur sendiri).</p>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
 
                     <?php elseif ($active_tab == 'notification'): ?>
                         <div class="dw-form-section">
                             <h3><span class="dashicons dashicons-megaphone"></span> Pengaturan Nada Pesanan Masuk (Default)</h3>
-                            <p class="dw-help-text">Atur nada default yang akan digunakan oleh semua toko jika mereka belum mengatur nada sendiri.</p>
+                            <p class="description">Atur nada default yang akan digunakan oleh semua toko jika mereka belum mengatur nada sendiri.</p>
                             
-                            <div class="dw-input-group">
-                                <label>Tipe Nada Default</label>
-                                <select name="dw_default_order_sound_type" id="dw_sound_type">
-                                    <?php $current_type = get_option('dw_default_order_sound_type', 'default'); ?>
-                                    <option value="default" <?php selected($current_type, 'default'); ?>>Suara Default Sistem</option>
-                                    <option value="upload" <?php selected($current_type, 'upload'); ?>>Upload File (MP3/MP4)</option>
-                                    <option value="youtube" <?php selected($current_type, 'youtube'); ?>>Link YouTube</option>
-                                </select>
-                            </div>
-
-                            <div class="dw-input-group" id="group_sound_upload" style="<?php echo $current_type != 'upload' ? 'display:none;' : ''; ?>">
-                                <label>File Audio/Video</label>
-                                <div style="display:flex; gap:10px; align-items:center; margin-bottom: 15px;">
-                                    <input type="text" name="dw_default_order_sound_url" id="dw_sound_url_field" value="<?php echo esc_attr(get_option('dw_default_order_sound_url')); ?>" placeholder="URL File MP3/MP4">
-                                    <button type="button" class="button" id="btn_upl_sound_default">Pilih File</button>
-                                </div>
-                                <p class="dw-help-text">Upload file MP3 atau MP4 untuk digunakan sebagai nada pesanan.</p>
-                            </div>
-
-                            <div class="dw-input-group" id="group_sound_youtube" style="<?php echo $current_type != 'youtube' ? 'display:none;' : ''; ?>">
-                                <label>Link YouTube</label>
-                                <input type="text" name="dw_default_order_sound_url_yt" id="dw_sound_url_yt_field" value="<?php echo $current_type == 'youtube' ? esc_attr(get_option('dw_default_order_sound_url')) : ''; ?>" placeholder="https://www.youtube.com/watch?v=xxxx">
-                                <p class="dw-help-text">Masukkan link YouTube untuk nada peringatan.</p>
-                            </div>
+                            <table class="form-table" role="presentation">
+                                <tbody>
+                                    <tr>
+                                        <th scope="row"><label for="dw_sound_type">Tipe Nada Default</label></th>
+                                        <td>
+                                            <select name="dw_default_order_sound_type" id="dw_sound_type">
+                                                <?php $current_type = get_option('dw_default_order_sound_type', 'default'); ?>
+                                                <option value="default" <?php selected($current_type, 'default'); ?>>Suara Default Sistem</option>
+                                                <option value="upload" <?php selected($current_type, 'upload'); ?>>Upload File (MP3/MP4)</option>
+                                                <option value="youtube" <?php selected($current_type, 'youtube'); ?>>Link YouTube</option>
+                                            </select>
+                                        </td>
+                                    </tr>
+                                    <tr id="group_sound_upload" style="<?php echo $current_type != 'upload' ? 'display:none;' : ''; ?>">
+                                        <th scope="row"><label for="dw_sound_url_field">File Audio/Video</label></th>
+                                        <td>
+                                            <div style="display:flex; gap:10px; align-items:center;">
+                                                <input type="text" name="dw_default_order_sound_url" id="dw_sound_url_field" value="<?php echo esc_attr(get_option('dw_default_order_sound_url')); ?>" class="regular-text" placeholder="URL File MP3/MP4">
+                                                <button type="button" class="button" id="btn_upl_sound_default">Pilih File</button>
+                                            </div>
+                                            <p class="description">Upload file MP3 atau MP4 untuk digunakan sebagai nada pesanan.</p>
+                                        </td>
+                                    </tr>
+                                    <tr id="group_sound_youtube" style="<?php echo $current_type != 'youtube' ? 'display:none;' : ''; ?>">
+                                        <th scope="row"><label for="dw_sound_url_yt_field">Link YouTube</label></th>
+                                        <td>
+                                            <input type="text" name="dw_default_order_sound_url_yt" id="dw_sound_url_yt_field" value="<?php echo $current_type == 'youtube' ? esc_attr(get_option('dw_default_order_sound_url')) : ''; ?>" class="regular-text" placeholder="https://www.youtube.com/watch?v=xxxx">
+                                            <p class="description">Masukkan link YouTube untuk nada peringatan.</p>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
                         <script>
                         jQuery(document).ready(function($){
@@ -276,7 +330,10 @@ function dw_admin_settings_page_handler() {
                         </script>
                     <?php endif; ?>
                     
-                    <button type="submit" name="dw_settings_submit" class="dw-button-save">Simpan Perubahan</button>
+                    <?php 
+                    // Tombol Submit
+                    submit_button( 'Simpan Perubahan', 'primary large', 'dw_settings_submit' );
+                    ?>
                 </form>
             </div>
         </div>
