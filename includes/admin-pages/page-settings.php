@@ -3,6 +3,7 @@
  * File: includes/admin-pages/page-settings.php
  * * Admin Page: Pengaturan Sistem
  * * Menggunakan Tab Navigasi modern dan Card wrapper.
+ * * UPDATE FASE 4: Integrasi Xendit ke dalam Tab Pembayaran.
  */
 
 defined( 'ABSPATH' ) || exit;
@@ -19,25 +20,50 @@ function dw_settings_save_handler() {
 
     $tab = $_POST['active_tab'] ?? 'general';
 
+    // Ambil setting general existing untuk update parsial (kompatibilitas)
+    $gen_settings = get_option( 'dw_settings_general', [] );
+
     if ( $tab === 'general' ) {
+        // Simpan Individual Options (Legacy Support)
         update_option( 'dw_app_name', sanitize_text_field( $_POST['dw_app_name'] ) );
         update_option( 'dw_admin_phone', sanitize_text_field( $_POST['dw_admin_phone'] ) );
         update_option( 'dw_company_address', sanitize_textarea_field( $_POST['dw_company_address'] ) );
+
+        // Sync ke dw_settings_general (untuk konsistensi handler baru)
+        $gen_settings['desa_name'] = sanitize_text_field( $_POST['dw_app_name'] );
+        $gen_settings['desa_address'] = sanitize_textarea_field( $_POST['dw_company_address'] );
+        update_option( 'dw_settings_general', $gen_settings );
+
     } elseif ( $tab === 'payment' ) {
+        // 1. Simpan Bank Manual
         update_option( 'dw_bank_name', sanitize_text_field( $_POST['dw_bank_name'] ) );
         update_option( 'dw_bank_account', sanitize_text_field( $_POST['dw_bank_account'] ) );
         update_option( 'dw_bank_holder', sanitize_text_field( $_POST['dw_bank_holder'] ) );
         update_option( 'dw_qris_image_url', esc_url_raw( $_POST['dw_qris_image_url'] ) );
+
+        // 2. Simpan Xendit Config (Ke dw_settings_general)
+        $gen_settings['xendit_mode'] = sanitize_text_field( $_POST['xendit_mode'] );
+        $gen_settings['xendit_secret_key'] = sanitize_text_field( $_POST['xendit_secret_key'] );
+        $gen_settings['xendit_callback_token'] = sanitize_text_field( $_POST['xendit_callback_token'] );
+        update_option( 'dw_settings_general', $gen_settings );
+
     } elseif ( $tab === 'whatsapp' ) {
         update_option( 'dw_wa_api_url', esc_url_raw( $_POST['dw_wa_api_url'] ) );
         update_option( 'dw_wa_api_key', sanitize_text_field( $_POST['dw_wa_api_key'] ) );
         update_option( 'dw_wa_sender', sanitize_text_field( $_POST['dw_wa_sender'] ) );
         update_option( 'dw_order_notification_youtube', esc_url_raw( $_POST['dw_order_notification_youtube'] ) );
+        
+        // Sync ke dw_settings_general
+        $gen_settings['wa_gateway_url'] = esc_url_raw( $_POST['dw_wa_api_url'] );
+        $gen_settings['wa_api_key'] = sanitize_text_field( $_POST['dw_wa_api_key'] );
+        update_option( 'dw_settings_general', $gen_settings );
+
     } elseif ( $tab === 'referral' ) {
         update_option( 'dw_bonus_quota_referral', absint( $_POST['dw_bonus_quota_referral'] ) );
         update_option( 'dw_prefix_referral_pedagang', strtoupper( sanitize_text_field( $_POST['dw_prefix_referral_pedagang'] ) ) );
         update_option( 'dw_ref_auto_verify', sanitize_key( $_POST['dw_ref_auto_verify'] ) );
         update_option( 'dw_buyer_referral_points', absint( $_POST['dw_buyer_referral_points'] ) );
+
     } elseif ( $tab === 'notification' ) {
         update_option( 'dw_default_order_sound_url', esc_url_raw( $_POST['dw_default_order_sound_url'] ) );
         update_option( 'dw_default_order_sound_type', sanitize_text_field( $_POST['dw_default_order_sound_type'] ) );
@@ -67,6 +93,9 @@ function dw_admin_settings_page_handler() {
         }
         delete_transient('settings_errors');
     }
+
+    // Ambil Data General Settings (untuk Xendit)
+    $settings_gen = get_option( 'dw_settings_general', [] );
     ?>
     <div class="wrap dw-admin-wrapper">
         <!-- Header Section -->
@@ -130,7 +159,7 @@ function dw_admin_settings_page_handler() {
 
                     <?php elseif ($active_tab == 'payment'): ?>
                         <div class="dw-form-section">
-                            <h3><span class="dashicons dashicons-bank"></span> Rekening Admin</h3>
+                            <h3><span class="dashicons dashicons-bank"></span> Rekening Admin (Manual Transfer)</h3>
                             <table class="form-table" role="presentation">
                                 <tbody>
                                     <tr>
@@ -161,6 +190,44 @@ function dw_admin_settings_page_handler() {
                                             <div class="dw-qris-preview">
                                                 <img id="prev_qris_admin" src="<?php echo esc_url(get_option('dw_qris_image_url') ?: 'https://placehold.co/200x200?text=No+QRIS'); ?>" style="max-width:200px; height:auto; display:block; border-radius: 8px;">
                                             </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <!-- XENDIT SECTION (FASE 4) -->
+                            <h3 style="margin-top: 30px; border-top: 1px solid #f1f5f9; padding-top: 25px; color: #0073aa;"><span class="dashicons dashicons-money-alt"></span> Gateway Otomatis (Xendit)</h3>
+                            <p class="description">Konfigurasi ini digunakan untuk menerima pembayaran otomatis (Topup Paket Transaksi).</p>
+                            <table class="form-table" role="presentation">
+                                <tbody>
+                                    <tr>
+                                        <th scope="row"><label for="xendit_mode">Mode Environment</label></th>
+                                        <td>
+                                            <select name="xendit_mode" id="xendit_mode">
+                                                <option value="sandbox" <?php selected( isset($settings_gen['xendit_mode']) ? $settings_gen['xendit_mode'] : '', 'sandbox' ); ?>>Sandbox (Test)</option>
+                                                <option value="production" <?php selected( isset($settings_gen['xendit_mode']) ? $settings_gen['xendit_mode'] : '', 'production' ); ?>>Production (Live)</option>
+                                            </select>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th scope="row"><label for="xendit_secret_key">Xendit Secret API Key</label></th>
+                                        <td>
+                                            <input type="password" name="xendit_secret_key" id="xendit_secret_key" value="<?php echo esc_attr( isset($settings_gen['xendit_secret_key']) ? $settings_gen['xendit_secret_key'] : '' ); ?>" class="large-text">
+                                            <p class="description">Dapatkan dari Dashboard Xendit > Settings > API Keys.</p>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th scope="row"><label for="xendit_callback_token">Callback Verification Token</label></th>
+                                        <td>
+                                            <input type="text" name="xendit_callback_token" id="xendit_callback_token" value="<?php echo esc_attr( isset($settings_gen['xendit_callback_token']) ? $settings_gen['xendit_callback_token'] : '' ); ?>" class="large-text">
+                                            <p class="description">Dapatkan dari Dashboard Xendit > Settings > Callbacks.</p>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th scope="row">Webhook URL (Invoice Paid)</th>
+                                        <td>
+                                            <code style="background: #f0f0f1; padding: 5px; display: block; margin-top: 5px;"><?php echo site_url('/wp-json/dw-api/v1/payment/callback'); ?></code>
+                                            <p class="description">Salin URL ini ke pengaturan Callback Xendit untuk event <strong>Invoice Paid</strong>.</p>
                                         </td>
                                     </tr>
                                 </tbody>

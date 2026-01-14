@@ -3,8 +3,9 @@
  * AJAX Handlers
  * Path: includes/ajax-handlers.php
  * * Menangani semua request AJAX dari dashboard admin dengan validasi Nonce & Capability.
+ * * UPDATE: Merged fitur CRUD Pedagang (Lama) + Hitung Ongkir & Lokasi (Baru).
  * @package DesaWisataCore
- * @version 2.5.0 (Security Hardened)
+ * @version 2.8.0
  */
 
 if (!defined('ABSPATH')) {
@@ -260,3 +261,89 @@ function dw_ajax_delete_pedagang() {
     }
 }
 add_action('wp_ajax_dw_delete_pedagang', 'dw_ajax_delete_pedagang');
+
+
+/**
+ * ----------------------------------------------------------------------
+ * FASE 4.2 ADDITIONS: Ojek & Location Handlers
+ * ----------------------------------------------------------------------
+ */
+
+/**
+ * AJAX: Hitung Ongkos Kirim Ojek
+ * Action: dw_calculate_ongkir
+ */
+add_action( 'wp_ajax_dw_calculate_ongkir', 'dw_ajax_calculate_ongkir' );
+add_action( 'wp_ajax_nopriv_dw_calculate_ongkir', 'dw_ajax_calculate_ongkir' );
+
+function dw_ajax_calculate_ongkir() {
+    // Menggunakan dw_nonce_frontend untuk public access
+    check_ajax_referer( 'dw_nonce_frontend', 'nonce' );
+
+    $lat_user = isset( $_POST['lat'] ) ? floatval( $_POST['lat'] ) : 0;
+    $lon_user = isset( $_POST['lng'] ) ? floatval( $_POST['lng'] ) : 0;
+    $pedagang_id = isset( $_POST['pedagang_id'] ) ? intval( $_POST['pedagang_id'] ) : 0;
+
+    if ( empty( $lat_user ) || empty( $lon_user ) || empty( $pedagang_id ) ) {
+        wp_send_json_error( [ 'message' => 'Data lokasi tidak lengkap.' ] );
+    }
+
+    // Ambil Lokasi Pedagang
+    $lat_pedagang = get_user_meta( $pedagang_id, 'latitude', true );
+    $lon_pedagang = get_user_meta( $pedagang_id, 'longitude', true );
+
+    if ( ! $lat_pedagang || ! $lon_pedagang ) {
+        wp_send_json_error( [ 'message' => 'Lokasi pedagang belum diatur.' ] );
+    }
+
+    // Hitung Jarak
+    if ( ! class_exists( 'DW_Ojek_Handler' ) ) {
+        require_once DW_PLUGIN_DIR . 'includes/classes/class-dw-ojek-handler.php';
+    }
+
+    // Menggunakan static methods dari class Ojek Handler yang sudah diupdate
+    $distance = DW_Ojek_Handler::calculate_distance( $lat_user, $lon_user, $lat_pedagang, $lon_pedagang );
+    
+    // Hitung Biaya
+    $cost = DW_Ojek_Handler::calculate_shipping_cost( $distance );
+
+    // Cari Ojek Terdekat (Opsional, untuk info ketersediaan)
+    // Asumsi get_nearest_ojek sudah diimplementasikan di class DW_Ojek_Handler jika ingin dipakai
+    // $available_ojek = DW_Ojek_Handler::get_nearest_ojek( $lat_pedagang, $lon_pedagang, 10 ); 
+    // $ojek_found = count( $available_ojek ) > 0;
+    $ojek_found = true; // Placeholder sementara
+
+    wp_send_json_success( [
+        'distance' => $distance . ' KM',
+        'cost' => $cost,
+        'cost_formatted' => 'Rp ' . number_format( $cost, 0, ',', '.' ),
+        'ojek_available' => $ojek_found,
+        'message' => $ojek_found ? 'Ojek tersedia' : 'Tidak ada ojek di sekitar pedagang saat ini'
+    ] );
+}
+
+/**
+ * AJAX: Simpan Lokasi (User/Pedagang)
+ * Action: dw_save_location
+ */
+add_action( 'wp_ajax_dw_save_location', 'dw_ajax_save_location' );
+
+function dw_ajax_save_location() {
+    check_ajax_referer( 'dw_vars_nonce', 'nonce' ); // Menggunakan dw_vars dari admin-scripts
+
+    if ( ! is_user_logged_in() ) {
+        wp_send_json_error( [ 'message' => 'Unauthorized' ] );
+    }
+
+    $user_id = get_current_user_id();
+    $lat = isset( $_POST['lat'] ) ? sanitize_text_field( $_POST['lat'] ) : '';
+    $lng = isset( $_POST['lng'] ) ? sanitize_text_field( $_POST['lng'] ) : '';
+
+    if ( $lat && $lng ) {
+        update_user_meta( $user_id, 'latitude', $lat );
+        update_user_meta( $user_id, 'longitude', $lng );
+        wp_send_json_success( [ 'message' => 'Lokasi berhasil disimpan.' ] );
+    } else {
+        wp_send_json_error( [ 'message' => 'Koordinat tidak valid.' ] );
+    }
+}
