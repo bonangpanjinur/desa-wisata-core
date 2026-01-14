@@ -1,112 +1,139 @@
 <?php
 /**
- * File: includes/shortcodes/class-dw-shortcodes.php
- * * Handler untuk semua shortcode di sisi frontend.
- * * Menggabungkan fitur Dashboard, POS, dan Top Up Paket (Xendit).
+ * Class DW_Shortcodes
+ * Path: includes/shortcodes/class-dw-shortcodes.php
+ * * UPDATE FASE 5.3: 
+ * - Enqueue 'dw-frontend.css' dan 'dw-dashboard.js'
+ * - Update struktur HTML [dw_dashboard_toko] dengan ID dan Skeleton Classes.
+ * - Mempertahankan logika Top Up Paket & POS System.
  */
 
-if ( ! defined( 'ABSPATH' ) ) {
+if (!defined('ABSPATH')) {
     exit;
 }
 
 class DW_Shortcodes {
 
     public function __construct() {
-        // Dashboard & Fitur Utama
-        add_shortcode( 'dw_dashboard_toko', [ $this, 'render_dashboard_toko' ] );
-        add_shortcode( 'dw_dashboard_desa', [ $this, 'render_dashboard_desa' ] );
-        add_shortcode( 'dw_transaksi_list', [ $this, 'render_transaksi_list' ] );
-        add_shortcode( 'dw_pos_system', [ $this, 'render_pos_system' ] );
+        // Register Shortcodes
+        add_shortcode('dw_dashboard_toko', [$this, 'render_dashboard_toko']);
+        add_shortcode('dw_dashboard_desa', [$this, 'render_dashboard_desa']);
+        add_shortcode('dw_transaksi_list', [$this, 'render_transaksi_list']);
+        add_shortcode('dw_pos_system', [$this, 'render_pos_system']);
+        add_shortcode('dw_topup_paket', [$this, 'render_topup_paket']); // Fase 4
+
+        // Enqueue Scripts
+        add_action('wp_enqueue_scripts', [$this, 'enqueue_frontend_scripts']);
         
-        // FASE 4: Top Up Paket
-        add_shortcode( 'dw_topup_paket', [ $this, 'render_topup_paket' ] );
-        
-        // Register Scripts specific for shortcodes
-        add_action( 'wp_enqueue_scripts', [ $this, 'enqueue_frontend_scripts' ] );
-        
-        // Ajax handler untuk create invoice
+        // Ajax handler untuk create invoice (Fase 4 - Xendit)
         add_action( 'wp_ajax_dw_create_topup_invoice', [ $this, 'ajax_create_topup_invoice' ] );
     }
 
     public function enqueue_frontend_scripts() {
-        wp_enqueue_script( 'jquery' );
-        // SweetAlert2 (optional but recommended for UX)
-        wp_enqueue_script( 'sweetalert2', 'https://cdn.jsdelivr.net/npm/sweetalert2@11', [], null, true );
-        
-        // CSS sederhana untuk card paket & dashboard
-        wp_add_inline_style( 'wp-block-library', '
-            .dw-frontend-wrapper { margin-bottom: 30px; }
-            .dw-header-section { margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
-            .dw-stats-grid-frontend { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
-            .dw-stat-card { background: #fff; padding: 20px; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-            .dw-stat-card .label { display: block; color: #666; font-size: 0.9em; margin-bottom: 5px; }
-            .dw-stat-card .value { display: block; font-size: 1.5em; font-weight: bold; color: #333; }
-            .dw-action-buttons { display: flex; gap: 10px; flex-wrap: wrap; }
-            .dw-btn { padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: 500; display: inline-block; }
-            .dw-btn-primary { background: #0073aa; color: #fff; border: 1px solid #0073aa; }
-            .dw-btn-secondary { background: #f0f0f1; color: #333; border: 1px solid #ccc; }
-            .dw-btn-outline { background: transparent; color: #0073aa; border: 1px solid #0073aa; }
+        // CSS Frontend Utama (Fase 5.3)
+        wp_enqueue_style('dw-frontend-css', DW_PLUGIN_URL . 'assets/css/dw-frontend.css', [], '2.8.0');
+
+        // JS Dependencies
+        wp_enqueue_script('jquery');
+        wp_enqueue_script('sweetalert2', 'https://cdn.jsdelivr.net/npm/sweetalert2@11', [], null, true);
+
+        // JS Dashboard Logic (Fase 5.3)
+        // Load hanya jika ada shortcode dashboard
+        global $post;
+        if (is_a($post, 'WP_Post') && (has_shortcode($post->post_content, 'dw_dashboard_toko') || has_shortcode($post->post_content, 'dw_dashboard_desa'))) {
+            wp_enqueue_script('dw-dashboard-js', DW_PLUGIN_URL . 'assets/js/dw-dashboard.js', ['jquery'], '2.8.0', true);
             
-            /* Topup CSS */
+            // Kirim variable ke JS
+            wp_localize_script('dw-dashboard-js', 'dw_dashboard_vars', [
+                'ajax_url' => admin_url('admin-ajax.php'),
+                'nonce' => wp_create_nonce('dw_nonce_frontend')
+            ]);
+        }
+        
+        // CSS Inline Fallback / Tambahan (Opsional, jika dw-frontend.css belum terload sempurna)
+        // Terutama untuk fitur Top Up yang CSS-nya spesifik
+        wp_add_inline_style( 'dw-frontend-css', '
+            /* Topup CSS Specific Override/Addition */
             .dw-paket-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 20px; }
             .dw-paket-card { border: 1px solid #ddd; padding: 20px; border-radius: 8px; text-align: center; transition: 0.3s; cursor: pointer; background: #fff; }
             .dw-paket-card:hover, .dw-paket-card.selected { border-color: #0073aa; box-shadow: 0 4px 12px rgba(0,0,0,0.1); transform: translateY(-2px); }
             .dw-paket-price { font-size: 1.5em; font-weight: bold; color: #28a745; margin: 10px 0; }
             .dw-btn-pay { width: 100%; padding: 12px; background: #0073aa; color: white; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; }
             .dw-btn-pay:disabled { background: #ccc; cursor: not-allowed; }
-
-            /* Table */
-            .dw-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-            .dw-table th, .dw-table td { border: 1px solid #ddd; padding: 10px; text-align: left; }
-            .dw-table th { background: #f9f9f9; }
         ' );
     }
 
     /**
      * 1. Shortcode: [dw_dashboard_toko]
-     * Halaman utama pedagang untuk melihat statistik dan menu.
+     * Dashboard Pedagang dengan Skeleton Loader (Fase 5.3 Updated)
      */
     public function render_dashboard_toko($atts) {
-        // Cek Login & Role
-        if ( ! is_user_logged_in() ) {
-            return $this->alert_message( 'Silakan login terlebih dahulu.', 'warning' );
-        }
+        if (!is_user_logged_in()) return $this->alert_message('Silakan login.', 'warning');
         
         $user = wp_get_current_user();
-        if ( ! in_array( 'pedagang', (array) $user->roles ) && ! in_array( 'administrator', (array) $user->roles ) ) {
-            return $this->alert_message( 'Akses ditolak. Halaman ini khusus Pedagang.', 'danger' );
+        if (!in_array('pedagang', (array) $user->roles) && !in_array('administrator', (array) $user->roles) && !in_array('dw_ojek', (array) $user->roles)) {
+            return $this->alert_message('Akses ditolak.', 'danger');
         }
 
-        // Mulai Output Buffer
         ob_start();
         ?>
         <div class="dw-frontend-wrapper">
+            <!-- Header -->
             <div class="dw-header-section">
-                <h2>Halo, <?php echo esc_html( $user->display_name ); ?> 👋</h2>
-                <p>Selamat datang di Dashboard Pedagang.</p>
-            </div>
-
-            <!-- Statistik Ringkas (Placeholder Logic) -->
-            <div class="dw-stats-grid-frontend">
-                <div class="dw-stat-card">
-                    <span class="label">Total Penjualan</span>
-                    <strong class="value">Rp 0</strong>
+                <div>
+                    <h2>Halo, <?php echo esc_html($user->display_name); ?> 👋</h2>
+                    <p style="color:#64748b; margin-top:5px;">Berikut ringkasan aktivitas toko Anda.</p>
                 </div>
-                <div class="dw-stat-card">
-                    <span class="label">Pesanan Baru</span>
-                    <strong class="value">0</strong>
-                </div>
-                <div class="dw-stat-card">
-                    <span class="label">Produk Aktif</span>
-                    <strong class="value">0</strong>
+                <div class="dw-action-buttons">
+                    <a href="<?php echo site_url('/pos'); ?>" class="dw-btn dw-btn-primary">Buka Kasir (POS)</a>
+                    <a href="<?php echo site_url('/transaksi'); ?>" class="dw-btn dw-btn-secondary">Riwayat Transaksi</a>
+                    <a href="<?php echo site_url('/pengaturan-toko'); ?>" class="dw-btn dw-btn-outline">Pengaturan Toko</a>
                 </div>
             </div>
 
-            <!-- Menu Navigasi Cepat -->
-            <div class="dw-action-buttons">
-                <a href="#" class="dw-btn dw-btn-primary">Kelola Produk</a>
-                <a href="#" class="dw-btn dw-btn-secondary">Riwayat Transaksi</a>
-                <a href="#" class="dw-btn dw-btn-outline">Pengaturan Toko</a>
+            <!-- Statistik Grid dengan ID untuk JS -->
+            <div class="dw-stats-grid">
+                <div class="dw-stat-card">
+                    <span class="dw-stat-label">Total Penjualan</span>
+                    <!-- Tambahkan class dw-skeleton secara default, JS akan menghapusnya -->
+                    <span id="stat-sales" class="dw-stat-value dw-skeleton dw-skeleton-text">Rp ...</span>
+                </div>
+                <div class="dw-stat-card">
+                    <span class="dw-stat-label">Pesanan Baru</span>
+                    <span id="stat-orders" class="dw-stat-value dw-skeleton dw-skeleton-text">...</span>
+                </div>
+                <div class="dw-stat-card">
+                    <span class="dw-stat-label">Produk Aktif</span>
+                    <span id="stat-products" class="dw-stat-value dw-skeleton dw-skeleton-text">...</span>
+                </div>
+            </div>
+
+            <!-- Tabel Transaksi Terbaru -->
+            <h3 style="margin-bottom:15px; color:#2c3e50;">Transaksi Terakhir</h3>
+            <div class="dw-table-container">
+                <table class="dw-table" id="dw-transaction-table">
+                    <thead>
+                        <tr>
+                            <th>Kode</th>
+                            <th>Tanggal</th>
+                            <th>Total</th>
+                            <th>Status</th>
+                            <th>Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Skeleton Rows (Loading State) -->
+                        <?php for($i=0; $i<3; $i++): ?>
+                        <tr>
+                            <td><span class="dw-skeleton dw-skeleton-text" style="width:80px;"></span></td>
+                            <td><span class="dw-skeleton dw-skeleton-text" style="width:120px;"></span></td>
+                            <td><span class="dw-skeleton dw-skeleton-text" style="width:100px;"></span></td>
+                            <td><span class="dw-skeleton dw-skeleton-text" style="width:60px;"></span></td>
+                            <td><span class="dw-skeleton dw-skeleton-text" style="width:50px;"></span></td>
+                        </tr>
+                        <?php endfor; ?>
+                    </tbody>
+                </table>
             </div>
         </div>
         <?php
@@ -364,13 +391,6 @@ class DW_Shortcodes {
      * Helper: Pesan Alert Sederhana
      */
     private function alert_message($msg, $type = 'info') {
-        $style = 'padding: 15px; border-radius: 5px; margin-bottom: 20px;';
-        switch ($type) {
-            case 'danger': $style .= 'background: #fee2e2; color: #991b1b; border: 1px solid #fecaca;'; break;
-            case 'warning': $style .= 'background: #fef9c3; color: #854d0e; border: 1px solid #fde047;'; break;
-            case 'success': $style .= 'background: #dcfce7; color: #166534; border: 1px solid #bbf7d0;'; break;
-            default: $style .= 'background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe;'; break;
-        }
-        return sprintf('<div style="%s">%s</div>', esc_attr($style), esc_html($msg));
+        return sprintf('<div class="dw-badge dw-badge-%s" style="padding:15px; font-size:1rem; display:block; margin-bottom:20px;">%s</div>', esc_attr($type), esc_html($msg));
     }
 }
