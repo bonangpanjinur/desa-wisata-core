@@ -27,7 +27,7 @@ class DW_Shortcode_Desa {
              ! in_array( 'desa', $roles ) && 
              ! current_user_can( 'dw_manage_desa' ) ) {
             
-            // Redirect ke halaman akun saya jika akses ditolak
+            // Redirect ke halaman akun saya jika akses ditolak (menggunakan JS karena headers sudah terkirim di shortcode)
             return '<script>window.location.href="' . home_url('/akun-saya/') . '";</script><div class="p-4 text-center">Mengalihkan...</div>';
         }
 
@@ -246,6 +246,11 @@ class DW_Shortcode_Desa {
         $payout_history = $wpdb->get_results($wpdb->prepare("SELECT * FROM $table_payout WHERE payable_to_type = 'desa' AND payable_to_id = %d ORDER BY created_at DESC", $id_desa));
 
         ob_start();
+
+        // 1. Panggil Header Tema (Hanya jika belum ada)
+        if ( ! did_action( 'get_header' ) ) {
+            get_header();
+        }
         ?>
 
         <!-- CDN Tailwind & FontAwesome -->
@@ -812,19 +817,9 @@ class DW_Shortcode_Desa {
 
             function copyToClipboard(text) {
                 navigator.clipboard.writeText(text).then(function() {
-                    Swal.fire({
-                        icon: 'success',
-                        title: 'Berhasil',
-                        text: 'Link berhasil disalin!',
-                        timer: 1500,
-                        showConfirmButton: false
-                    });
+                    alert('Link berhasil disalin!');
                 }, function(err) {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Gagal',
-                        text: 'Gagal menyalin link.',
-                    });
+                    alert('Gagal menyalin link.');
                 });
             }
 
@@ -861,6 +856,11 @@ class DW_Shortcode_Desa {
             });
         </script>
         <?php
+        // 2. Panggil Footer Tema (Hanya jika belum ada)
+        if ( ! did_action( 'get_footer' ) ) {
+            get_footer();
+        }
+
         return ob_get_clean();
     }
-} 
+}
