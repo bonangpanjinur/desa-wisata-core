@@ -1,5 +1,10 @@
 <?php
-// includes/shortcodes/class-dw-shortcode-desa.php
+/**
+ * Shortcode: Dashboard Desa [dw_dashboard_desa]
+ * Path: includes/shortcodes/class-dw-shortcode-desa.php
+ * Description: Dashboard frontend untuk Desa Wisata (Statistik, Dompet, Manajemen UMKM).
+ * Version: 2.6.0 (Financial Integrated)
+ */
 
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
@@ -9,6 +14,10 @@ class DW_Shortcode_Desa {
 
     public function __construct() {
         add_shortcode( 'dw_dashboard_desa', array( $this, 'render' ) );
+    }
+
+    public static function init() {
+        $instance = new self();
     }
 
     public function render( $atts ) {
@@ -60,7 +69,9 @@ class DW_Shortcode_Desa {
                 'status'                  => 'pending',
                 'status_akses_verifikasi' => 'locked', 
                 'created_at'              => current_time('mysql'),
-                'updated_at'              => current_time('mysql')
+                'updated_at'              => current_time('mysql'),
+                'saldo_komisi'            => 0, // Default saldo
+                'total_pendapatan'        => 0  // Default total pendapatan
             ]);
             
             $desa_data = $wpdb->get_row( $wpdb->prepare("SELECT * FROM $table_desa WHERE id_user_desa = %d", $current_user_id) );
@@ -75,7 +86,7 @@ class DW_Shortcode_Desa {
         $msg_type = '';
 
         // ==========================================
-        // FORM HANDLERS
+        // FORM HANDLERS (Existing from previous code)
         // ==========================================
 
         // 1. Simpan Profil & Update Referral
@@ -203,27 +214,59 @@ class DW_Shortcode_Desa {
             return '<script>window.location.href="' . remove_query_arg(['action','id','_wpnonce']) . '";</script>';
         }
 
-        // 6. Withdraw
+        // 6. Withdraw (Manual ke Payout Ledger + Integrasi Wallet Logic)
         if ( isset($_POST['action_withdraw']) && check_admin_referer('withdraw_action', 'withdraw_nonce') ) {
             $amount = floatval(str_replace('.', '', $_POST['nominal_withdraw'])); 
             
+            // Gunakan DW_Wallet jika ada untuk saldo yang lebih akurat
+            $saldo_saat_ini = 0;
+            if (class_exists('DW_Wallet')) {
+                $saldo_saat_ini = DW_Wallet::get_balance($current_user_id);
+            } else {
+                $saldo_saat_ini = $desa_data->saldo_komisi;
+            }
+            
             if ( $amount <= 0 ) {
                 $msg = "Nominal tidak valid."; $msg_type = "error";
-            } elseif ( $amount > $desa_data->saldo_komisi ) {
+            } elseif ( $amount > $saldo_saat_ini ) {
                 $msg = "Saldo tidak mencukupi."; $msg_type = "error";
             } elseif ( empty($desa_data->no_rekening_desa) || empty($desa_data->nama_bank_desa) ) {
-                $msg = "Lengkapi data rekening desa."; $msg_type = "error";
+                $msg = "Lengkapi data rekening desa di menu Profil."; $msg_type = "error";
             } else {
-                $wpdb->query($wpdb->prepare("UPDATE $table_desa SET saldo_komisi = saldo_komisi - %f WHERE id = %d", $amount, $id_desa));
-                $wpdb->insert($table_payout, [
-                    'order_id' => 0, 
-                    'payable_to_type' => 'desa',
-                    'payable_to_id' => $id_desa,
-                    'amount' => $amount,
-                    'status' => 'pending',
-                    'created_at' => current_time('mysql')
-                ]);
-                $msg = "Permintaan pencairan berhasil."; $msg_type = "success";
+                
+                // --- INTEGRASI WALLET SYSTEM BARU ---
+                if (class_exists('DW_Wallet')) {
+                    // Panggil fungsi request_withdrawal yang handle Xendit otomatis
+                    $bank_details = [
+                        'bank_code' => $desa_data->nama_bank_desa, // Pastikan format kode bank sesuai Xendit (e.g. BNI, BCA)
+                        'account_number' => $desa_data->no_rekening_desa,
+                        'account_name' => $desa_data->atas_nama_rekening_desa
+                    ];
+                    
+                    $result = DW_Wallet::request_withdrawal($current_user_id, $amount, $bank_details);
+                    
+                    if (is_wp_error($result)) {
+                        $msg = $result->get_error_message();
+                        $msg_type = "error";
+                    } else {
+                        $msg = "Permintaan pencairan berhasil diproses (ID: #$result).";
+                        $msg_type = "success";
+                    }
+                } else {
+                    // --- FALLBACK KE SISTEM LAMA (Manual Ledger) ---
+                    $wpdb->query($wpdb->prepare("UPDATE $table_desa SET saldo_komisi = saldo_komisi - %f WHERE id = %d", $amount, $id_desa));
+                    $wpdb->insert($table_payout, [
+                        'order_id' => 0, 
+                        'payable_to_type' => 'desa',
+                        'payable_to_id' => $id_desa,
+                        'amount' => $amount,
+                        'status' => 'pending',
+                        'created_at' => current_time('mysql')
+                    ]);
+                    $msg = "Permintaan pencairan manual berhasil."; $msg_type = "success";
+                }
+                
+                // Refresh Data Desa
                 $desa_data = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_desa WHERE id=%d",$id_desa));
             }
         }
@@ -242,12 +285,29 @@ class DW_Shortcode_Desa {
         $sys_bank_account = get_option('dw_bank_account', '-'); 
         $sys_bank_holder = get_option('dw_bank_holder', '-'); 
 
-        // Fetch History Payouts
-        $payout_history = $wpdb->get_results($wpdb->prepare("SELECT * FROM $table_payout WHERE payable_to_type = 'desa' AND payable_to_id = %d ORDER BY created_at DESC", $id_desa));
+        // Fetch History Payouts (Gabungan tabel ledger lama & withdrawals baru)
+        $payout_history = [];
+        
+        // 1. Cek Tabel Withdrawals Baru
+        $table_wd = $wpdb->prefix . 'dw_withdrawals';
+        if ($wpdb->get_var("SHOW TABLES LIKE '$table_wd'") == $table_wd) {
+            $payout_history = $wpdb->get_results($wpdb->prepare("SELECT * FROM $table_wd WHERE user_id = %d ORDER BY created_at DESC", $current_user_id));
+        } else {
+            // 2. Fallback Tabel Ledger Lama
+            $payout_history = $wpdb->get_results($wpdb->prepare("SELECT * FROM $table_payout WHERE payable_to_type = 'desa' AND payable_to_id = %d ORDER BY created_at DESC", $id_desa));
+        }
+
+        // Hitung Saldo Realtime untuk Tampilan
+        $saldo_tampil = 0;
+        if (class_exists('DW_Wallet')) {
+            $saldo_tampil = DW_Wallet::get_balance($current_user_id);
+        } else {
+            $saldo_tampil = $desa_data->saldo_komisi;
+        }
 
         ob_start();
 
-        // 1. Panggil Header Tema (Hanya jika belum ada)
+        // 2. Panggil Header Tema (Hanya jika belum ada)
         if ( ! did_action( 'get_header' ) ) {
             get_header();
         }
@@ -376,8 +436,8 @@ class DW_Shortcode_Desa {
                         <div class="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4 hover:shadow-md transition cursor-pointer" onclick="switchTab('keuangan')">
                             <div class="w-12 h-12 bg-green-100 text-green-600 rounded-xl flex items-center justify-center text-xl"><i class="fas fa-wallet"></i></div>
                             <div>
-                                <p class="text-sm text-gray-500 font-medium">Saldo Komisi</p>
-                                <h3 class="text-2xl font-bold text-gray-800">Rp <?php echo number_format($desa_data->saldo_komisi, 0, ',', '.'); ?></h3>
+                                <p class="text-sm text-gray-500 font-medium">Saldo Dompet</p>
+                                <h3 class="text-2xl font-bold text-gray-800">Rp <?php echo number_format($saldo_tampil, 0, ',', '.'); ?></h3>
                             </div>
                         </div>
                         
@@ -509,10 +569,13 @@ class DW_Shortcode_Desa {
                         <div class="bg-gradient-to-br from-green-500 to-green-700 text-white rounded-3xl p-8 shadow-xl relative overflow-hidden">
                             <div class="relative z-10">
                                 <p class="text-green-100 uppercase tracking-widest text-xs font-bold mb-2">Saldo Komisi Tersedia</p>
-                                <h2 class="text-4xl font-extrabold mb-6">Rp <?php echo number_format($desa_data->saldo_komisi, 0, ',', '.'); ?></h2>
+                                <h2 class="text-4xl font-extrabold mb-6">Rp <?php echo number_format($saldo_tampil, 0, ',', '.'); ?></h2>
                                 <div class="flex gap-3">
                                     <button onclick="document.getElementById('modal-withdraw').classList.remove('hidden')" class="bg-white text-green-700 px-6 py-3 rounded-xl font-bold hover:bg-green-50 transition shadow-lg flex items-center gap-2"><i class="fas fa-money-bill-wave"></i> Cairkan Dana</button>
-                                    <div class="text-xs text-green-100 flex items-center max-w-[150px] leading-tight">Minimal penarikan Rp 50.000</div>
+                                    <?php 
+                                        $min_wd = get_option('dw_min_withdrawal_amount', 10000); 
+                                    ?>
+                                    <div class="text-xs text-green-100 flex items-center max-w-[150px] leading-tight">Minimal penarikan Rp <?php echo number_format($min_wd, 0, ',', '.'); ?></div>
                                 </div>
                             </div>
                             <div class="absolute right-0 bottom-0 opacity-10 transform translate-x-10 translate-y-10"><i class="fas fa-wallet text-9xl"></i></div>
@@ -555,22 +618,27 @@ class DW_Shortcode_Desa {
                                         $status_badge = 'bg-gray-100 text-gray-600';
                                         $label = $pay->status;
 
-                                        if ($pay->status === 'pending') {
+                                        // Support status dari tabel ledger lama & withdrawals baru
+                                        if ($pay->status === 'pending' || $pay->status === 'processing') {
                                             $status_badge = 'bg-yellow-100 text-yellow-700';
-                                            $label = 'Menunggu';
-                                        } elseif ($pay->status === 'paid') {
+                                            $label = 'Diproses';
+                                        } elseif ($pay->status === 'paid' || $pay->status === 'completed') {
                                             $status_badge = 'bg-green-100 text-green-700';
-                                            $label = 'Dicairkan';
-                                        } elseif ($pay->status === 'rejected') {
+                                            $label = 'Berhasil';
+                                        } elseif ($pay->status === 'rejected' || $pay->status === 'failed') {
                                             $status_badge = 'bg-red-100 text-red-700';
-                                            $label = 'Ditolak';
+                                            $label = 'Gagal/Ditolak';
                                         }
+                                        
+                                        // Handle perbedaan nama kolom tanggal
+                                        $date_req = isset($pay->created_at) ? $pay->created_at : $pay->tanggal;
+                                        $date_paid = isset($pay->paid_at) ? $pay->paid_at : (isset($pay->updated_at) ? $pay->updated_at : '-');
                                     ?>
                                     <tr class="hover:bg-gray-50 transition">
-                                        <td class="p-4 pl-6 text-gray-600"><?php echo date('d M Y, H:i', strtotime($pay->created_at)); ?></td>
+                                        <td class="p-4 pl-6 text-gray-600"><?php echo date('d M Y, H:i', strtotime($date_req)); ?></td>
                                         <td class="p-4 font-bold text-gray-800">Rp <?php echo number_format($pay->amount, 0, ',', '.'); ?></td>
                                         <td class="p-4"><span class="px-3 py-1 rounded-full text-xs font-bold uppercase <?php echo $status_badge; ?>"><?php echo $label; ?></span></td>
-                                        <td class="p-4 pr-6 text-right text-gray-500"><?php echo $pay->paid_at ? date('d M Y', strtotime($pay->paid_at)) : '-'; ?></td>
+                                        <td class="p-4 pr-6 text-right text-gray-500"><?php echo ($date_paid && $date_paid != '-') ? date('d M Y', strtotime($date_paid)) : '-'; ?></td>
                                     </tr>
                                     <?php endforeach; else: ?>
                                     <tr><td colspan="4" class="p-8 text-center text-gray-400">Belum ada riwayat penarikan.</td></tr>
@@ -707,7 +775,7 @@ class DW_Shortcode_Desa {
                 <div class="bg-white rounded-3xl w-full max-w-sm p-8 shadow-2xl transform scale-100 transition-all text-center">
                     <div class="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-3xl mx-auto mb-4"><i class="fas fa-money-bill-wave"></i></div>
                     <h3 class="text-xl font-bold text-gray-800 mb-2">Tarik Dana Desa</h3>
-                    <p class="text-gray-500 text-sm mb-6">Saldo tersedia: <strong>Rp <?php echo number_format($desa_data->saldo_komisi, 0, ',', '.'); ?></strong></p>
+                    <p class="text-gray-500 text-sm mb-6">Saldo tersedia: <strong>Rp <?php echo number_format($saldo_tampil, 0, ',', '.'); ?></strong></p>
                     
                     <form method="POST">
                         <?php wp_nonce_field('withdraw_action', 'withdraw_nonce'); ?>
@@ -758,10 +826,10 @@ class DW_Shortcode_Desa {
                 if(nav) nav.classList.add('active-tab');
                 
                 if(window.innerWidth < 768) {
-                     const sidebar = document.getElementById('dashboard-sidebar');
-                     if (sidebar && !sidebar.classList.contains('-translate-x-full')) {
-                         toggleSidebar();
-                     }
+                      const sidebar = document.getElementById('dashboard-sidebar');
+                      if (sidebar && !sidebar.classList.contains('-translate-x-full')) {
+                          toggleSidebar();
+                      }
                 }
             }
 
@@ -864,3 +932,5 @@ class DW_Shortcode_Desa {
         return ob_get_clean();
     }
 }
+
+DW_Shortcode_Desa::init();

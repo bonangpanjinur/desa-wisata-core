@@ -1,19 +1,78 @@
 <?php
 /**
- * View: List Desa
+ * View: List Data Desa
  * Path: includes/views/admin/html-desa-list.php
  * Description: Template HTML untuk statistik, tabel desa, verifikasi, dan pengaturan.
- * Version: 2.5.0
+ * Version: 2.6.0 (Financial Integrated)
  * @package DesaWisataCore
  */
 
 if (!defined('ABSPATH')) {
     exit;
 }
-?>
 
-<!-- TAB 1: DATA DESA -->
-<?php if($active_tab == 'data_desa'): ?>
+// Pastikan variabel global tersedia (dikirim dari Controller)
+global $wpdb, $active_tab, $settings, $harga;
+
+// Helper format rupiah local
+if (!function_exists('dw_view_format_idr')) {
+    function dw_view_format_idr($val) {
+        return 'Rp ' . number_format($val, 0, ',', '.');
+    }
+}
+
+// -----------------------------------------------------------------------------
+// TAB 1: DATA DESA (UTAMA)
+// -----------------------------------------------------------------------------
+if ($active_tab == 'data_desa'): 
+    
+    // Pencarian & Pagination Logic dari Controller/Previous Code
+    $search_q = isset($_GET['s']) ? sanitize_text_field($_GET['s']) : '';
+    $paged = isset($_GET['paged']) ? max(1, intval($_GET['paged'])) : 1;
+    $limit = 10;
+    $offset = ($paged - 1) * $limit;
+
+    global $wpdb;
+    $table_desa = $wpdb->prefix . 'dw_desa'; // Ensure var available
+    $table_users = $wpdb->users;
+
+    // SECURE QUERY with Prepared Statement
+    $sql = "SELECT d.*, u.display_name as admin_name FROM {$table_desa} d LEFT JOIN {$table_users} u ON d.id_user_desa = u.ID WHERE 1=1 ";
+    $prepare_args = [];
+
+    if($search_q) {
+        $sql .= " AND (d.nama_desa LIKE %s OR d.slug_desa LIKE %s)";
+        $prepare_args[] = '%' . $wpdb->esc_like($search_q) . '%';
+        $prepare_args[] = '%' . $wpdb->esc_like($search_q) . '%';
+    }
+    $sql .= " ORDER BY d.created_at DESC LIMIT %d, %d";
+    $prepare_args[] = $offset;
+    $prepare_args[] = $limit;
+    
+    $rows = $wpdb->get_results($wpdb->prepare($sql, $prepare_args));
+    
+    // Count query
+    $count_sql = "SELECT COUNT(id) FROM $table_desa";
+    $total_items = $wpdb->get_var($count_sql);
+    $total_pages = ceil($total_items / $limit);
+
+    // Stats Counters (Calculated here or passed from controller)
+    // Assuming $total_desa, $active_count, $total_pendapatan_all, $total_saldo_komisi_all are passed or need recalculation if missing
+    // Recalculate for safety if not set
+    if(!isset($total_desa)) $total_desa = $total_items;
+    if(!isset($active_count)) $active_count = $wpdb->get_var("SELECT COUNT(id) FROM $table_desa WHERE status='aktif'");
+    if(!isset($total_pendapatan_all)) $total_pendapatan_all = $wpdb->get_var("SELECT SUM(total_pendapatan) FROM $table_desa") ?: 0;
+    
+    // Cek total saldo dari tabel Wallet untuk akurasi tinggi (Financial Integration)
+    if(!isset($total_saldo_komisi_all)) {
+        $table_wallet = $wpdb->prefix . 'dw_wallet';
+        if ($wpdb->get_var("SHOW TABLES LIKE '$table_wallet'") == $table_wallet) {
+            $total_saldo_komisi_all = $wpdb->get_var("SELECT SUM(balance) FROM $table_wallet") ?: 0;
+        } else {
+            $total_saldo_komisi_all = $wpdb->get_var("SELECT SUM(saldo_komisi) FROM $table_desa") ?: 0;
+        }
+    }
+    ?>
     
     <!-- STATS GRID -->
     <div class="dw-stats-grid">
@@ -35,14 +94,14 @@ if (!defined('ABSPATH')) {
             <div class="dw-stat-icon-wrapper bg-purple"><span class="dashicons dashicons-chart-area"></span></div>
             <div class="dw-stat-info">
                 <span class="dw-stat-label">Total Pendapatan</span>
-                <h4 class="dw-stat-value">Rp <?php echo esc_html(number_format($total_pendapatan_all, 0, ',', '.')); ?></h4>
+                <h4 class="dw-stat-value"><?php echo dw_view_format_idr($total_pendapatan_all); ?></h4>
             </div>
         </div>
         <div class="dw-stat-card">
             <div class="dw-stat-icon-wrapper bg-orange"><span class="dashicons dashicons-money-alt"></span></div>
             <div class="dw-stat-info">
                 <span class="dw-stat-label">Saldo Mengendap</span>
-                <h4 class="dw-stat-value">Rp <?php echo esc_html(number_format($total_saldo_komisi_all, 0, ',', '.')); ?></h4>
+                <h4 class="dw-stat-value"><?php echo dw_view_format_idr($total_saldo_komisi_all); ?></h4>
             </div>
         </div>
     </div>
@@ -52,41 +111,12 @@ if (!defined('ABSPATH')) {
             <h3 class="card-heading">Daftar Desa Wisata</h3>
             <form method="get" style="display:flex; gap:10px;">
                 <input type="hidden" name="page" value="dw-desa">
+                <input type="hidden" name="tab" value="data_desa">
                 <input type="text" name="s" placeholder="Cari nama desa..." class="dw-input" value="<?php echo isset($_GET['s']) ? esc_attr($_GET['s']) : ''; ?>" style="width: 200px;">
                 <button class="dw-button dw-button-secondary">Cari</button>
             </form>
         </div>
         <div class="dw-card-body" style="padding:0;">
-            <?php
-            $search_q = isset($_GET['s']) ? sanitize_text_field($_GET['s']) : '';
-            $paged = isset($_GET['paged']) ? max(1, intval($_GET['paged'])) : 1;
-            $limit = 10;
-            $offset = ($paged - 1) * $limit;
-
-            global $wpdb;
-            $table_desa = $wpdb->prefix . 'dw_desa'; // Ensure var available
-            $table_users = $wpdb->users;
-
-            // SECURE QUERY with Prepared Statement
-            $sql = "SELECT d.*, u.display_name as admin_name FROM {$table_desa} d LEFT JOIN {$table_users} u ON d.id_user_desa = u.ID WHERE 1=1 ";
-            $prepare_args = [];
-
-            if($search_q) {
-                $sql .= " AND (d.nama_desa LIKE %s)";
-                $prepare_args[] = '%' . $wpdb->esc_like($search_q) . '%';
-            }
-            $sql .= " ORDER BY d.created_at DESC LIMIT %d, %d";
-            $prepare_args[] = $offset;
-            $prepare_args[] = $limit;
-            
-            $rows = $wpdb->get_results($wpdb->prepare($sql, $prepare_args));
-            
-            // Count query
-            $count_sql = "SELECT COUNT(id) FROM $table_desa";
-            $total_items = $wpdb->get_var($count_sql);
-            $total_pages = ceil($total_items / $limit);
-            ?>
-
             <div class="dw-table-wrapper" style="border:none; border-radius:0;">
                 <table class="dw-modern-table">
                     <thead>
@@ -95,7 +125,8 @@ if (!defined('ABSPATH')) {
                             <th>Nama Desa</th>
                             <th>Lokasi</th>
                             <th>Admin</th>
-                            <th>Keuangan</th>
+                            <th>Keuangan (Saldo)</th>
+                            <th>Pendapatan Total</th>
                             <th>Status</th>
                             <th>Premium</th>
                             <th style="text-align:right;">Aksi</th>
@@ -114,10 +145,31 @@ if (!defined('ABSPATH')) {
                                 <div style="font-size:11px; color:#64748b;"><?php echo esc_html($r->kabupaten); ?></div>
                             </td>
                             <td><?php echo esc_html($r->admin_name ?: '-'); ?></td>
+                            
+                            <!-- LOGIC SALDO (INTEGRASI WALLET) -->
                             <td>
-                                <div style="font-size:11px;">Total: <strong>Rp <?php echo number_format($r->total_pendapatan, 0, ',', '.'); ?></strong></div>
-                                <div style="font-size:11px; color:#d63638;">Sisa: <strong>Rp <?php echo number_format($r->saldo_komisi, 0, ',', '.'); ?></strong></div>
+                                <?php 
+                                $saldo = 0;
+                                // Prioritas ambil dari Class DW_Wallet untuk real-time balance
+                                if (class_exists('DW_Wallet')) {
+                                    $saldo = DW_Wallet::get_balance($r->id_user_desa);
+                                } else {
+                                    $saldo = $r->saldo_komisi; // Fallback
+                                }
+                                
+                                $color_saldo = ($saldo > 0) ? '#2271b1' : '#50575e';
+                                ?>
+                                <span style="font-weight:bold; font-size:13px; color:<?php echo $color_saldo; ?>">
+                                    <?php echo dw_view_format_idr($saldo); ?>
+                                </span>
                             </td>
+                            
+                            <td>
+                                <span style="color:#50575e; font-size:13px;">
+                                    <?php echo dw_view_format_idr($r->total_pendapatan); ?>
+                                </span>
+                            </td>
+
                             <td>
                                 <?php if($r->status == 'aktif'): ?><span class="dw-badge status-success">Aktif</span>
                                 <?php else: ?><span class="dw-badge status-warning">Pending</span><?php endif; ?>
@@ -140,7 +192,7 @@ if (!defined('ABSPATH')) {
                             </td>
                         </tr>
                         <?php endforeach; else: ?>
-                            <tr><td colspan="8" style="text-align:center; padding:30px;">Belum ada data desa.</td></tr>
+                            <tr><td colspan="9" style="text-align:center; padding:30px;">Belum ada data desa.</td></tr>
                         <?php endif; ?>
                     </tbody>
                 </table>
@@ -154,7 +206,11 @@ if (!defined('ABSPATH')) {
         </div>
     </div>
 
-<?php elseif($active_tab == 'verifikasi'): 
+<?php 
+// -----------------------------------------------------------------------------
+// TAB 2: VERIFIKASI PREMIUM
+// -----------------------------------------------------------------------------
+elseif ($active_tab == 'verifikasi'): 
     global $wpdb;
     $table_desa = $wpdb->prefix . 'dw_desa';
     $pending_verif = $wpdb->get_results("SELECT * FROM $table_desa WHERE status_akses_verifikasi = 'pending' ORDER BY updated_at ASC");
@@ -217,7 +273,11 @@ if (!defined('ABSPATH')) {
         </div>
     </div>
 
-<?php elseif($active_tab == 'pengaturan'): ?>
+<?php 
+// -----------------------------------------------------------------------------
+// TAB 3: PENGATURAN HARGA
+// -----------------------------------------------------------------------------
+elseif($active_tab == 'pengaturan'): ?>
     <!-- TAB 3: PENGATURAN -->
     <div class="dw-card" style="max-width:500px;">
         <div class="dw-card-header"><h3 class="card-heading">Pengaturan Harga Premium</h3></div>

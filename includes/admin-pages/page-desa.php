@@ -3,7 +3,7 @@
  * Halaman Manajemen Desa (Controller)
  * Path: includes/admin-pages/page-desa.php
  * Description: Controller utama untuk manajemen desa. Logika backend dipisah dari view.
- * Version: 2.5.0 (MVC Refactored)
+ * Version: 2.6.0 (Financial Integrated)
  * @package DesaWisataCore
  */
 
@@ -24,6 +24,12 @@ if (file_exists($ui_path)) {
 if ( ! class_exists( 'DW_Referral_Logic' ) ) {
     $logic_path = dirname(dirname(__FILE__)) . '/class-dw-referral-logic.php';
     if (file_exists($logic_path)) require_once $logic_path;
+}
+
+// Logic Wallet (NEW: Load class wallet untuk statistik keuangan)
+if ( ! class_exists( 'DW_Wallet' ) ) {
+    $wallet_path = dirname(dirname(__FILE__)) . '/classes/class-dw-wallet.php';
+    if (file_exists($wallet_path)) require_once $wallet_path;
 }
 
 /**
@@ -246,10 +252,18 @@ if (!function_exists('dw_desa_page_render')) {
             'role__in' => ['admin_desa', 'administrator'] 
         ]);
 
-        // Stats & Counters
+        // Stats & Counters (UPDATED: Gunakan data Wallet jika ada untuk akurasi)
         $count_verify = $wpdb->get_var("SELECT COUNT(*) FROM $table_desa WHERE status_akses_verifikasi = 'pending'");
         $total_pendapatan_all = $wpdb->get_var("SELECT SUM(total_pendapatan) FROM $table_desa") ?: 0;
-        $total_saldo_komisi_all = $wpdb->get_var("SELECT SUM(saldo_komisi) FROM $table_desa") ?: 0;
+        
+        // Cek total saldo dari tabel Wallet untuk akurasi tinggi
+        $table_wallet = $wpdb->prefix . 'dw_wallet';
+        if ($wpdb->get_var("SHOW TABLES LIKE '$table_wallet'") == $table_wallet) {
+            $total_saldo_komisi_all = $wpdb->get_var("SELECT SUM(balance) FROM $table_wallet") ?: 0;
+        } else {
+            // Fallback ke legacy column
+            $total_saldo_komisi_all = $wpdb->get_var("SELECT SUM(saldo_komisi) FROM $table_desa") ?: 0;
+        }
 
         $total_desa = 0; $active_count = 0; 
         if (!$is_edit) {
@@ -320,7 +334,7 @@ if (!function_exists('dw_desa_page_render')) {
             <div class="dw-page-header">
                 <div class="dw-header-title">
                     <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
-                    <p class="dw-subtitle"><?php echo esc_html__('Kelola daftar desa wisata, verifikasi akun, dan pengaturan.', 'desa-wisata-core'); ?></p>
+                    <p class="dw-subtitle"><?php echo esc_html__('Kelola daftar desa wisata, verifikasi akun, dan pengaturan keuangan.', 'desa-wisata-core'); ?></p>
                 </div>
                 <div class="dw-header-actions">
                     <?php if (!$is_edit && $active_tab == 'data_desa'): ?>

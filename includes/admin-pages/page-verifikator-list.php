@@ -1,11 +1,12 @@
 <?php
 /**
- * File: includes/admin-pages/page-verifikator-list.php
- * * Admin Page: Dashboard Manajemen Verifikator UMKM
- * * Menampilkan list, statistik, dan modal CRUD verifikator.
+ * Admin Page: Daftar Verifikator
+ * Path: includes/admin-pages/page-verifikator-list.php
+ * Description: List Verifikator dengan data performa & saldo wallet.
+ * Version: 2.1.0
  */
 
-defined( 'ABSPATH' ) || exit;
+if ( ! defined( 'ABSPATH' ) ) exit;
 
 // Include UI components
 if ( defined( 'DW_CORE_PLUGIN_DIR' ) ) {
@@ -14,10 +15,10 @@ if ( defined( 'DW_CORE_PLUGIN_DIR' ) ) {
     require_once plugin_dir_path( dirname( dirname( __FILE__ ) ) ) . 'includes/admin-ui-components.php';
 }
 
-function dw_render_page_verifikator_list() {
+function dw_render_verifikator_list_page() {
     global $wpdb;
-    // FIX: Sesuaikan nama tabel dengan activation.php (prefix 'dw_')
-    $table_v = $wpdb->prefix . 'dw_verifikator'; 
+    $table_verifikator = $wpdb->prefix . 'dw_verifikator';
+    $table_users = $wpdb->prefix . 'users';
     $table_p = $wpdb->prefix . 'dw_pedagang'; 
 
     // --- 1. HANDLE FORM SUBMISSION (ADD/EDIT/DELETE) ---
@@ -37,35 +38,35 @@ function dw_render_page_verifikator_list() {
         // DELETE LOGIC
         if ($action_type == 'delete') {
             $id_del = intval($_POST['id']);
-            $wpdb->delete($table_v, ['id' => $id_del]);
+            $wpdb->delete($table_verifikator, ['id' => $id_del]);
             wp_redirect(add_query_arg(['msg' => 'success_delete'], admin_url('admin.php?page=dw-verifikator-list')));
             exit;
         }
 
         // B. Persiapan Data (Sesuai Schema Database)
         $data = [
-            'id_user'           => intval($_POST['user_id']),
-            'nama_lengkap'      => sanitize_text_field($_POST['nama_lengkap']),
-            'nik'               => sanitize_text_field($_POST['nik']),
-            'kode_referral'     => strtoupper(sanitize_text_field($_POST['kode_referral'])),
-            'nomor_wa'          => sanitize_text_field($_POST['nomor_wa']),
-            'alamat_lengkap'    => sanitize_textarea_field($_POST['alamat_lengkap']),
-            'kode_pos'          => sanitize_text_field($_POST['kode_pos']),
+            'id_user'       => intval($_POST['user_id']),
+            'nama_lengkap'  => sanitize_text_field($_POST['nama_lengkap']),
+            'nik'           => sanitize_text_field($_POST['nik']),
+            'kode_referral' => strtoupper(sanitize_text_field($_POST['kode_referral'])),
+            'nomor_wa'      => sanitize_text_field($_POST['nomor_wa']),
+            'alamat_lengkap'=> sanitize_textarea_field($_POST['alamat_lengkap']),
+            'kode_pos'      => sanitize_text_field($_POST['kode_pos']),
             
             // Data Wilayah (Nama Text)
-            'provinsi'          => sanitize_text_field($_POST['provinsi']),
-            'kabupaten'         => sanitize_text_field($_POST['kabupaten']),
-            'kecamatan'         => sanitize_text_field($_POST['kecamatan']),
-            'kelurahan'         => sanitize_text_field($_POST['kelurahan']),
+            'provinsi'      => sanitize_text_field($_POST['provinsi']),
+            'kabupaten'     => sanitize_text_field($_POST['kabupaten']),
+            'kecamatan'     => sanitize_text_field($_POST['kecamatan']),
+            'kelurahan'     => sanitize_text_field($_POST['kelurahan']),
 
             // Data Wilayah (ID API)
-            'api_provinsi_id'   => sanitize_text_field($_POST['api_provinsi_id']),
-            'api_kabupaten_id'  => sanitize_text_field($_POST['api_kabupaten_id']),
-            'api_kecamatan_id'  => sanitize_text_field($_POST['api_kecamatan_id']),
-            'api_kelurahan_id'  => sanitize_text_field($_POST['api_kelurahan_id']),
+            'api_provinsi_id'  => sanitize_text_field($_POST['api_provinsi_id']),
+            'api_kabupaten_id' => sanitize_text_field($_POST['api_kabupaten_id']),
+            'api_kecamatan_id' => sanitize_text_field($_POST['api_kecamatan_id']),
+            'api_kelurahan_id' => sanitize_text_field($_POST['api_kelurahan_id']),
             
-            'status'            => sanitize_text_field($_POST['status']),
-            'updated_at'        => current_time('mysql')
+            'status'        => sanitize_text_field($_POST['status']),
+            'updated_at'    => current_time('mysql')
         ];
 
         // C. Validasi Input Wajib
@@ -91,16 +92,16 @@ function dw_render_page_verifikator_list() {
             $data['saldo_saat_ini']          = 0;
 
             // Cek Duplikat User ID
-            $exist_user = $wpdb->get_var($wpdb->prepare("SELECT id FROM $table_v WHERE id_user = %d", $data['id_user']));
+            $exist_user = $wpdb->get_var($wpdb->prepare("SELECT id FROM $table_verifikator WHERE id_user = %d", $data['id_user']));
             // Cek Duplikat Referral
-            $exist_ref  = $wpdb->get_var($wpdb->prepare("SELECT id FROM $table_v WHERE kode_referral = %s", $data['kode_referral']));
+            $exist_ref  = $wpdb->get_var($wpdb->prepare("SELECT id FROM $table_verifikator WHERE kode_referral = %s", $data['kode_referral']));
 
             if($exist_user) {
                 wp_redirect(add_query_arg(['msg' => 'error_exist_user'], admin_url('admin.php?page=dw-verifikator-list')));
             } elseif($exist_ref) {
                 wp_redirect(add_query_arg(['msg' => 'error_exist_ref'], admin_url('admin.php?page=dw-verifikator-list')));
             } else {
-                $result = $wpdb->insert($table_v, $data);
+                $result = $wpdb->insert($table_verifikator, $data);
                 if($result === false) {
                     wp_die('Database Error (Insert): ' . $wpdb->last_error);
                 }
@@ -113,15 +114,15 @@ function dw_render_page_verifikator_list() {
             if ( ! $id ) wp_die('ID Invalid');
 
             // Cek Duplikat (kecuali diri sendiri)
-            $exist_user = $wpdb->get_var($wpdb->prepare("SELECT id FROM $table_v WHERE id_user = %d AND id != %d", $data['id_user'], $id));
-            $exist_ref  = $wpdb->get_var($wpdb->prepare("SELECT id FROM $table_v WHERE kode_referral = %s AND id != %d", $data['kode_referral'], $id));
+            $exist_user = $wpdb->get_var($wpdb->prepare("SELECT id FROM $table_verifikator WHERE id_user = %d AND id != %d", $data['id_user'], $id));
+            $exist_ref  = $wpdb->get_var($wpdb->prepare("SELECT id FROM $table_verifikator WHERE kode_referral = %s AND id != %d", $data['kode_referral'], $id));
             
             if($exist_user) {
                 wp_redirect(add_query_arg(['msg' => 'error_exist_user'], admin_url('admin.php?page=dw-verifikator-list')));
             } elseif($exist_ref) {
                 wp_redirect(add_query_arg(['msg' => 'error_exist_ref'], admin_url('admin.php?page=dw-verifikator-list')));
             } else {
-                $result = $wpdb->update($table_v, $data, ['id' => $id]);
+                $result = $wpdb->update($table_verifikator, $data, ['id' => $id]);
                 if($result === false) {
                     wp_die('Database Error (Update): ' . $wpdb->last_error);
                 }
@@ -132,18 +133,32 @@ function dw_render_page_verifikator_list() {
     }
 
     // --- 2. QUERY DATA ---
-
     $table_exists = $wpdb->get_var("SHOW TABLES LIKE '$table_p'") === $table_p;
 
-    $total_v = $wpdb->get_var("SELECT COUNT(id) FROM $table_v WHERE status = 'aktif'");
-    $pending_v = $wpdb->get_var("SELECT COUNT(id) FROM $table_v WHERE status = 'pending'");
-    $umkm_verified_global = $wpdb->get_var("SELECT SUM(total_verifikasi_sukses) FROM $table_v");
+    $total_v = $wpdb->get_var("SELECT COUNT(id) FROM $table_verifikator WHERE status = 'aktif'");
+    $pending_v = $wpdb->get_var("SELECT COUNT(id) FROM $table_verifikator WHERE status = 'pending'");
+    $umkm_verified_global = $wpdb->get_var("SELECT SUM(total_verifikasi_sukses) FROM $table_verifikator");
     $total_linked_global = $table_exists ? $wpdb->get_var("SELECT COUNT(id) FROM $table_p WHERE id_verifikator > 0") : 0;
-    $total_saldo_global = $wpdb->get_var("SELECT SUM(saldo_saat_ini) FROM $table_v");
+    
+    // Total Saldo (Wallet)
+    // Cek dulu apakah tabel wallet ada
+    $table_wallet = $wpdb->prefix . 'dw_wallet';
+    $wallet_exists = $wpdb->get_var("SHOW TABLES LIKE '$table_wallet'") === $table_wallet;
+    
+    if ($wallet_exists) {
+        $total_saldo_global = $wpdb->get_var("
+            SELECT SUM(w.balance) 
+            FROM $table_wallet w
+            JOIN $table_verifikator v ON w.user_id = v.id_user
+        ");
+    } else {
+        $total_saldo_global = $wpdb->get_var("SELECT SUM(saldo_saat_ini) FROM $table_verifikator");
+    }
 
     $verifikators = $wpdb->get_results("
-        SELECT v.*
-        FROM $table_v v 
+        SELECT v.*, u.user_email, u.display_name 
+        FROM $table_verifikator v
+        LEFT JOIN $table_users u ON v.id_user = u.ID
         ORDER BY v.created_at DESC
     ");
 
@@ -153,7 +168,7 @@ function dw_render_page_verifikator_list() {
         'orderby' => 'display_name'
     ]);
 
-    $used_user_ids = $wpdb->get_col("SELECT id_user FROM $table_v");
+    $used_user_ids = $wpdb->get_col("SELECT id_user FROM $table_verifikator");
     if(!$used_user_ids) $used_user_ids = [];
 
     $region_nonce = wp_create_nonce('dw_region_nonce'); 
@@ -306,10 +321,27 @@ function dw_render_page_verifikator_list() {
                                         <?php if($v->kode_pos) echo 'Kode Pos: ' . esc_html($v->kode_pos); ?>
                                     </span>
                                 </td>
+                                
+                                <!-- KOLOM KEUANGAN (UPDATED) -->
                                 <td>
-                                    <span style="color:#10b981; font-weight:600;">Rp <?php echo number_format($v->saldo_saat_ini, 0, ',', '.'); ?></span><br>
+                                    <?php 
+                                    // Ambil Saldo Wallet Real-time jika class ada
+                                    $saldo = 0;
+                                    if (class_exists('DW_Wallet')) {
+                                        $saldo = DW_Wallet::get_balance($v->id_user);
+                                    } else {
+                                        $saldo = $v->saldo_saat_ini; // Fallback
+                                    }
+                                    
+                                    $color = ($saldo > 0) ? '#007017' : '#888';
+                                    ?>
+                                    <strong style="color:<?php echo $color; ?>;">
+                                        Rp <?php echo number_format($saldo, 0, ',', '.'); ?>
+                                    </strong>
+                                    <br>
                                     <span style="font-size:11px; color:#646970;">Total Komisi: Rp <?php echo number_format($v->total_pendapatan_komisi, 0, ',', '.'); ?></span>
                                 </td>
+
                                 <td>
                                     <div style="font-size: 12px;">
                                         Terhubung: <strong><?php echo number_format($linked_count); ?></strong><br>
