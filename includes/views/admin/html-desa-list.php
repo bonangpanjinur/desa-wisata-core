@@ -2,208 +2,147 @@
 /**
  * View: List Data Desa
  * Path: includes/views/admin/html-desa-list.php
- * Description: Template HTML untuk statistik, tabel desa, verifikasi, dan pengaturan.
- * Version: 2.6.0 (Financial Integrated)
- * @package DesaWisataCore
  */
 
-if (!defined('ABSPATH')) {
-    exit;
-}
+if (!defined('ABSPATH')) exit;
 
-// Pastikan variabel global tersedia (dikirim dari Controller)
-global $wpdb, $active_tab, $settings, $harga;
-
-// Helper format rupiah local
-if (!function_exists('dw_view_format_idr')) {
-    function dw_view_format_idr($val) {
-        return 'Rp ' . number_format($val, 0, ',', '.');
-    }
-}
+// Pastikan variabel utama ada (Fallback)
+$active_tab = isset($active_tab) ? $active_tab : 'data_desa';
 
 // -----------------------------------------------------------------------------
-// TAB 1: DATA DESA (UTAMA)
+// TAB 1: DATA DESA
 // -----------------------------------------------------------------------------
 if ($active_tab == 'data_desa'): 
     
-    // Pencarian & Pagination Logic dari Controller/Previous Code
+    // Pencarian
     $search_q = isset($_GET['s']) ? sanitize_text_field($_GET['s']) : '';
     $paged = isset($_GET['paged']) ? max(1, intval($_GET['paged'])) : 1;
     $limit = 10;
     $offset = ($paged - 1) * $limit;
 
     global $wpdb;
-    $table_desa = $wpdb->prefix . 'dw_desa'; // Ensure var available
+    $table_desa = $wpdb->prefix . 'dw_desa';
     $table_users = $wpdb->users;
 
-    // SECURE QUERY with Prepared Statement
-    $sql = "SELECT d.*, u.display_name as admin_name FROM {$table_desa} d LEFT JOIN {$table_users} u ON d.id_user_desa = u.ID WHERE 1=1 ";
-    $prepare_args = [];
-
+    // Query Data
+    $sql = "SELECT d.*, u.display_name as admin_name 
+            FROM {$table_desa} d 
+            LEFT JOIN {$table_users} u ON d.id_user_desa = u.ID 
+            WHERE 1=1 ";
+    
+    $args = [];
     if($search_q) {
         $sql .= " AND (d.nama_desa LIKE %s OR d.slug_desa LIKE %s)";
-        $prepare_args[] = '%' . $wpdb->esc_like($search_q) . '%';
-        $prepare_args[] = '%' . $wpdb->esc_like($search_q) . '%';
+        $args[] = '%' . $wpdb->esc_like($search_q) . '%';
+        $args[] = '%' . $wpdb->esc_like($search_q) . '%';
     }
+    
     $sql .= " ORDER BY d.created_at DESC LIMIT %d, %d";
-    $prepare_args[] = $offset;
-    $prepare_args[] = $limit;
+    $args[] = $offset;
+    $args[] = $limit;
     
-    $rows = $wpdb->get_results($wpdb->prepare($sql, $prepare_args));
+    $rows = $wpdb->get_results($wpdb->prepare($sql, $args));
     
-    // Count query
-    $count_sql = "SELECT COUNT(id) FROM $table_desa";
-    $total_items = $wpdb->get_var($count_sql);
+    // Hitung Total untuk Pagination
+    $total_items = $wpdb->get_var("SELECT COUNT(id) FROM $table_desa");
     $total_pages = ceil($total_items / $limit);
-
-    // Stats Counters (Calculated here or passed from controller)
-    // Assuming $total_desa, $active_count, $total_pendapatan_all, $total_saldo_komisi_all are passed or need recalculation if missing
-    // Recalculate for safety if not set
-    if(!isset($total_desa)) $total_desa = $total_items;
-    if(!isset($active_count)) $active_count = $wpdb->get_var("SELECT COUNT(id) FROM $table_desa WHERE status='aktif'");
-    if(!isset($total_pendapatan_all)) $total_pendapatan_all = $wpdb->get_var("SELECT SUM(total_pendapatan) FROM $table_desa") ?: 0;
-    
-    // Cek total saldo dari tabel Wallet untuk akurasi tinggi (Financial Integration)
-    if(!isset($total_saldo_komisi_all)) {
-        $table_wallet = $wpdb->prefix . 'dw_wallet';
-        if ($wpdb->get_var("SHOW TABLES LIKE '$table_wallet'") == $table_wallet) {
-            $total_saldo_komisi_all = $wpdb->get_var("SELECT SUM(balance) FROM $table_wallet") ?: 0;
-        } else {
-            $total_saldo_komisi_all = $wpdb->get_var("SELECT SUM(saldo_komisi) FROM $table_desa") ?: 0;
-        }
-    }
     ?>
     
-    <!-- STATS GRID -->
-    <div class="dw-stats-grid">
-        <div class="dw-stat-card">
-            <div class="dw-stat-icon-wrapper bg-blue"><span class="dashicons dashicons-admin-site-alt3"></span></div>
-            <div class="dw-stat-info">
-                <span class="dw-stat-label">Total Desa</span>
-                <h4 class="dw-stat-value"><?php echo esc_html($total_desa); ?></h4>
+    <!-- STATS KEUANGAN -->
+    <div class="dw-stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+        <div class="dw-stat-card" style="background: #fff; padding: 15px; border-left: 4px solid #2271b1; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
+            <div style="font-size: 12px; color: #666;">Total Desa</div>
+            <div style="font-size: 20px; font-weight: bold;"><?php echo esc_html($total_desa ?? 0); ?></div>
+        </div>
+        <div class="dw-stat-card" style="background: #fff; padding: 15px; border-left: 4px solid #00a32a; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
+            <div style="font-size: 12px; color: #666;">Total Pendapatan</div>
+            <div style="font-size: 20px; font-weight: bold; color: #00a32a;">
+                Rp <?php echo number_format($total_pendapatan_all ?? 0, 0, ',', '.'); ?>
             </div>
         </div>
-        <div class="dw-stat-card">
-            <div class="dw-stat-icon-wrapper bg-green"><span class="dashicons dashicons-awards"></span></div>
-            <div class="dw-stat-info">
-                <span class="dw-stat-label">Aktif</span>
-                <h4 class="dw-stat-value"><?php echo esc_html($active_count); ?></h4>
-            </div>
-        </div>
-        <div class="dw-stat-card">
-            <div class="dw-stat-icon-wrapper bg-purple"><span class="dashicons dashicons-chart-area"></span></div>
-            <div class="dw-stat-info">
-                <span class="dw-stat-label">Total Pendapatan</span>
-                <h4 class="dw-stat-value"><?php echo dw_view_format_idr($total_pendapatan_all); ?></h4>
-            </div>
-        </div>
-        <div class="dw-stat-card">
-            <div class="dw-stat-icon-wrapper bg-orange"><span class="dashicons dashicons-money-alt"></span></div>
-            <div class="dw-stat-info">
-                <span class="dw-stat-label">Saldo Mengendap</span>
-                <h4 class="dw-stat-value"><?php echo dw_view_format_idr($total_saldo_komisi_all); ?></h4>
+        <div class="dw-stat-card" style="background: #fff; padding: 15px; border-left: 4px solid #dba617; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
+            <div style="font-size: 12px; color: #666;">Saldo Mengendap</div>
+            <div style="font-size: 20px; font-weight: bold; color: #dba617;">
+                Rp <?php echo number_format($total_saldo_komisi_all ?? 0, 0, ',', '.'); ?>
             </div>
         </div>
     </div>
 
-    <div class="dw-card">
-        <div class="dw-card-header">
-            <h3 class="card-heading">Daftar Desa Wisata</h3>
-            <form method="get" style="display:flex; gap:10px;">
+    <!-- TABEL DATA -->
+    <div class="dw-card" style="background: #fff; border: 1px solid #ccd0d4; box-shadow: 0 1px 1px rgba(0,0,0,.04);">
+        <div class="dw-card-header" style="padding: 10px 15px; border-bottom: 1px solid #ccd0d4; display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="margin: 0;">Daftar Desa</h3>
+            <form method="get">
                 <input type="hidden" name="page" value="dw-desa">
-                <input type="hidden" name="tab" value="data_desa">
-                <input type="text" name="s" placeholder="Cari nama desa..." class="dw-input" value="<?php echo isset($_GET['s']) ? esc_attr($_GET['s']) : ''; ?>" style="width: 200px;">
-                <button class="dw-button dw-button-secondary">Cari</button>
+                <input type="text" name="s" value="<?php echo esc_attr($search_q); ?>" placeholder="Cari desa...">
+                <button class="button">Cari</button>
             </form>
         </div>
-        <div class="dw-card-body" style="padding:0;">
-            <div class="dw-table-wrapper" style="border:none; border-radius:0;">
-                <table class="dw-modern-table">
-                    <thead>
-                        <tr>
-                            <th width="60">Logo</th>
-                            <th>Nama Desa</th>
-                            <th>Lokasi</th>
-                            <th>Admin</th>
-                            <th>Keuangan (Saldo)</th>
-                            <th>Pendapatan Total</th>
-                            <th>Status</th>
-                            <th>Premium</th>
-                            <th style="text-align:right;">Aksi</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php if($rows): foreach($rows as $r): ?>
-                        <tr>
-                            <td><img src="<?php echo $r->foto ? esc_url($r->foto) : 'https://via.placeholder.com/60'; ?>" style="width:40px; height:40px; border-radius:6px; object-fit:cover;"></td>
-                            <td>
-                                <strong><a href="?page=dw-desa&tab=data_desa&view=edit&id=<?php echo esc_attr($r->id); ?>" class="dw-btn-link"><?php echo esc_html($r->nama_desa); ?></a></strong>
-                                <div class="dw-text-muted" style="font-size:12px; color:#646970;">Ref: <?php echo esc_html($r->kode_referral); ?></div>
-                            </td>
-                            <td>
-                                <div style="font-size:13px; font-weight:500;"><?php echo esc_html($r->kecamatan); ?></div>
-                                <div style="font-size:11px; color:#64748b;"><?php echo esc_html($r->kabupaten); ?></div>
-                            </td>
-                            <td><?php echo esc_html($r->admin_name ?: '-'); ?></td>
-                            
-                            <!-- LOGIC SALDO (INTEGRASI WALLET) -->
-                            <td>
-                                <?php 
-                                $saldo = 0;
-                                // Prioritas ambil dari Class DW_Wallet untuk real-time balance
-                                if (class_exists('DW_Wallet')) {
-                                    $saldo = DW_Wallet::get_balance($r->id_user_desa);
-                                } else {
-                                    $saldo = $r->saldo_komisi; // Fallback
-                                }
-                                
-                                $color_saldo = ($saldo > 0) ? '#2271b1' : '#50575e';
-                                ?>
-                                <span style="font-weight:bold; font-size:13px; color:<?php echo $color_saldo; ?>">
-                                    <?php echo dw_view_format_idr($saldo); ?>
-                                </span>
-                            </td>
-                            
-                            <td>
-                                <span style="color:#50575e; font-size:13px;">
-                                    <?php echo dw_view_format_idr($r->total_pendapatan); ?>
-                                </span>
-                            </td>
+        
+        <table class="wp-list-table widefat fixed striped">
+            <thead>
+                <tr>
+                    <th width="50">ID</th>
+                    <th width="60">Logo</th>
+                    <th>Nama Desa</th>
+                    <th>Admin</th>
+                    <th>Saldo Wallet</th>
+                    <th>Pendapatan</th>
+                    <th>Status</th>
+                    <th width="100">Aksi</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if($rows): foreach($rows as $r): ?>
+                <tr>
+                    <td>#<?php echo $r->id; ?></td>
+                    <td><img src="<?php echo $r->foto ? esc_url($r->foto) : 'https://via.placeholder.com/40'; ?>" width="40" height="40" style="border-radius:4px;"></td>
+                    <td>
+                        <strong><?php echo esc_html($r->nama_desa); ?></strong><br>
+                        <small style="color:#666;"><?php echo esc_html($r->kabupaten); ?></small>
+                    </td>
+                    <td><?php echo esc_html($r->admin_name); ?></td>
+                    
+                    <!-- Wallet & Pendapatan -->
+                    <td>
+                        <?php 
+                        $saldo = 0;
+                        if (class_exists('DW_Wallet')) {
+                            $saldo = DW_Wallet::get_balance($r->id_user_desa);
+                        } else {
+                            $saldo = isset($r->saldo_komisi) ? $r->saldo_komisi : 0;
+                        }
+                        ?>
+                        <span style="color:#2271b1; font-weight:bold;">Rp <?php echo number_format($saldo, 0, ',', '.'); ?></span>
+                    </td>
+                    <td>
+                        <span style="color:#555;">Rp <?php echo number_format($r->total_pendapatan, 0, ',', '.'); ?></span>
+                    </td>
 
-                            <td>
-                                <?php if($r->status == 'aktif'): ?><span class="dw-badge status-success">Aktif</span>
-                                <?php else: ?><span class="dw-badge status-warning">Pending</span><?php endif; ?>
-                            </td>
-                            <td>
-                                <?php if($r->status_akses_verifikasi == 'active'): ?><span class="dw-badge status-success">Ya</span>
-                                <?php elseif($r->status_akses_verifikasi == 'pending'): ?><span class="dw-badge status-warning">Pending</span>
-                                <?php else: ?><span class="dw-badge status-neutral">Tidak</span><?php endif; ?>
-                            </td>
-                            <td style="text-align:right;">
-                                <div style="display:flex; gap:6px; justify-content:flex-end;">
-                                    <a href="?page=dw-desa&tab=data_desa&view=edit&id=<?php echo esc_attr($r->id); ?>" class="dw-button dw-button-secondary" style="padding: 4px 10px; font-size: 12px; min-height:unset;">Edit</a>
-                                    <form method="post" style="display:inline-block;" onsubmit="return confirm('Yakin hapus desa ini? Data pedagang harus kosong.');">
-                                        <?php wp_nonce_field('dw_desa_action'); ?>
-                                        <input type="hidden" name="action_desa" value="delete">
-                                        <input type="hidden" name="desa_id" value="<?php echo esc_attr($r->id); ?>">
-                                        <button class="dw-button" style="padding: 4px 8px; font-size: 12px; color:#d63638; border:none; background:none; cursor:pointer; min-height:unset;">Hapus</button>
-                                    </form>
-                                </div>
-                            </td>
-                        </tr>
-                        <?php endforeach; else: ?>
-                            <tr><td colspan="9" style="text-align:center; padding:30px;">Belum ada data desa.</td></tr>
+                    <td>
+                        <?php if($r->status == 'aktif'): ?>
+                            <span style="background:#d1e7dd; color:#0f5132; padding:2px 6px; border-radius:4px; font-weight:bold; font-size:11px;">Aktif</span>
+                        <?php else: ?>
+                            <span style="background:#f8d7da; color:#721c24; padding:2px 6px; border-radius:4px; font-weight:bold; font-size:11px;">Pending</span>
                         <?php endif; ?>
-                    </tbody>
-                </table>
-                
-                <?php if($total_pages > 1): ?>
-                    <div style="padding:15px; text-align:right; border-top:1px solid #e2e8f0;">
-                        <?php echo paginate_links(['total' => $total_pages, 'current' => $paged]); ?>
-                    </div>
+                    </td>
+                    <td>
+                        <a href="?page=dw-desa&tab=data_desa&view=edit&id=<?php echo $r->id; ?>" class="button button-small">Edit</a>
+                    </td>
+                </tr>
+                <?php endforeach; else: ?>
+                <tr><td colspan="8" style="text-align:center;">Belum ada data desa.</td></tr>
                 <?php endif; ?>
+            </tbody>
+        </table>
+        
+        <?php if($total_pages > 1): ?>
+            <div class="tablenav bottom">
+                <div class="tablenav-pages">
+                    <?php echo paginate_links(['total' => $total_pages, 'current' => $paged]); ?>
+                </div>
             </div>
-        </div>
+        <?php endif; ?>
     </div>
 
 <?php 
@@ -212,89 +151,50 @@ if ($active_tab == 'data_desa'):
 // -----------------------------------------------------------------------------
 elseif ($active_tab == 'verifikasi'): 
     global $wpdb;
-    $table_desa = $wpdb->prefix . 'dw_desa';
-    $pending_verif = $wpdb->get_results("SELECT * FROM $table_desa WHERE status_akses_verifikasi = 'pending' ORDER BY updated_at ASC");
+    $pending_verif = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}dw_desa WHERE status_akses_verifikasi = 'pending'");
 ?>
-    <!-- TAB 2: VERIFIKASI -->
-    <div class="dw-card">
-        <div class="dw-card-header"><h3 class="card-heading">Antrean Verifikasi Upgrade Premium</h3></div>
-        <div class="dw-card-body">
-            <?php if(empty($pending_verif)): ?>
-                <div style="text-align:center; padding:40px; color:#64748b;">
-                    <span class="dashicons dashicons-yes-alt" style="font-size:40px; width:40px; height:40px; color:var(--dw-success); margin-bottom:10px;"></span>
-                    <p>Tidak ada permintaan verifikasi saat ini.</p>
-                </div>
-            <?php else: foreach($pending_verif as $p): ?>
-                <div style="border:1px solid #e2e8f0; border-radius:12px; padding:20px; margin-bottom:20px; display:flex; gap:24px; align-items:flex-start; background:#fff;">
-                    <div style="width:120px; height:120px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
-                            <?php if($p->bukti_bayar_akses): ?>
-                                <a href="<?php echo esc_url($p->bukti_bayar_akses); ?>" target="_blank"><img src="<?php echo esc_url($p->bukti_bayar_akses); ?>" style="width:100%; height:100%; object-fit:cover;"></a>
-                            <?php else: ?><span class="dashicons dashicons-format-image" style="color:#cbd5e1; font-size:32px;"></span><?php endif; ?>
-                    </div>
-                    <div style="flex:1;">
-                        <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
-                            <div>
-                                <h4 style="margin:0 0 4px 0; font-size:16px; color:var(--dw-text-dark);"><?php echo esc_html($p->nama_desa); ?></h4>
-                                <span class="dw-badge status-warning">Menunggu Konfirmasi</span>
-                            </div>
-                            <div style="text-align:right;">
-                                <small style="color:#64748b;">Diajukan pada:</small><br>
-                                <strong style="font-size:13px;"><?php echo date('d M Y, H:i', strtotime($p->updated_at)); ?></strong>
-                            </div>
-                        </div>
-                        <p style="margin:0 0 16px; color:#64748b; font-size:13px; line-height:1.5;">
-                            <strong>Lokasi:</strong> <?php echo esc_html($p->kecamatan.', '.$p->kabupaten); ?>
-                        </p>
-                        
-                        <div style="display:flex; gap:12px; align-items:center;">
-                            <form method="post">
-                                <?php wp_nonce_field('dw_verify_desa'); ?>
-                                <input type="hidden" name="action_verify_desa" value="1">
-                                <input type="hidden" name="desa_id" value="<?php echo esc_attr($p->id); ?>">
-                                <input type="hidden" name="decision" value="approve">
-                                <button type="submit" class="dw-button dw-button-primary"><span class="dashicons dashicons-yes" style="margin-right:5px;"></span> Setujui Premium</button>
-                            </form>
-                            <button type="button" class="dw-button dw-button-secondary" onclick="jQuery('#reject-box-<?php echo esc_attr($p->id); ?>').toggle();" style="color:#ef4444; border-color:#fecaca; background:#fef2f2;">Tolak</button>
-                        </div>
-                        
-                        <div id="reject-box-<?php echo esc_attr($p->id); ?>" style="display:none; margin-top:15px; background:#fff1f2; padding:15px; border-radius:8px; border:1px solid #fecaca;">
-                            <form method="post" style="display:flex; gap:10px;">
-                                <?php wp_nonce_field('dw_verify_desa'); ?>
-                                <input type="hidden" name="action_verify_desa" value="1">
-                                <input type="hidden" name="desa_id" value="<?php echo esc_attr($p->id); ?>">
-                                <input type="hidden" name="decision" value="reject">
-                                <input type="text" name="alasan_penolakan" class="dw-input" placeholder="Tulis alasan penolakan..." required style="padding:8px;">
-                                <button type="submit" class="dw-button" style="background:#ef4444; color:#fff; border:none; padding:0 20px;">Kirim Penolakan</button>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-            <?php endforeach; endif; ?>
-        </div>
+    <div class="card">
+        <h3>Verifikasi Premium</h3>
+        <table class="wp-list-table widefat fixed striped">
+            <thead><tr><th>Nama Desa</th><th>Bukti</th><th>Tanggal</th><th>Aksi</th></tr></thead>
+            <tbody>
+                <?php if($pending_verif): foreach($pending_verif as $p): ?>
+                <tr>
+                    <td><?php echo esc_html($p->nama_desa); ?></td>
+                    <td><a href="<?php echo esc_url($p->bukti_bayar_akses); ?>" target="_blank">Lihat Bukti</a></td>
+                    <td><?php echo $p->updated_at; ?></td>
+                    <td>
+                        <form method="post" style="display:inline;">
+                            <?php wp_nonce_field('dw_verify_desa'); ?>
+                            <input type="hidden" name="action_verify_desa" value="1">
+                            <input type="hidden" name="desa_id" value="<?php echo $p->id; ?>">
+                            <button type="submit" name="decision" value="approve" class="button button-primary button-small">Terima</button>
+                        </form>
+                    </td>
+                </tr>
+                <?php endforeach; else: ?>
+                <tr><td colspan="4">Tidak ada permintaan verifikasi.</td></tr>
+                <?php endif; ?>
+            </tbody>
+        </table>
     </div>
 
 <?php 
 // -----------------------------------------------------------------------------
-// TAB 3: PENGATURAN HARGA
+// TAB 3: PENGATURAN
 // -----------------------------------------------------------------------------
-elseif($active_tab == 'pengaturan'): ?>
-    <!-- TAB 3: PENGATURAN -->
-    <div class="dw-card" style="max-width:500px;">
-        <div class="dw-card-header"><h3 class="card-heading">Pengaturan Harga Premium</h3></div>
-        <div class="dw-card-body">
-            <form method="post">
-                <?php wp_nonce_field('dw_desa_settings_save'); ?>
-                <input type="hidden" name="action_save_settings" value="1">
-                <div class="dw-form-group">
-                    <label class="dw-label">Biaya Upgrade (Rp)</label>
-                    <div style="display:flex; align-items:center; gap:10px;">
-                        <span style="font-weight:bold; color:#64748b; font-size:18px;">Rp</span>
-                        <input type="number" name="harga_premium_desa" class="dw-input" value="<?php echo esc_attr($harga); ?>" style="font-size:18px; font-weight:bold; padding:12px;">
-                    </div>
-                    <p class="dw-help-text">Biaya yang harus dibayar admin desa untuk mendapatkan fitur premium (Verifikasi).</p>
-                </div>
-                <button type="submit" class="dw-button dw-button-primary">Simpan Pengaturan</button>
-            </form>
-        </div>
+elseif ($active_tab == 'pengaturan'): 
+?>
+    <div class="card" style="max-width: 500px;">
+        <h3>Pengaturan Harga Premium</h3>
+        <form method="post">
+            <?php wp_nonce_field('dw_desa_settings_save'); ?>
+            <input type="hidden" name="action_save_settings" value="1">
+            <p>
+                <label>Biaya Upgrade (Rp)</label><br>
+                <input type="number" name="harga_premium_desa" value="<?php echo esc_attr($harga); ?>" class="regular-text">
+            </p>
+            <button type="submit" class="button button-primary">Simpan</button>
+        </form>
     </div>
 <?php endif; ?>

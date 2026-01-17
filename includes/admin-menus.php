@@ -2,7 +2,7 @@
 /**
  * File Name:   includes/admin-menus.php
  * Description: Mengatur menu admin dan meload halaman admin.
- * UPDATE: Menyesuaikan menu dengan file-file di folder admin-pages dan memperbaiki error "undefined constant".
+ * UPDATE: Fix Fatal Error & Path Loading
  * @package DesaWisataCore
  */
 
@@ -10,12 +10,11 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-// Pastikan DW_CORE_PATH terdefinisi untuk menghindari error fatal
+// Definisi Konstanta Path (Fallback Safety)
 if ( ! defined( 'DW_CORE_PATH' ) ) {
     if ( defined( 'DW_CORE_PLUGIN_DIR' ) ) {
         define( 'DW_CORE_PATH', DW_CORE_PLUGIN_DIR );
     } else {
-        // Fallback ke path relatif jika constant tidak ditemukan
         define( 'DW_CORE_PATH', plugin_dir_path( dirname( __FILE__ ) ) );
     }
 }
@@ -51,11 +50,16 @@ function dw_render_pusat_verifikasi() {
 
 // MENU 2: DATA DESA
 function dw_render_desa() { 
-    require_once DW_CORE_PATH . 'includes/admin-pages/page-desa.php';
-    if (function_exists('dw_desa_page_render')) {
-        dw_desa_page_render(); 
-    } elseif (function_exists('dw_render_page_desa')) {
-        dw_render_page_desa(); 
+    $file = DW_CORE_PATH . 'includes/admin-pages/page-desa.php';
+    if (file_exists($file)) {
+        require_once $file;
+        if (function_exists('dw_desa_page_render')) {
+            dw_desa_page_render(); 
+        } else {
+            echo '<div class="notice notice-error"><p>Fungsi render desa tidak ditemukan.</p></div>';
+        }
+    } else {
+        echo '<div class="notice notice-error"><p>File page-desa.php tidak ditemukan.</p></div>';
     }
 }
 
@@ -188,9 +192,12 @@ function dw_render_referral_rewards() {
     }
 }
 
-function dw_render_verifikator_list_page() {
+// [FIX UTAMA] Ganti nama fungsi wrapper agar tidak bentrok dengan page-verifikator-list.php
+function dw_render_verifikator_list_page_wrapper() {
     require_once DW_CORE_PATH . 'includes/admin-pages/page-verifikator-list.php';
-    if (function_exists('dw_render_page_verifikator_list')) {
+    if (function_exists('dw_render_verifikator_list_page')) {
+        dw_render_verifikator_list_page();
+    } elseif (function_exists('dw_render_page_verifikator_list')) {
         dw_render_page_verifikator_list();
     }
 }
@@ -213,31 +220,27 @@ function dw_register_admin_menus() {
     
     add_submenu_page('dw-dashboard', 'Dashboard', 'Dashboard', 'read', 'dw-dashboard', 'dw_render_dashboard');
 
-    // --- PUSAT KOMANDO (ADMIN ONLY) ---
     if (current_user_can('manage_options')) {
         add_submenu_page('dw-dashboard', 'Pusat Pesanan', 'Pusat Pesanan', 'manage_options', 'dw-manajemen-pesanan-pusat', 'dw_render_manajemen_pesanan_pusat');
         add_submenu_page('dw-dashboard', 'Pusat Verifikasi', 'Pusat Verifikasi', 'manage_options', 'dw-pusat-verifikasi', 'dw_render_pusat_verifikasi');
     }
 
-    // --- MANAJEMEN PENGGUNA ---
     if (current_user_can('manage_options')) {
-        add_submenu_page('dw-dashboard', 'Daftar Verifikator', 'List Verifikator', 'manage_options', 'dw-verifikator-list', 'dw_render_verifikator_list_page');
+        // Panggil wrapper yang baru
+        add_submenu_page('dw-dashboard', 'Daftar Verifikator', 'List Verifikator', 'manage_options', 'dw-verifikasi-list', 'dw_render_verifikator_list_page_wrapper');
         add_submenu_page('dw-dashboard', 'Manajemen Pembeli', 'Pembeli/Wisatawan', 'manage_options', 'dw-pembeli', 'dw_render_pembeli');
         add_submenu_page('dw-dashboard', 'Log Reward Referral', 'Reward Referral', 'manage_options', 'dw-referral-reward', 'dw_render_referral_rewards');
     }
 
-    // --- VERIFIKATOR MENU ---
     if (current_user_can('verifikator') || current_user_can('manage_options')) {
         add_submenu_page('dw-dashboard', 'Verifikasi UMKM', 'Verifikasi UMKM', 'read', 'dw-verifikasi-umkm', 'dw_render_verifikator_dashboard_page');
     }
 
-    // --- DATA MASTER ---
     add_submenu_page('dw-dashboard', 'Data Desa', 'Data Desa', 'read', 'dw-desa', 'dw_render_desa');
     add_submenu_page('dw-dashboard', 'Objek Wisata', 'Objek Wisata', 'edit_posts', 'dw-wisata', 'dw_render_wisata');
     add_submenu_page('dw-dashboard', 'Produk UMKM', 'Produk UMKM', 'edit_posts', 'dw-produk', 'dw_render_produk');
     add_submenu_page('dw-dashboard', 'Toko/Pedagang', 'Toko/Pedagang', 'read', 'dw-pedagang', 'dw_render_pedagang');
     
-    // --- OPERASIONAL ---
     if (current_user_can('pedagang') || current_user_can('manage_options')) {
         add_submenu_page('dw-dashboard', 'Pesanan Masuk', 'Pesanan Masuk', 'read', 'dw-pesanan-pedagang', 'dw_render_pesanan');
         add_submenu_page('dw-dashboard', 'Inkuiri Chat', 'Inkuiri (Chat)', 'read', 'dw-chat-inquiry', 'dw_render_chat');
@@ -251,7 +254,6 @@ function dw_register_admin_menus() {
         add_submenu_page('dw-dashboard', 'Manajemen Ojek', 'Ojek Desa', 'read', 'dw-manajemen-ojek', 'dw_render_ojek_management');
     }
 
-    // --- ADMIN SETTINGS ---
     if (current_user_can('manage_options')) {
         add_submenu_page('dw-dashboard', 'Paket & Kuota', 'Paket & Kuota', 'manage_options', 'dw-paket-transaksi', 'dw_render_paket');
         add_submenu_page('dw-dashboard', 'Verifikasi Paket', 'Verifikasi Paket', 'manage_options', 'dw-verifikasi-paket', 'dw_render_verifikasi_paket');
@@ -269,9 +271,6 @@ function dw_register_admin_menus() {
 }
 add_action('admin_menu', 'dw_register_admin_menus');
 
-/**
- * 3. CLEANUP MENU
- */
 function dw_cleanup_admin_menu_system() {
     if (current_user_can('manage_options')) return;
     
