@@ -3,7 +3,7 @@
  * Activation Handler
  * Path: includes/activation.php
  * Description: Menangani pembuatan dan update struktur tabel database (Full Enterprise Schema).
- * Version: 2.6.0 (Merged Legacy Schema with Phase 3 & 4 Updates)
+ * Version: 2.7.0 (Financial System Integrated)
  * @package DesaWisataCore
  */
 
@@ -14,9 +14,6 @@ if (!defined('ABSPATH')) {
 function dw_activation_run() {
     global $wpdb;
     $charset_collate = $wpdb->get_charset_collate();
-    // Prefix 'dw_' ditambahkan ke prefix WP jika belum ada di logic manual, 
-    // tapi di sini kita ikuti standar prefix WP + nama tabel plugin
-    // Format: wp_dw_nama_tabel
     
     require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
 
@@ -71,7 +68,6 @@ function dw_activation_run() {
     dbDelta($sql_desa);
 
     // 2. Tabel Pedagang
-    // Updated: Added latitude, longitude, fcm_token for Phase 3 & 4
     $table_pedagang = $wpdb->prefix . 'dw_pedagang';
     $sql_pedagang = "CREATE TABLE $table_pedagang (
         id bigint(20) NOT NULL AUTO_INCREMENT,
@@ -182,7 +178,7 @@ function dw_activation_run() {
     $table_verifikator = $wpdb->prefix . 'dw_verifikator';
     $sql_verifikator = "CREATE TABLE $table_verifikator (
         id bigint(20) NOT NULL AUTO_INCREMENT,
-        id_user bigint(20) UNSIGNED NOT NULL,
+        user_id bigint(20) NOT NULL,
         nama_lengkap varchar(255) NOT NULL,
         foto_profil varchar(255) DEFAULT NULL,
         nik varchar(50) NOT NULL,
@@ -197,6 +193,12 @@ function dw_activation_run() {
         api_kabupaten_id varchar(20),
         api_kecamatan_id varchar(20),
         api_kelurahan_id varchar(20),
+        
+        -- DATA KEUANGAN VERIFIKATOR (Pastikan kolom ini ada)
+        no_rekening varchar(50) DEFAULT NULL,
+        nama_bank varchar(100) DEFAULT NULL,
+        atas_nama_rekening varchar(100) DEFAULT NULL,
+        
         total_verifikasi_sukses int(11) DEFAULT 0,
         total_pendapatan_komisi decimal(15,2) DEFAULT 0,
         saldo_saat_ini decimal(15,2) DEFAULT 0,
@@ -206,11 +208,10 @@ function dw_activation_run() {
         updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         deleted_at datetime DEFAULT NULL,
         PRIMARY KEY  (id),
-        UNIQUE KEY id_user (id_user),
-        UNIQUE KEY kode_referral (kode_referral),
-        KEY idx_lokasi_v (api_kabupaten_id)
+        UNIQUE KEY user_id (user_id),
+        UNIQUE KEY kode_referral (kode_referral)
     ) $charset_collate;";
-    dbDelta($sql_verifikator);
+    dbDelta( $sql_verifikator );
 
     // 2D. Tabel Pembeli (Wisatawan/Member)
     $table_pembeli = $wpdb->prefix . 'dw_pembeli';
@@ -336,8 +337,8 @@ function dw_activation_run() {
        3. TRANSAKSI (E-COMMERCE FLOW)
        ========================================= */
 
-    // 6. Tabel Transaksi Utama (Induk)
-    // Updated: Added xendit_external_id, xendit_payment_method for Phase 4
+    // 6. Tabel Transaksi Utama (E-Commerce)
+    // Updated: Menambahkan kolom Profit Sharing dan Payment Channel
     $table_transaksi = $wpdb->prefix . 'dw_transaksi';
     $sql_transaksi = "CREATE TABLE $table_transaksi (
         id bigint(20) NOT NULL AUTO_INCREMENT,
@@ -354,10 +355,18 @@ function dw_activation_run() {
         total_transaksi decimal(15,2) DEFAULT 0,
         total_amount decimal(15,2), 
         discount_amount decimal(15,2) DEFAULT 0, 
+        
+        -- PROFIT SHARING (KEUANGAN)
+        platform_fee decimal(15,2) DEFAULT 0, -- Keuntungan Sistem
+        partner_commission decimal(15,2) DEFAULT 0, -- Komisi Mitra
+        
         payment_token varchar(255) DEFAULT NULL,
         payment_url text DEFAULT NULL,
         xendit_external_id varchar(100),
         xendit_payment_method varchar(50),
+        payment_channel varchar(50), -- OVO, DANA, BCA, etc
+        paid_at datetime,
+        
         nama_penerima varchar(255),
         no_hp varchar(20),
         alamat_lengkap text,
@@ -461,8 +470,8 @@ function dw_activation_run() {
     ) $charset_collate;";
     dbDelta($sql_paket);
 
-    // 10. Pembelian Paket
-    // Updated: Added xendit_external_id for Phase 4
+    // 10. Pembelian Paket (Topup Kuota)
+    // Updated: Menambahkan kolom lengkap untuk Xendit & Profit Sharing
     $table_pembelian = $wpdb->prefix . 'dw_pembelian_paket';
     $sql_pembelian = "CREATE TABLE $table_pembelian (
         id bigint(20) NOT NULL AUTO_INCREMENT,
@@ -474,14 +483,26 @@ function dw_activation_run() {
         harga_paket decimal(15,2) NOT NULL,
         harga decimal(15,2), 
         jumlah_transaksi int(11) NOT NULL,
+        
         referrer_id bigint(20) DEFAULT 0, 
         referrer_type enum('desa','verifikator') DEFAULT NULL,
+        
+        -- KEUANGAN & PROFIT SHARING
+        platform_fee decimal(15,2) DEFAULT 0, -- Keuntungan Sistem
+        partner_commission decimal(15,2) DEFAULT 0, -- Komisi Referral/Mitra
         persentase_komisi_referrer decimal(5,2) DEFAULT 0,
         komisi_nominal_cair decimal(15,2) DEFAULT 0,
+        
+        -- PEMBAYARAN (XENDIT)
         url_bukti_bayar varchar(255),
-        status enum('pending','disetujui','ditolak') DEFAULT 'pending',
+        status enum('pending','disetujui','ditolak','paid','expired') DEFAULT 'pending',
         catatan_admin text,
         xendit_external_id varchar(100),
+        payment_url text, -- Link bayar Xendit
+        payment_channel varchar(50), -- Metode bayar (BCA, QRIS, etc)
+        payment_method varchar(50), -- Virtual Account, Retail, etc
+        paid_at datetime,
+        
         created_at datetime DEFAULT CURRENT_TIMESTAMP,
         processed_at datetime DEFAULT NULL,
         PRIMARY KEY  (id),
@@ -595,7 +616,6 @@ function dw_activation_run() {
     dbDelta($sql_ulasan);
 
     // 16. Audit Logs
-    // Updated: Added idx_created for Phase 3
     $table_logs = $wpdb->prefix . 'dw_logs';
     $sql_logs = "CREATE TABLE $table_logs (
         id bigint(20) NOT NULL AUTO_INCREMENT,
@@ -739,14 +759,83 @@ function dw_activation_run() {
     dbDelta($sql_complaints);
 
     /* =========================================
+       6. FITUR KEUANGAN & WALLET (NEW)
+       ========================================= */
+
+    // 27. Tabel Saldo/Dompet (NEW - Untuk Desa & Verifikator)
+    $table_wallet = $wpdb->prefix . 'dw_wallet';
+    $sql_wallet = "CREATE TABLE $table_wallet (
+        id bigint(20) NOT NULL AUTO_INCREMENT,
+        user_id bigint(20) NOT NULL, -- User ID WordPress (Bisa Verifikator/Admin Desa)
+        balance decimal(15,2) NOT NULL DEFAULT 0,
+        last_updated datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY  (id),
+        UNIQUE KEY user_id (user_id)
+    ) $charset_collate;";
+    dbDelta($sql_wallet);
+
+    // 28. Tabel Mutasi Saldo / Wallet Logs (NEW - Buku Besar)
+    $table_wallet_logs = $wpdb->prefix . 'dw_wallet_logs';
+    $sql_wallet_logs = "CREATE TABLE $table_wallet_logs (
+        id bigint(20) NOT NULL AUTO_INCREMENT,
+        wallet_id bigint(20) NOT NULL,
+        transaction_id bigint(20) DEFAULT NULL, -- ID Referensi (Misal ID Pembelian Paket)
+        withdrawal_id bigint(20) DEFAULT NULL, -- ID Referensi Penarikan
+        type varchar(20) NOT NULL, -- credit (masuk) / debit (keluar)
+        amount decimal(15,2) NOT NULL DEFAULT 0,
+        description varchar(255),
+        balance_after decimal(15,2) NOT NULL DEFAULT 0,
+        created_at datetime DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY  (id),
+        KEY wallet_id (wallet_id)
+    ) $charset_collate;";
+    dbDelta($sql_wallet_logs);
+
+    // 29. Tabel Withdrawal / Penarikan (NEW - Riwayat Request)
+    $table_withdrawals = $wpdb->prefix . 'dw_withdrawals';
+    $sql_withdrawals = "CREATE TABLE $table_withdrawals (
+        id bigint(20) NOT NULL AUTO_INCREMENT,
+        user_id bigint(20) NOT NULL,
+        amount decimal(15,2) NOT NULL,
+        
+        -- Snapshot Data Bank (Penting untuk History jika user ganti rek)
+        bank_code varchar(20) NOT NULL,
+        account_number varchar(50) NOT NULL,
+        account_name varchar(100) NOT NULL,
+        
+        status varchar(20) DEFAULT 'pending', -- pending, processing, completed, failed
+        xendit_disbursement_id varchar(100),
+        failure_reason text,
+        created_at datetime DEFAULT CURRENT_TIMESTAMP,
+        updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY  (id),
+        KEY user_id (user_id)
+    ) $charset_collate;";
+    dbDelta($sql_withdrawals);
+
+    // 30. Tabel Log Pembayaran Xendit (NEW - Debugging)
+    $table_payment_logs = $wpdb->prefix . 'dw_payment_logs';
+    $sql_payment_logs = "CREATE TABLE $table_payment_logs (
+        id bigint(20) NOT NULL AUTO_INCREMENT,
+        event_type varchar(50) NOT NULL, -- invoice.paid, disbursement.succeeded
+        reference_id varchar(100),
+        gateway_id varchar(100),
+        payload longtext,
+        status varchar(20),
+        created_at datetime DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY  (id)
+    ) $charset_collate;";
+    dbDelta($sql_payment_logs);
+
+    /* =========================================
        5. FINALISASI
        ========================================= */
 
-    update_option('dw_core_db_version', '4.0.0'); // Bump version to force update
+    update_option('dw_core_db_version', '4.1.0'); // Bump version to force update
     
     // Log kesuksesan
     if (defined('WP_DEBUG') && WP_DEBUG) {
-        error_log('[DW Core] Tabel database Enterprise berhasil dibuat/diupdate.');
+        error_log('[DW Core] Tabel database Enterprise + Financial Features berhasil dibuat/diupdate.');
     }
 
     if (function_exists('dw_create_roles_and_caps')) {

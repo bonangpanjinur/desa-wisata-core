@@ -1,111 +1,113 @@
 <?php
 /**
- * File: includes/classes/gateways/class-dw-xendit-gateway.php
- * * Class ini menangani komunikasi HTTP ke API Xendit.
- * Menggunakan wp_remote_post() bawaan WordPress (tanpa library eksternal yang berat).
+ * Xendit Gateway Handler
+ * Path: includes/classes/gateways/class-dw-xendit-gateway.php
+ * Description: Menangani komunikasi API dengan Xendit (Invoice & Disbursement).
+ * * @package DesaWisataCore
  */
 
-if ( ! defined( 'ABSPATH' ) ) {
-    exit;
-}
+if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 class DW_Xendit_Gateway {
 
-    private $api_url = 'https://api.xendit.co/v2/invoices';
-    private $secret_key;
-    private $verification_token;
+    private $api_key;
+    private $callback_token;
+    private $api_url = 'https://api.xendit.co';
 
     public function __construct() {
-        $options = get_option( 'dw_settings_general' );
-        $this->secret_key = isset( $options['xendit_secret_key'] ) ? $options['xendit_secret_key'] : '';
-        $this->verification_token = isset( $options['xendit_callback_token'] ) ? $options['xendit_callback_token'] : '';
+        $settings = get_option( 'dw_payment_settings', [] ); // Ambil dari settingan baru
+        $this->api_key = isset( $settings['xendit_secret_key'] ) ? $settings['xendit_secret_key'] : '';
+        $this->callback_token = isset( $settings['xendit_callback_token'] ) ? $settings['xendit_callback_token'] : '';
     }
 
     /**
-     * Membuat Invoice Xendit
-     * * @param array $params Data invoice (external_id, amount, email, description)
-     * @return array|WP_Error Response dari Xendit
+     * 1. Buat Invoice (Untuk Pembelian Kuota)
      */
-    public function create_invoice( $params ) {
-        if ( empty( $this->secret_key ) ) {
-            return new WP_Error( 'xendit_config_error', 'Xendit Secret Key belum diatur di pengaturan.' );
-        }
+    public function create_invoice( $transaction_id, $amount, $payer_email, $desc ) {
+        if ( empty( $this->api_key ) ) return new WP_Error( 'config_error', 'API Key kosong.' );
+
+        $endpoint = $this->api_url . '/v2/invoices';
+        $external_id = 'TRX-' . $transaction_id . '-' . time(); // Unik ID
 
         $body = [
-            'external_id'      => $params['external_id'],
-            'amount'           => (int) $params['amount'],
-            'payer_email'      => sanitize_email( $params['payer_email'] ),
-            'description'      => sanitize_text_field( $params['description'] ),
-            'currency'         => 'IDR',
-            'should_send_email'=> true,
-            'success_redirect_url' => get_site_url() . '/dashboard-toko?payment=success',
-            'failure_redirect_url' => get_site_url() . '/dashboard-toko?payment=failed'
+            'external_id' => $external_id,
+            'amount'      => $amount,
+            'payer_email' => $payer_email,
+            'description' => $desc,
+            'success_redirect_url' => home_url('/transaksi-berhasil'), // Ganti halaman sukses
+            'failure_redirect_url' => home_url('/transaksi-gagal'),
         ];
 
-        $args = [
-            'headers' => [
-                'Authorization' => 'Basic ' . base64_encode( $this->secret_key . ':' ),
-                'Content-Type'  => 'application/json'
-            ],
-            'body'    => json_encode( $body ),
-            'timeout' => 45
-        ];
-
-        $response = wp_remote_post( $this->api_url, $args );
-
-        if ( is_wp_error( $response ) ) {
-            return $response;
-        }
-
-        $response_code = wp_remote_retrieve_response_code( $response );
-        $body_response = json_decode( wp_remote_retrieve_body( $response ), true );
-
-        if ( $response_code !== 200 ) {
-            return new WP_Error( 'xendit_api_error', isset($body_response['message']) ? $body_response['message'] : 'Unknown error from Xendit' );
-        }
-
-        return $body_response;
+        return $this->send_request( 'POST', $endpoint, $body );
     }
 
     /**
-     * Memverifikasi Webhook Masuk
-     * * @param WP_REST_Request $request
-     * @return bool Valid atau tidak
+     * 2. Buat Disbursement (Transfer Otomatis ke User)
      */
-    public function verify_webhook( $request ) {
-        $headers = $request->get_headers();
-        
-        // Verifikasi token callback jika diatur di pengaturan
-        if ( ! empty( $this->verification_token ) ) {
-            $x_callback_token = isset( $headers['x_callback_token'][0] ) ? $headers['x_callback_token'][0] : '';
-            if ( $x_callback_token !== $this->verification_token ) {
-                return false;
-            }
+    public function create_disbursement( $wd_id, $amount, $bank_code, $acc_number, $acc_name, $desc ) {
+        if ( empty( $this->api_key ) ) return new WP_Error( 'config_error', 'API Key kosong.' );
+
+        $endpoint = $this->api_url . '/disbursements';
+        $external_id = 'WD-' . $wd_id . '-' . time();
+
+        $body = [
+            'external_id' => $external_id,
+            'amount'      => (int) $amount,
+            'bank_code'   => $bank_code,
+            'account_holder_name' => $acc_name,
+            'account_number' => $acc_number,
+            'description' => $desc
+        ];
+
+        // Idempotency Key (Pencegah double transfer)
+        $headers = [ 'X-IDEMPOTENCY-KEY' => 'idempotency-' . $external_id ];
+
+        $response = $this->send_request( 'POST', $endpoint, $body, $headers );
+
+        // Jika sukses request ke Xendit, update ID Xendit di database
+        if ( ! is_wp_error( $response ) && isset( $response['id'] ) ) {
+            global $wpdb;
+            $wpdb->update( 
+                $wpdb->prefix . 'dw_withdrawals', 
+                [ 'xendit_disbursement_id' => $response['id'] ], 
+                [ 'id' => $wd_id ] 
+            );
         }
 
-        return true;
+        return $response;
     }
 
     /**
-     * Get Invoice Status (Opsional, untuk pengecekan manual)
+     * Helper: Kirim Request ke Xendit
      */
-    public function get_invoice( $invoice_id ) {
-        if ( empty( $this->secret_key ) ) {
-            return new WP_Error( 'xendit_config_error', 'Xendit Secret Key belum diatur.' );
-        }
+    private function send_request( $method, $url, $body, $custom_headers = [] ) {
+        $headers = array_merge( [
+            'Authorization' => 'Basic ' . base64_encode( $this->api_key . ':' ),
+            'Content-Type'  => 'application/json'
+        ], $custom_headers );
 
         $args = [
-            'headers' => [
-                'Authorization' => 'Basic ' . base64_encode( $this->secret_key . ':' ),
-            ]
+            'method'    => $method,
+            'headers'   => $headers,
+            'body'      => json_encode( $body ),
+            'timeout'   => 45
         ];
 
-        $response = wp_remote_get( $this->api_url . '/' . $invoice_id, $args );
+        $response = wp_remote_request( $url, $args );
 
-        if ( is_wp_error( $response ) ) {
-            return $response;
+        if ( is_wp_error( $response ) ) return $response;
+
+        $code = wp_remote_retrieve_response_code( $response );
+        $body = json_decode( wp_remote_retrieve_body( $response ), true );
+
+        if ( $code >= 200 && $code < 300 ) {
+            return $body;
+        } else {
+            return new WP_Error( 'xendit_error', isset($body['message']) ? $body['message'] : 'Error Xendit' );
         }
+    }
 
-        return json_decode( wp_remote_retrieve_body( $response ), true );
+    public function verify_token( $token ) {
+        return $token === $this->callback_token;
     }
 }
