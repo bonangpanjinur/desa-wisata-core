@@ -63,13 +63,7 @@ function dw_render_desa() {
     }
 }
 
-// KHUSUS ADMIN DESA: Verifikasi Pedagang
-function dw_render_desa_verifikasi() {
-    require_once DW_CORE_PATH . 'includes/admin-pages/page-desa-verifikasi-pedagang.php';
-    if (function_exists('dw_admin_desa_verifikasi_page_render')) {
-        dw_admin_desa_verifikasi_page_render();
-    }
-}
+
 
 // MENU 3: TOKO ATAU PEDAGANG
 function dw_render_pedagang() { 
@@ -232,9 +226,7 @@ function dw_register_admin_menus() {
         add_submenu_page('dw-dashboard', 'Log Reward Referral', 'Reward Referral', 'manage_options', 'dw-referral-reward', 'dw_render_referral_rewards');
     }
 
-    if (current_user_can('verifikator') || current_user_can('manage_options')) {
-        add_submenu_page('dw-dashboard', 'Verifikasi UMKM', 'Verifikasi UMKM', 'read', 'dw-verifikasi-umkm', 'dw_render_verifikator_dashboard_page');
-    }
+
 
     add_submenu_page('dw-dashboard', 'Data Desa', 'Data Desa', 'read', 'dw-desa', 'dw_render_desa');
     add_submenu_page('dw-dashboard', 'Objek Wisata', 'Objek Wisata', 'edit_posts', 'dw-wisata', 'dw_render_wisata');
@@ -243,11 +235,6 @@ function dw_register_admin_menus() {
     
     if (current_user_can('pedagang') || current_user_can('manage_options')) {
         add_submenu_page('dw-dashboard', 'Pesanan Masuk', 'Pesanan Masuk', 'read', 'dw-pesanan-pedagang', 'dw_render_pesanan');
-        add_submenu_page('dw-dashboard', 'Inkuiri Chat', 'Inkuiri (Chat)', 'read', 'dw-chat-inquiry', 'dw_render_chat');
-    }
-
-    if (current_user_can('dw_approve_pedagang') || current_user_can('manage_options')) {
-        add_submenu_page('dw-dashboard', 'Verifikasi Pedagang', 'Verifikasi Pedagang', 'read', 'dw-desa-verifikasi', 'dw_render_desa_verifikasi');
     }
 
     if (current_user_can('dw_verify_ojek') || current_user_can('manage_options')) {

@@ -3,7 +3,7 @@
  * Activation Handler
  * Path: includes/activation.php
  * Description: Menangani pembuatan dan update struktur tabel database (Full Enterprise Schema).
- * Version: 2.7.0 (Financial System Integrated)
+ * Version: 2.8.0 (Ojek Rates & Driver Logic Added)
  * @package DesaWisataCore
  */
 
@@ -248,6 +248,24 @@ function dw_activation_run() {
         KEY idx_referral (terdaftar_melalui_kode)
     ) $charset_collate;";
     dbDelta($sql_pembeli);
+
+    // 2E. Tabel Tarif Ojek (NEW - Tarif per Kabupaten)
+    $table_ojek_rates = $wpdb->prefix . 'dw_ojek_rates';
+    $sql_ojek_rates = "CREATE TABLE $table_ojek_rates (
+        id bigint(20) NOT NULL AUTO_INCREMENT,
+        api_kabupaten_id varchar(20) NOT NULL,
+        nama_kabupaten varchar(100) NOT NULL,
+        base_fare decimal(15,2) DEFAULT 5000, -- Tarif dasar (buka pintu)
+        price_per_km decimal(15,2) NOT NULL, -- Tarif per KM
+        min_distance_km decimal(5,2) DEFAULT 1, -- Jarak minimum kena tarif dasar
+        commission_percent decimal(5,2) DEFAULT 10, -- Persentase bagi hasil khusus daerah ini (opsional)
+        is_active tinyint(1) DEFAULT 1,
+        created_at datetime DEFAULT CURRENT_TIMESTAMP,
+        updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY  (id),
+        UNIQUE KEY api_kabupaten_id (api_kabupaten_id)
+    ) $charset_collate;";
+    dbDelta($sql_ojek_rates);
 
     /* =========================================
        2. KONTEN (INVENTORY & WISATA)
@@ -831,11 +849,11 @@ function dw_activation_run() {
        5. FINALISASI
        ========================================= */
 
-    update_option('dw_core_db_version', '4.1.0'); // Bump version to force update
+    update_option('dw_core_db_version', '2.8.0'); // Update version to trigger dbDelta
     
     // Log kesuksesan
     if (defined('WP_DEBUG') && WP_DEBUG) {
-        error_log('[DW Core] Tabel database Enterprise + Financial Features berhasil dibuat/diupdate.');
+        error_log('[DW Core] Tabel database Enterprise + Ojek Rates & Features berhasil dibuat/diupdate.');
     }
 
     if (function_exists('dw_create_roles_and_caps')) {
