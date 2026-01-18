@@ -1,274 +1,182 @@
 <?php
 /**
- * DW Wallet Class
- * Path: includes/classes/class-dw-wallet.php
- * Description: Menangani logika Dompet Digital User (Topup, Withdrawal, Mutasi).
- * * UPDATE FASE 5 (Security): 
- * - Implementasi Atomic Transactions ($wpdb->query('START TRANSACTION')).
- * - Implementasi Row Locking (SELECT ... FOR UPDATE) untuk mencegah Race Condition.
- * - Validasi Saldo Anti-Minus.
- *
- * @package DesaWisataCore
+ * File: includes/classes/class-dw-wallet.php
+ * * Class DW_Wallet
+ * Menangani saldo user, topup, withdraw, dan logging transaksi.
  */
 
-if ( ! defined( 'ABSPATH' ) ) { exit; }
+if (!defined('ABSPATH')) {
+    exit;
+}
 
 class DW_Wallet {
 
     /**
-     * Mengambil Saldo User
-     * * @param int $user_id ID User
-     * @param bool $lock Set true untuk mengunci row database (HANYA gunakan dalam transaction)
-     * @return float Jumlah saldo saat ini
+     * Ambil Saldo User
      */
-    public function get_balance( $user_id, $lock = false ) {
-        global $wpdb;
-        $table_wallet = $wpdb->prefix . 'dw_wallet';
-
-        // Pastikan tabel wallet ada
-        if ( $wpdb->get_var( "SHOW TABLES LIKE '$table_wallet'" ) != $table_wallet ) {
-            return 0.00;
-        }
-
-        if ( $lock ) {
-            // LOCKING QUERY: Membaca nilai saldo dan mengunci barisnya agar proses lain harus menunggu
-            // Kita kunci row di tabel dw_wallet.
-            $current = $wpdb->get_var( $wpdb->prepare(
-                "SELECT balance FROM {$table_wallet} 
-                 WHERE user_id = %d 
-                 LIMIT 1 FOR UPDATE",
-                $user_id
-            ) );
-
-            return $current !== null ? (float) $current : 0.00;
-        }
-        
-        // Standard non-locking read
-        $balance = $wpdb->get_var( $wpdb->prepare( "SELECT balance FROM $table_wallet WHERE user_id = %d", $user_id ) );
-        return $balance ? (float) $balance : 0.00;
+    public static function get_balance($user_id) {
+        $balance = get_user_meta($user_id, '_dw_wallet_balance', true);
+        return $balance ? (float) $balance : 0.0;
     }
 
     /**
-     * Menambah Saldo (Credit) - Thread Safe
-     * * @param int $user_id
-     * @param float $amount
-     * @param string $description
-     * @param string $ref_id (Opsional, misal ID Order atau ID Topup)
-     * @return bool True jika sukses
+     * Tambah Saldo (Credit)
      */
-    public function add_balance( $user_id, $amount, $description = '', $ref_id = '' ) {
-        global $wpdb;
-        $amount = (float) $amount;
-        $table_wallet = $wpdb->prefix . 'dw_wallet';
-        $table_logs   = $wpdb->prefix . 'dw_wallet_logs';
+    public static function add_balance($user_id, $amount, $description = '', $type = 'credit', $reference_id = 0) {
+        if ($amount <= 0) return false;
 
-        if ( $amount <= 0 ) {
-            return false;
-        }
+        $current_balance = self::get_balance($user_id);
+        $new_balance = $current_balance + $amount;
 
-        // 1. MULAI TRANSAKSI
-        $wpdb->query( 'START TRANSACTION' );
+        update_user_meta($user_id, '_dw_wallet_balance', $new_balance);
+        self::log_transaction($user_id, $amount, 'in', $type, $description, $new_balance, $reference_id);
 
-        try {
-            // Cek apakah user sudah punya wallet, jika belum buatkan
-            $exists = $wpdb->get_var( $wpdb->prepare( "SELECT id FROM $table_wallet WHERE user_id = %d", $user_id ) );
-            if ( ! $exists ) {
-                $wpdb->insert( $table_wallet, [ 'user_id' => $user_id, 'balance' => 0 ] );
-                $wallet_id = $wpdb->insert_id;
-            } else {
-                $wallet_id = $exists;
-            }
-
-            // 2. AMBIL SALDO (DENGAN LOCK)
-            // Proses lain yang mencoba akses saldo user ini akan antre di sini
-            $current_balance = $this->get_balance( $user_id, true );
-            
-            // 3. HITUNG SALDO BARU
-            $new_balance = $current_balance + $amount;
-
-            // 4. UPDATE DATABASE
-            $updated = $wpdb->update( $table_wallet, [ 'balance' => $new_balance ], [ 'user_id' => $user_id ] );
-
-            if ( $updated === false ) {
-                throw new Exception( 'Gagal update tabel wallet.' );
-            }
-
-            // 5. CATAT LOG MUTASI (AUDIT TRAIL)
-            $this->log_transaction( $wallet_id, 'credit', $amount, $new_balance, $description, $ref_id );
-
-            // 6. SELESAI
-            $wpdb->query( 'COMMIT' );
-            return true;
-
-        } catch ( Exception $e ) {
-            // Jika ada error, batalkan semua perubahan DB di atas
-            $wpdb->query( 'ROLLBACK' );
-            error_log( "Wallet Add Error [User $user_id]: " . $e->getMessage() );
-            return false;
-        }
+        return true;
     }
 
     /**
-     * Mengurangi Saldo (Debit) - Thread Safe & Anti-Minus
-     * * @param int $user_id
-     * @param float $amount
-     * @param string $description
-     * @param string $ref_id
-     * @return bool|WP_Error True jika sukses, WP_Error jika gagal
+     * Kurangi Saldo (Debit)
      */
-    public function deduct_balance( $user_id, $amount, $description = '', $ref_id = '' ) {
-        global $wpdb;
-        $amount = (float) $amount;
-        $table_wallet = $wpdb->prefix . 'dw_wallet';
+    public static function deduct_balance($user_id, $amount, $description = '', $type = 'debit', $reference_id = 0) {
+        if ($amount <= 0) return false;
 
-        if ( $amount <= 0 ) {
-            return new WP_Error( 'invalid_amount', 'Nominal harus lebih dari 0.' );
+        $current_balance = self::get_balance($user_id);
+
+        // Validasi saldo cukup (kecuali tipe tertentu)
+        if ($type !== 'commission_deduction' && $current_balance < $amount) {
+            return new WP_Error('insufficient_funds', 'Saldo tidak mencukupi.');
         }
 
-        // 1. MULAI TRANSAKSI
-        $wpdb->query( 'START TRANSACTION' );
+        $new_balance = $current_balance - $amount;
+        update_user_meta($user_id, '_dw_wallet_balance', $new_balance);
 
-        try {
-            // Cek wallet user
-            $wallet_id = $wpdb->get_var( $wpdb->prepare( "SELECT id FROM $table_wallet WHERE user_id = %d", $user_id ) );
-            if ( ! $wallet_id ) {
-                 throw new Exception( 'Dompet user tidak ditemukan.' );
-            }
+        self::log_transaction($user_id, $amount, 'out', $type, $description, $new_balance, $reference_id);
 
-            // 2. AMBIL SALDO (DENGAN LOCK)
-            $current_balance = $this->get_balance( $user_id, true );
-
-            // 3. VALIDASI SALDO (CRITICAL)
-            if ( $current_balance < $amount ) {
-                throw new Exception( 'Saldo tidak mencukupi (Insufficient Funds). Saldo saat ini: ' . number_format($current_balance, 0, ',', '.') );
-            }
-
-            // 4. HITUNG SALDO BARU
-            $new_balance = $current_balance - $amount;
-
-            // 5. UPDATE DATABASE
-            $updated = $wpdb->update( $table_wallet, [ 'balance' => $new_balance ], [ 'user_id' => $user_id ] );
-
-            if ( $updated === false ) {
-                throw new Exception( 'Gagal update tabel wallet.' );
-            }
-
-            // 6. CATAT LOG MUTASI
-            $this->log_transaction( $wallet_id, 'debit', $amount, $new_balance, $description, $ref_id );
-
-            // 7. SELESAI
-            $wpdb->query( 'COMMIT' );
-            return true;
-
-        } catch ( Exception $e ) {
-            $wpdb->query( 'ROLLBACK' );
-            return new WP_Error( 'wallet_error', $e->getMessage() );
-        }
+        return true;
     }
 
     /**
-     * Proses Request Penarikan (Withdrawal) ke Xendit
-     * * @param int $user_id ID User
-     * @param float $amount Jumlah Penarikan
-     * @param array $bank_details Array berisi 'bank_code', 'account_number', 'account_name'
+     * Buat Request Penarikan (Withdraw)
+     * Menggunakan Custom Post Type 'dw_withdrawal'
      */
-    public function request_withdrawal( $user_id, $amount, $bank_details ) {
-        global $wpdb;
+    public static function create_withdrawal_request($user_id, $amount, $bank_details = '') {
+        $balance = self::get_balance($user_id);
         
-        // 1. Cek Minimal Penarikan (Default 10rb)
-        $min_withdrawal = get_option( 'dw_min_withdrawal_amount', 10000 ); 
-        if ( $amount < $min_withdrawal ) {
-            return new WP_Error( 'min_limit', 'Minimal penarikan adalah Rp ' . number_format( $min_withdrawal, 0, ',', '.' ) );
+        // 1. Validasi Saldo
+        if ($balance < $amount) {
+            return new WP_Error('insufficient_funds', 'Saldo tidak mencukupi untuk penarikan.');
         }
 
-        // 2. Cek Saldo Cukup (Non-locking check first for UX)
-        $current_balance = self::get_balance( $user_id );
-        if ( $current_balance < $amount ) {
-            return new WP_Error( 'insufficient_funds', 'Saldo Anda (Rp ' . number_format( $current_balance, 0, ',', '.' ) . ') tidak cukup.' );
-        }
-
-        // 3. Simpan ke Tabel Withdrawals (Status Awal: Processing)
-        $table_wd = $wpdb->prefix . 'dw_withdrawals';
-        $wpdb->insert( $table_wd, [
-            'user_id'        => $user_id,
-            'amount'         => $amount,
-            'bank_code'      => isset($bank_details['bank_code']) ? $bank_details['bank_code'] : '',
-            'account_number' => isset($bank_details['account_number']) ? $bank_details['account_number'] : '',
-            'account_name'   => isset($bank_details['account_name']) ? $bank_details['account_name'] : '',
-            'status'         => 'processing', // Langsung processing karena auto-transfer trigger Xendit
-            'created_at'     => current_time( 'mysql' )
-        ] );
-        $wd_id = $wpdb->insert_id;
-
-        if ( ! $wd_id ) {
-             return new WP_Error( 'db_error', 'Gagal membuat data penarikan di database.' );
-        }
-
-        // 4. Potong Saldo User (Lock dana agar tidak ditarik ganda)
-        // Gunakan object instance method deduct_balance
-        $deduct = $this->deduct_balance( $user_id, $amount, 'Penarikan Dana ID: #' . $wd_id, $wd_id );
+        // 2. Kunci Saldo (Deduct sementara)
+        // Kita kurangi saldo "real" sekarang agar tidak bisa dipakai belanja. 
+        // Jika ditolak admin, kita refund balik.
+        $deduct = self::deduct_balance($user_id, $amount, 'Request Penarikan Dana (Pending)', 'withdraw_hold', 0);
         
-        if ( is_wp_error( $deduct ) ) {
-             // Rollback jika gagal potong (jarang terjadi karena sudah dicek di awal)
-             $wpdb->delete( $table_wd, [ 'id' => $wd_id ] );
-             return $deduct;
+        if (is_wp_error($deduct)) {
+            return $deduct;
         }
 
-        // 5. Trigger Xendit Disbursement (Auto Transfer)
-        // Pastikan class Gateway sudah diload
-        if ( ! class_exists( 'DW_Xendit_Gateway' ) ) {
-            require_once( plugin_dir_path( dirname( __FILE__ ) ) . 'classes/gateways/class-dw-xendit-gateway.php' );
-        }
-
-        $gateway = new DW_Xendit_Gateway();
-        $result = $gateway->create_disbursement( 
-            $wd_id, 
-            $amount, 
-            $bank_details['bank_code'], 
-            $bank_details['account_number'], 
-            $bank_details['account_name'],
-            'Penarikan Saldo Desa Wisata #' . $wd_id
+        // 3. Buat Record Request (CPT)
+        $post_data = array(
+            'post_title'    => 'Withdraw - ' . get_userdata($user_id)->display_name . ' - ' . date('Y-m-d H:i'),
+            'post_status'   => 'pending', // Pending review admin
+            'post_type'     => 'dw_withdrawal',
+            'post_author'   => $user_id
         );
 
-        if ( is_wp_error( $result ) ) {
-            // Jika API Xendit Error/Down, kembalikan saldo (Refund)
-            $this->add_balance( $user_id, $amount, 'Refund: Gagal koneksi Xendit (ID #' . $wd_id . ')', $wd_id );
-            
-            // Update status jadi failed
-            $wpdb->update( $table_wd, [ 
-                'status' => 'failed', 
-                'failure_reason' => $result->get_error_message() 
-            ], [ 'id' => $wd_id ] );
-            
-            return $result;
-        }
+        $request_id = wp_insert_post($post_data);
 
-        return $wd_id; // Return ID Penarikan jika sukses request
+        if ($request_id) {
+            update_post_meta($request_id, '_withdraw_amount', $amount);
+            update_post_meta($request_id, '_bank_details', $bank_details);
+            update_post_meta($request_id, '_withdraw_status', 'pending');
+            
+            // Update reference ID di log transaksi sebelumnya (opsional, agak tricky karena log sudah tertulis)
+            return $request_id;
+        } else {
+            // Rollback saldo jika gagal insert post
+            self::add_balance($user_id, $amount, 'Rollback: Gagal buat request withdraw', 'rollback', 0);
+            return new WP_Error('system_error', 'Gagal membuat permintaan penarikan.');
+        }
     }
 
     /**
-     * Internal Logger untuk Mencatat Riwayat Mutasi ke Tabel Log Khusus
+     * Proses Penarikan (Admin Action)
+     * @param int $request_id
+     * @param string $action 'approve' or 'reject'
      */
-    private function log_transaction( $wallet_id, $type, $amount, $balance_after, $desc, $ref_id ) {
-        global $wpdb;
-        $table_logs = $wpdb->prefix . 'dw_wallet_logs';
-        
-        // Coba insert ke tabel logs khusus wallet
-        $wpdb->insert( $table_logs, [
-            'wallet_id'      => $wallet_id,
-            'transaction_id' => is_numeric($ref_id) ? $ref_id : 0, // ID referensi
-            'type'           => $type, // 'credit' atau 'debit'
-            'amount'         => $amount,
-            'description'    => $desc,
-            'balance_after'  => $balance_after,
-            'created_at'     => current_time( 'mysql' )
-        ] );
+    public static function process_withdrawal($request_id, $action) {
+        $post = get_post($request_id);
+        if (!$post || $post->post_type !== 'dw_withdrawal') return false;
 
-        // Fallback logging ke system log (opsional)
-        if ( function_exists( 'dw_log_activity' ) ) {
-            $user_id = $wpdb->get_var($wpdb->prepare("SELECT user_id FROM {$wpdb->prefix}dw_wallet WHERE id = %d", $wallet_id));
-            $action_code = ($type === 'credit') ? 'WALLET_CREDIT' : 'WALLET_DEBIT';
-            dw_log_activity( $action_code, "[$type] Rp " . number_format($amount) . " - $desc", $user_id );
+        $current_status = get_post_meta($request_id, '_withdraw_status', true);
+        if ($current_status !== 'pending') return new WP_Error('invalid_status', 'Permintaan ini sudah diproses sebelumnya.');
+
+        $user_id = $post->post_author;
+        $amount = get_post_meta($request_id, '_withdraw_amount', true);
+
+        if ($action === 'approve') {
+            // Status jadi publish/approved
+            wp_update_post(['ID' => $request_id, 'post_status' => 'publish']);
+            update_post_meta($request_id, '_withdraw_status', 'approved');
+            update_post_meta($request_id, '_processed_date', current_time('mysql'));
+            
+            // Saldo sudah dipotong saat request, jadi tidak perlu aksi saldo lagi.
+            // Bisa kirim notif email ke user.
+            return true;
+
+        } elseif ($action === 'reject') {
+            // Status jadi trash/draft
+            wp_update_post(['ID' => $request_id, 'post_status' => 'draft']);
+            update_post_meta($request_id, '_withdraw_status', 'rejected');
+            
+            // KEMBALIKAN SALDO KE USER
+            self::add_balance($user_id, $amount, "Pengembalian: Penarikan Ditolak #$request_id", 'withdraw_refund', $request_id);
+            
+            return true;
         }
+
+        return false;
+    }
+
+    /**
+     * Log Transaksi ke Database
+     */
+    private static function log_transaction($user_id, $amount, $flow, $type, $description, $balance_after, $reference_id) {
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'dw_wallet_transactions';
+
+        if ($wpdb->get_var("SHOW TABLES LIKE '$table_name'") != $table_name) {
+             // Fallback Meta
+             $history = get_user_meta($user_id, '_dw_wallet_history', true);
+             if (!is_array($history)) $history = [];
+             $history[] = [
+                 'date' => current_time('mysql'),
+                 'amount' => $amount,
+                 'flow' => $flow,
+                 'type' => $type,
+                 'desc' => $description,
+                 'ref' => $reference_id
+             ];
+             // Keep last 50
+             if (count($history) > 50) array_shift($history);
+             update_user_meta($user_id, '_dw_wallet_history', $history);
+             return;
+        }
+
+        $wpdb->insert(
+            $table_name,
+            array(
+                'user_id' => $user_id,
+                'amount' => $amount,
+                'flow' => $flow,
+                'type' => $type,
+                'description' => $description,
+                'balance_after' => $balance_after,
+                'reference_id' => $reference_id,
+                'created_at' => current_time('mysql')
+            ),
+            array('%d', '%f', '%s', '%s', '%s', '%f', '%d', '%s')
+        );
     }
 }

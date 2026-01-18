@@ -1,50 +1,53 @@
 <?php
-// includes/shortcodes/class-dw-shortcodes.php
-
-if ( ! defined( 'ABSPATH' ) ) {
-    exit; // Exit if accessed directly
-}
-
 /**
  * Class DW_Shortcodes
- * Bertugas sebagai loader utama untuk semua modul shortcode.
+ * Central registry untuk semua shortcode di plugin.
  */
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
 class DW_Shortcodes {
 
-    public function __construct() {
-        $this->load_dependencies();
-        $this->init_shortcodes();
-    }
+    public static function init() {
+        // Init Shortcode Ojek
+        if (class_exists('DW_Shortcode_Ojek')) {
+            DW_Shortcode_Ojek::init();
+        }
 
-    private function load_dependencies() {
-        $path = plugin_dir_path( __FILE__ );
+        // Init Shortcode Desa & Wisata
+        if (class_exists('DW_Shortcode_Desa')) {
+            DW_Shortcode_Desa::init();
+        }
 
-        // 1. Modul E-commerce
-        require_once $path . 'class-dw-shortcode-product-list.php';
-        require_once $path . 'class-dw-shortcode-cart.php';
-        require_once $path . 'class-dw-shortcode-checkout.php';
-
-        // 2. Modul Dashboard Role
-        require_once $path . 'class-dw-shortcode-desa.php';
-        require_once $path . 'class-dw-shortcode-pedagang.php';
-        require_once $path . 'class-dw-shortcode-verifikator.php';
-        require_once $path . 'class-dw-shortcode-ojek.php';
+        // Init Shortcode Cart & Checkout (Custom)
+        if (class_exists('DW_Shortcode_Cart')) {
+            DW_Shortcode_Cart::init();
+        }
+        if (class_exists('DW_Shortcode_Checkout')) {
+            DW_Shortcode_Checkout::init();
+        }
         
-        // 3. Modul Kasir (BARU)
-        require_once $path . 'class-dw-shortcode-pos.php';
-    }
+        // Init Shortcode Pedagang & Produk
+        if (class_exists('DW_Shortcode_Pedagang')) {
+            DW_Shortcode_Pedagang::init();
+        }
+        if (class_exists('DW_Shortcode_Product_List')) {
+            DW_Shortcode_Product_List::init();
+        }
 
-    private function init_shortcodes() {
-        // Inisialisasi setiap kelas
-        new DW_Shortcode_Product_List();
-        new DW_Shortcode_Cart();
-        new DW_Shortcode_Checkout();
+        // FASE 4: Init Shortcode Wallet
+        if (class_exists('DW_Shortcode_Wallet')) {
+            DW_Shortcode_Wallet::init();
+        }
         
-        new DW_Shortcode_Desa();
-        new DW_Shortcode_Pedagang();
-        new DW_Shortcode_Verifikator();
-        new DW_Shortcode_Ojek();
-        
-        new DW_Shortcode_POS(); // Init POS
+        // Shortcode lainnya...
+        if (class_exists('DW_Shortcode_Verifikator')) {
+            DW_Shortcode_Verifikator::init();
+        }
+        if (class_exists('DW_Shortcode_POS')) {
+            DW_Shortcode_POS::init();
+        }
     }
 }

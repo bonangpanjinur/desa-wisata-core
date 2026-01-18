@@ -2,49 +2,84 @@
 /**
  * File: includes/cron-jobs.php
  * Menangani tugas-tugas terjadwal (Cron Jobs) otomatis.
- * UPDATE FASE 5: Menambahkan Job Sync Payment Status (Safety Net).
- * * Tugas Utama:
- * 1. dw_sync_payment_status: Cek status Xendit untuk order pending > 30 menit.
- * 2. dw_daily_cleanup: (Opsional) Membersihkan keranjang lama/log.
+ * * CAKUPAN TUGAS (Sesuai Roadmap):
+ * 1. FASE 2: Auto-Complete Order (Ojek & Ekspedisi) -> Hook: dw_cron_auto_complete_orders
+ * 2. FASE 5: Sync Payment Status (Xendit/Safety Net) -> Hook: dw_cron_sync_payments
  */
 
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 /**
- * 1. Daftarkan Jadwal Kustom (Jika interval bawaan WP kurang)
+ * 1. Daftarkan Interval Waktu Kustom
  */
 function dw_add_cron_intervals( $schedules ) {
-    // Interval 30 Menit
+    // Interval 30 Menit untuk Sync Payment yang lebih agresif
     $schedules['every_30_mins'] = array(
         'interval' => 1800,
-        'display'  => __( 'Every 30 Minutes' ),
+        'display'  => __( 'Setiap 30 Menit' ),
     );
     return $schedules;
 }
 add_filter( 'cron_schedules', 'dw_add_cron_intervals' );
 
 /**
- * 2. Registrasi Hook saat Plugin Aktif
- * Dipanggil di includes/activation.php sebenarnya, tapi kita definisikan hooknya di sini.
+ * 2. Registrasi Hook Jadwal (Scheduler)
+ * Fungsi ini harus dipanggil saat aktivasi plugin atau di init.
  */
-if ( ! wp_next_scheduled( 'dw_cron_sync_payments' ) ) {
-    wp_schedule_event( time(), 'hourly', 'dw_cron_sync_payments' );
+function dw_schedule_cron_jobs() {
+    // A. Jadwal Auto-Complete Order (Fase 2) - Jalan setiap jam
+    if ( ! wp_next_scheduled( 'dw_cron_auto_complete_orders' ) ) {
+        wp_schedule_event( time(), 'hourly', 'dw_cron_auto_complete_orders' );
+    }
+
+    // B. Jadwal Sync Payment Status (Fase 5) - Jalan setiap 30 menit
+    if ( ! wp_next_scheduled( 'dw_cron_sync_payments' ) ) {
+        wp_schedule_event( time(), 'every_30_mins', 'dw_cron_sync_payments' );
+    }
 }
+// Hook ke init untuk memastikan cron tetap terjadwal jika terhapus tidak sengaja
+add_action( 'init', 'dw_schedule_cron_jobs' );
 
 /**
- * 3. LOGIKA UTAMA: Sinkronisasi Status Pembayaran
- * Mengecek transaksi PENDING yang dibuat lebih dari 20 menit lalu.
+ * 3. Bersihkan Jadwal (Cleanup)
+ * Dipanggil saat plugin dinonaktifkan.
+ */
+function dw_clear_cron_jobs() {
+    $jobs = [ 'dw_cron_auto_complete_orders', 'dw_cron_sync_payments' ];
+    foreach ( $jobs as $job ) {
+        $timestamp = wp_next_scheduled( $job );
+        if ( $timestamp ) {
+            wp_unschedule_event( $timestamp, $job );
+        }
+    }
+}
+register_deactivation_hook( DW_FILE, 'dw_clear_cron_jobs' );
+
+/**
+ * ==============================================================================
+ * IMPLEMENTASI LOGIKA TUGAS (HANDLERS)
+ * ==============================================================================
+ */
+
+/**
+ * A. LOGIKA SYNC PAYMENT (Fase 5 - Safety Net)
+ * Mengecek transaksi PENDING (Xendit/QRIS) yang mungkin statusnya miss-sync.
  */
 function dw_execute_sync_payments() {
     global $wpdb;
     $table_transaksi = $wpdb->prefix . 'dw_transaksi';
 
-    // Ambil transaksi yang masih 'menunggu_pembayaran' dan dibuat > 20 menit lalu
-    // Kita batasi 20 order per run agar server tidak berat
+    // Cek apakah tabel transaksi ada (mencegah error fatal jika belum install DB)
+    if ( $wpdb->get_var( "SHOW TABLES LIKE '$table_transaksi'" ) != $table_transaksi ) {
+        return;
+    }
+
+    // Ambil transaksi 'menunggu_pembayaran' (Pending)
+    // Kriteria: Dibuat > 20 menit lalu & < 24 jam lalu
     $orders = $wpdb->get_results( "
         SELECT * FROM $table_transaksi 
         WHERE status_transaksi = 'menunggu_pembayaran' 
-        AND metode_pembayaran IN ('xendit', 'qris', 'va')
+        AND metode_pembayaran IN ('xendit', 'qris', 'va', 'ewallet')
         AND created_at < DATE_SUB(NOW(), INTERVAL 20 MINUTE)
         AND created_at > DATE_SUB(NOW(), INTERVAL 24 HOUR) 
         LIMIT 20
@@ -54,56 +89,51 @@ function dw_execute_sync_payments() {
         return;
     }
 
-    // Pastikan gateway class tersedia
+    // Pastikan dependensi tersedia
     if ( ! class_exists( 'DW_Xendit_Gateway' ) ) {
-        require_once plugin_dir_path( __FILE__ ) . 'classes/gateways/class-dw-xendit-gateway.php';
+        // Coba load manual jika path sesuai standar plugin
+        $gateway_path = plugin_dir_path( dirname( __FILE__ ) ) . 'includes/classes/gateways/class-dw-xendit-gateway.php';
+        if ( file_exists( $gateway_path ) ) {
+            require_once $gateway_path;
+        } else {
+            return; // Nyerah, file gak ada
+        }
     }
-    
-    // Pastikan commission handler tersedia
+
+    // Load Commission Handler jika perlu
     if ( ! function_exists( 'dw_distribute_order_commissions' ) ) {
-        require_once plugin_dir_path( __FILE__ ) . 'commission-handler.php';
+        $comm_path = plugin_dir_path( dirname( __FILE__ ) ) . 'includes/commission-handler.php';
+        if ( file_exists( $comm_path ) ) require_once $comm_path;
     }
 
     $gateway = new DW_Xendit_Gateway();
 
     foreach ( $orders as $order ) {
-        // Coba cari External ID (Format: TRX-{ID}-{TIMESTAMP})
-        // Kita perlu mencari External ID yang valid. 
-        // Jika kode_unik disimpan sebagai external_id di DB, gunakan itu. 
-        // Jika tidak, kita mungkin perlu reconstruct atau simpan external_id di meta saat create invoice.
-        // Asumsi: Kode Unik di DB = External ID (atau mirip).
-        // Tapi create_invoice pakai format: 'TRX-' . $transaction_id . '-' . time()
-        // Masalah: Kita tidak tahu timestamp pastinya.
-        // SOLUSI TERBAIK: Simpan 'external_id' Xendit di tabel transaksi saat create invoice.
-        // Jika belum ada kolom itu, kita coba cari Invoice ID dari meta post (jika disimpan).
-        
-        // Untuk Safety Net ini bekerja efektif, 'includes/classes/gateways/class-dw-xendit-gateway.php' 
-        // idealnya menyimpan Invoice ID Xendit ke post_meta '_xendit_invoice_id'.
-        
+        // Logika External ID / Invoice ID
+        // Prioritas 1: Ambil dari Meta Post (jika tersimpan)
         $xendit_invoice_id = get_post_meta( $order->id, '_xendit_invoice_id', true );
         
-        // Jika tidak punya ID Xendit, kita tidak bisa cek status pastinya. Skip.
+        // Prioritas 2: Jika kosong, coba reconstruct dari pola (Fallback)
+        // Format umum: TRX-{ID}-{TIMESTAMP}. 
+        // Note: Ini berisiko jika timestamp beda detik. Lebih aman pakai Priority 1.
         if ( ! $xendit_invoice_id ) {
-            continue; 
+             continue; // Skip jika tidak ada ID referensi yang valid
         }
 
-        // Panggil API Xendit Get Invoice
+        // Call API Xendit
         $invoice = $gateway->get_invoice( $xendit_invoice_id );
 
         if ( is_wp_error( $invoice ) ) {
-            // Log error koneksi, tapi jangan stop proses order lain
-            error_log( "DW Cron Error Order #{$order->id}: " . $invoice->get_error_message() );
+            error_log( "[DW Cron] Error Order #{$order->id}: " . $invoice->get_error_message() );
             continue;
         }
 
-        // Cek Status Invoice di Xendit
-        $status_xendit = isset($invoice['status']) ? $invoice['status'] : '';
+        $status_xendit = isset( $invoice['status'] ) ? $invoice['status'] : '';
 
+        // 1. KASUS SUKSES (PAID/SETTLED)
         if ( $status_xendit === 'PAID' || $status_xendit === 'SETTLED' ) {
-            // ALHAMDULILLAH, SUDAH BAYAR TAPI STATUS LOKAL BELUM UPDATE
-            // Lakukan Update Otomatis
             
-            // 1. Update Status DB Utama
+            // Update Status DB Custom
             $wpdb->update( 
                 $table_transaksi, 
                 [ 
@@ -113,40 +143,52 @@ function dw_execute_sync_payments() {
                 [ 'id' => $order->id ] 
             );
 
-            // 2. Update Sub-Order jadi 'dikemas'
-            $wpdb->update(
-                $wpdb->prefix . 'dw_transaksi_sub',
-                [ 'status_pesanan' => 'dikemas' ],
-                [ 'id_transaksi' => $order->id ]
-            );
-
-            // 3. Trigger Distribusi Komisi (PENTING)
-            dw_distribute_order_commissions( $order->id );
-
-            // 4. Log Aktivitas
-            if ( function_exists( 'dw_log_activity' ) ) {
-                dw_log_activity( 'CRON_AUTO_SYNC', "Order #{$order->id} otomatis di-update ke PAID via Cron Job.", 0 );
+            // Update Status WooCommerce / Sub Transaction
+            // Asumsi tabel sub transaksi ada
+            $table_sub = $wpdb->prefix . 'dw_transaksi_sub';
+            if ( $wpdb->get_var( "SHOW TABLES LIKE '$table_sub'" ) == $table_sub ) {
+                $wpdb->update(
+                    $table_sub,
+                    [ 'status_pesanan' => 'dikemas' ],
+                    [ 'id_transaksi' => $order->id ]
+                );
             }
 
+            // Update Status WooCommerce Order (jika pakai WC Orders)
+            $wc_order = wc_get_order( $order->id );
+            if ( $wc_order ) {
+                $wc_order->payment_complete();
+                $wc_order->add_order_note( 'Pembayaran terverifikasi otomatis via Cron Job (Safety Net).' );
+            }
+
+            // Distribusi Komisi
+            if ( function_exists( 'dw_distribute_order_commissions' ) ) {
+                dw_distribute_order_commissions( $order->id );
+            }
+
+        // 2. KASUS EXPIRED
         } elseif ( $status_xendit === 'EXPIRED' ) {
-            // Invoice sudah kadaluarsa
             $wpdb->update( 
                 $table_transaksi, 
                 [ 'status_transaksi' => 'dibatalkan' ], 
                 [ 'id' => $order->id ] 
             );
+            
+            $wc_order = wc_get_order( $order->id );
+            if ( $wc_order ) {
+                $wc_order->update_status( 'cancelled', 'Invoice Xendit Expired (dicek via Cron).' );
+            }
         }
     }
 }
 add_action( 'dw_cron_sync_payments', 'dw_execute_sync_payments' );
 
 /**
- * 4. Helper: Unschedule saat Deaktivasi Plugin
- * (Biasanya dipanggil di file deactivation.php)
+ * B. LOGIKA AUTO-COMPLETE (Fase 2)
+ * Note: Logika detailnya didelegasikan ke Class Handler agar file ini tidak terlalu panjang.
+ * Pastikan class 'DW_Transaction_Handler' sudah dimuat di init.php.
  */
-function dw_clear_cron_jobs() {
-    $timestamp = wp_next_scheduled( 'dw_cron_sync_payments' );
-    if ( $timestamp ) {
-        wp_unschedule_event( $timestamp, 'dw_cron_sync_payments' );
-    }
-}
+/* * Hook 'dw_cron_auto_complete_orders' akan ditangkap oleh:
+ * DW_Transaction_Handler::run_auto_complete_logic() 
+ * (Lihat file: includes/classes/class-dw-transaction-handler.php)
+ */
