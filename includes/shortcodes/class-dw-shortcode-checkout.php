@@ -11,6 +11,24 @@ class DW_Shortcode_Checkout {
         add_shortcode( 'dw_checkout', array( $this, 'render' ) );
     }
 
+    /**
+     * Helper: Hitung Platform Fee
+     */
+    private function calculate_platform_fee($subtotal) {
+        $fee_type  = get_option( 'dw_buyer_fee_type', 'fixed' );
+        $fee_value = (float) get_option( 'dw_buyer_fee_value', 0 );
+
+        if ( $fee_value <= 0 ) {
+            return 0;
+        }
+
+        if ( $fee_type === 'percentage' ) {
+            return $subtotal * ( $fee_value / 100 );
+        }
+
+        return $fee_value;
+    }
+
     public function render( $atts ) {
         // Cek Login
         if ( ! is_user_logged_in() ) {
@@ -83,7 +101,7 @@ class DW_Shortcode_Checkout {
                 update_user_meta($user_id, 'billing_state', $provinsi);
                 update_user_meta($user_id, 'billing_city', $kabupaten);
                 
-                // B. Update Tabel Role Khusus
+                // B. Update Tabel Role Khusus (Sama seperti kode lama)
                 $table_user = '';
                 $where_user = [];
                 $data_update_user = [];
@@ -137,7 +155,7 @@ class DW_Shortcode_Checkout {
                     }
                 }
                 
-                // C. Kalkulasi Total
+                // C. Kalkulasi Total & Fee
                 $total_produk = 0;
                 $total_ongkir = 0;
                 $items_by_toko = [];
@@ -151,8 +169,10 @@ class DW_Shortcode_Checkout {
                     $total_ongkir += floatval($ongkir_val);
                 }
 
-                $grand_total = $total_produk + $total_ongkir;
-                $kode_unik = 'TRX-' . strtoupper(wp_generate_password(8, false));
+                // --- HITUNG BIAYA LAYANAN (MARKETPLACE FEE) ---
+                $platform_fee = $this->calculate_platform_fee($total_produk);
+                $grand_total  = $total_produk + $total_ongkir + $platform_fee;
+                $kode_unik    = 'TRX-' . strtoupper(wp_generate_password(8, false));
 
                 // D. Insert Transaksi Utama
                 $wpdb->insert("{$wpdb->prefix}dw_transaksi", [
@@ -160,7 +180,7 @@ class DW_Shortcode_Checkout {
                     'id_pembeli'        => $user_id,
                     'total_produk'      => $total_produk,
                     'total_ongkir'      => $total_ongkir,
-                    'biaya_layanan'     => 0,
+                    'biaya_layanan'     => $platform_fee, // Masukkan ke kolom baru (pastikan tabel sudah update)
                     'total_transaksi'   => $grand_total,
                     'nama_penerima'     => $nama_penerima,
                     'no_hp'             => $no_hp,
@@ -176,6 +196,14 @@ class DW_Shortcode_Checkout {
                     'batas_bayar'       => date('Y-m-d H:i:s', strtotime('+24 hours'))
                 ]);
                 $trx_id = $wpdb->insert_id;
+
+                // --- SIMPAN META FEE UNTUK DISTRIBUSI KOMISI ---
+                // Penting untuk cron job / webhook handler nanti
+                update_post_meta($trx_id, '_dw_fee_buyer_amount', $platform_fee);
+                
+                // Snapshot Rate Pedagang saat ini (misal 5%)
+                $merchant_rate = get_option('dw_merchant_fee_value', 5);
+                update_post_meta($trx_id, '_dw_fee_merchant_rate', $merchant_rate);
 
                 // E. Insert Sub Transaksi & Items
                 foreach ($items_by_toko as $toko_id => $toko_items) {
@@ -242,7 +270,7 @@ class DW_Shortcode_Checkout {
             }
         }
 
-        // --- 2. PENGAMBILAN DATA ALAMAT ---
+        // --- 2. PENGAMBILAN DATA ALAMAT (Bagian ini tidak berubah banyak) ---
         $data_source = null;
         $role_type   = 'pembeli'; 
 
@@ -308,10 +336,8 @@ class DW_Shortcode_Checkout {
         }
 
         // --- 3. AMBIL DATA CART (POST DATA) ---
-        // Jika form ini di-load, harusnya menerima POST cart_ids dari halaman Keranjang
         $selected_cart_ids = isset($_POST['cart_ids']) ? array_map('intval', $_POST['cart_ids']) : [];
         
-        // Render Empty State jika tidak ada cart_ids (misal user akses langsung url /checkout)
         if ( empty($selected_cart_ids) ) {
             ob_start();
             ?>
@@ -331,13 +357,13 @@ class DW_Shortcode_Checkout {
 
         $ids_placeholder = implode(',', array_fill(0, count($selected_cart_ids), '%d'));
         $sql = "SELECT c.id as cart_id, c.qty, c.id_produk, c.id_variasi,
-                       p.nama_produk, p.berat_gram, p.foto_utama, 
-                       COALESCE(v.harga_variasi, p.harga) as final_price,
-                       v.deskripsi_variasi,
-                       t.id as toko_id, t.nama_toko, t.kabupaten_nama as asal_kota, 
-                       t.api_kecamatan_id as merchant_kec_id,
-                       t.shipping_ojek_lokal_aktif, t.shipping_ojek_lokal_zona,
-                       t.shipping_nasional_aktif, t.allow_pesan_di_tempat
+                        p.nama_produk, p.berat_gram, p.foto_utama, 
+                        COALESCE(v.harga_variasi, p.harga) as final_price,
+                        v.deskripsi_variasi,
+                        t.id as toko_id, t.nama_toko, t.kabupaten_nama as asal_kota, 
+                        t.api_kecamatan_id as merchant_kec_id,
+                        t.shipping_ojek_lokal_aktif, t.shipping_ojek_lokal_zona,
+                        t.shipping_nasional_aktif, t.allow_pesan_di_tempat
                 FROM {$wpdb->prefix}dw_cart c
                 JOIN {$wpdb->prefix}dw_produk p ON c.id_produk = p.id
                 LEFT JOIN {$wpdb->prefix}dw_produk_variasi v ON c.id_variasi = v.id
@@ -364,6 +390,10 @@ class DW_Shortcode_Checkout {
             $grouped_checkout[$item->toko_id]['items'][] = $item;
             $grand_total_barang += $subtotal;
         }
+
+        // Hitung Fee untuk Tampilan
+        $display_fee = $this->calculate_platform_fee($grand_total_barang);
+        $total_initial_display = $grand_total_barang + $display_fee;
 
         ob_start();
         ?>
@@ -467,7 +497,7 @@ class DW_Shortcode_Checkout {
                                 <div class="md:w-1/3 space-y-1">
                                     <label class="text-xs font-bold text-gray-600 uppercase tracking-wide">Kode Pos</label>
                                     <input type="text" name="kode_pos" id="kode_pos" value="<?php echo esc_attr($kode_pos); ?>" 
-                                        class="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-primary outline-none">
+                                            class="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-primary outline-none">
                                 </div>
                             </div>
                         </div>
@@ -621,13 +651,19 @@ class DW_Shortcode_Checkout {
                                     <span>Total Ongkos Kirim</span>
                                     <span class="font-bold text-gray-800" id="summary-ongkir">Rp 0</span>
                                 </div>
+                                
+                                <!-- DISPLAY PLATFORM FEE -->
+                                <div class="flex justify-between items-center text-green-700 bg-green-50 px-2 py-1 -mx-2 rounded">
+                                    <span class="flex items-center gap-1">Biaya Layanan <i class="fas fa-info-circle text-[10px]" title="Biaya operasional platform"></i></span>
+                                    <span class="font-bold">Rp <?php echo number_format($display_fee, 0, ',', '.'); ?></span>
+                                </div>
                             </div>
 
                             <div class="border-t border-dashed border-gray-300 pt-5 mb-6">
                                 <div class="flex justify-between items-end">
                                     <span class="font-bold text-gray-800 text-base">Total Tagihan</span>
                                     <span class="text-2xl font-extrabold text-primary" id="summary-grand-total">
-                                        Rp <?php echo number_format($grand_total_barang, 0, ',', '.'); ?>
+                                        Rp <?php echo number_format($total_initial_display, 0, ',', '.'); ?>
                                     </span>
                                 </div>
                             </div>
@@ -649,7 +685,8 @@ class DW_Shortcode_Checkout {
         </div>
 
         <script>
-            const baseTotalBarang = <?php echo $grand_total_barang; ?>;
+            // UPDATE: Base total sekarang sudah termasuk Platform Fee
+            const baseTotalWithFee = <?php echo $total_initial_display; ?>;
             const ajaxUrl = '<?php echo admin_url('admin-ajax.php'); ?>';
 
             document.addEventListener('DOMContentLoaded', function() {
@@ -778,7 +815,8 @@ class DW_Shortcode_Checkout {
                     });
 
                     dispOngkir.innerText = formatRupiah(totalOngkir);
-                    dispTotal.innerText = formatRupiah(baseTotalBarang + totalOngkir);
+                    // UPDATE: Total akhir = (Produk + Fee) + Ongkir
+                    dispTotal.innerText = formatRupiah(baseTotalWithFee + totalOngkir);
 
                     // --- LOGIKA DISABLE TUNAI ---
                     const radioTunai = document.querySelector('input[name="payment_method"][value="tunai"]');

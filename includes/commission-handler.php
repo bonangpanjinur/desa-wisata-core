@@ -1,91 +1,138 @@
 <?php
 /**
  * File: includes/commission-handler.php
- * Deskripsi: Logika inti pembagian komisi dinamis lintas aktor (Platform, Desa, Verifikator).
- * Update: Integrasi dengan Payout Ledger untuk pencatatan riwayat komisi.
+ * Deskripsi: Handler Utama Distribusi Dana (Marketplace Split Bill).
+ * UPDATE FASE 5: Logika "Marketplace" dimana uang masuk ke Admin dulu, baru didistribusikan.
+ * * Flow:
+ * 1. Webhook Xendit masuk (PAID) -> Update Status Order.
+ * 2. Fungsi dw_distribute_order_commissions() dipanggil.
+ * 3. Hitung Hak Pedagang = (Harga Barang - Komisi Admin) + Ongkir.
+ * 4. Hitung Pendapatan Admin = Fee Pembeli + Komisi Admin.
+ * 5. Transfer saldo ke Wallet masing-masing.
  */
 
-if (!defined('ABSPATH')) exit;
+if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 /**
- * Memproses pembagian komisi saat transaksi sukses
- * * @param int $transaction_id ID Transaksi / Order
- * @param float $total_admin_fee Total potongan biaya layanan yang diambil oleh sistem
+ * Fungsi Utama: Distribusi Dana per Order
+ * Dipanggil saat pesanan berubah status menjadi 'pembayaran_dikonfirmasi' (PAID).
+ *
+ * @param int $order_id ID Transaksi (dw_transaksi)
+ * @return void
  */
-function dw_process_transaction_commissions($transaction_id, $total_admin_fee) {
+function dw_distribute_order_commissions( $order_id ) {
     global $wpdb;
-    
-    // 1. Dapatkan data pedagang dari transaksi
-    $pedagang_user_id = get_post_meta($transaction_id, '_pedagang_user_id', true);
-    if (!$pedagang_user_id) return;
 
-    // 2. Cari siapa Verifikatornya (pemilik kode)
-    $verifier_id = get_user_meta($pedagang_user_id, 'dw_verified_by', true);
-    
-    // 3. Cari Desa induk (relasi wilayah v3.4)
-    $desa_id = get_user_meta($pedagang_user_id, 'dw_parent_desa_id', true);
-    
-    // Cari User ID dari Desa tersebut untuk pengiriman saldo
-    $desa_user_id = 0;
-    if ($desa_id) {
-        $desa_user_id = $wpdb->get_var($wpdb->prepare("SELECT id_user_desa FROM {$wpdb->prefix}dw_desa WHERE id = %d", $desa_id));
+    // 1. SAFETY CHECK: Idempotency
+    // Pastikan komisi untuk order ini belum pernah didistribusikan sebelumnya.
+    if ( get_post_meta( $order_id, '_dw_commission_distributed', true ) ) {
+        return; 
     }
 
-    // 4. Ambil persentase pengaturan dinamis dari Admin
-    $settings = dw_get_commission_settings();
-    
-    // 5. Hitung porsi masing-masing aktor
-    $share_platform = ($settings['platform'] / 100) * $total_admin_fee;
-    $share_desa     = ($settings['desa'] / 100) * $total_admin_fee;
-    $share_verifier = ($settings['verifier'] / 100) * $total_admin_fee;
+    // 2. Ambil Data Transaksi Utama
+    $table_transaksi = $wpdb->prefix . 'dw_transaksi';
+    $order = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $table_transaksi WHERE id = %d", $order_id ) );
 
-    // 6. Distribusi Saldo & Pencatatan Ledger (Riwayat)
-    $ledger_table = $wpdb->prefix . 'dw_payout_ledger';
-
-    // A. Jatah Platform (Super Admin ID 1)
-    dw_add_user_balance(1, $share_platform, "Platform Commission - Trans #$transaction_id");
-    
-    // B. Jatah Desa (Pemilik Wilayah)
-    if ($desa_user_id && $share_desa > 0) {
-        dw_add_user_balance($desa_user_id, $share_desa, "Wilayah Fee - Trans #$transaction_id");
-        
-        // Catat ke Ledger (seperti versi sebelumnya)
-        $wpdb->insert($ledger_table, [
-            'order_id'        => $transaction_id,
-            'payable_to_type' => 'desa',
-            'payable_to_id'   => $desa_id,
-            'amount'          => $share_desa,
-            'status'          => 'paid_to_balance', // Status khusus saldo internal
-        ]);
+    if ( ! $order ) {
+        return;
     }
 
-    // C. Jatah Verifikator (Pemilik Kode)
-    if ($verifier_id && $share_verifier > 0) {
-        dw_add_user_balance($verifier_id, $share_verifier, "Verifier Fee - Trans #$transaction_id");
+    // Hanya proses jika status valid (Sudah Bayar)
+    // Sesuaikan status dengan flow sistem Anda. Biasanya: 'pembayaran_dikonfirmasi' atau 'diproses'
+    if ( ! in_array( $order->status_transaksi, ['pembayaran_dikonfirmasi', 'diproses', 'dikirim', 'selesai'] ) ) {
+        return;
+    }
+
+    // 3. Ambil Snapshot Fee yang disimpan saat Checkout
+    // Ini penting agar jika admin mengubah setting fee di kemudian hari, transaksi lama tidak berubah.
+    $buyer_fee     = (float) get_post_meta( $order_id, '_dw_fee_buyer_amount', true );
+    $merchant_rate = (float) get_post_meta( $order_id, '_dw_fee_merchant_rate', true );
+
+    // Fallback: Jika data meta kosong (transaksi legacy), ambil dari setting saat ini
+    if ( $merchant_rate <= 0 && get_post_meta( $order_id, '_dw_fee_merchant_rate', true ) === '' ) {
+        $merchant_rate = (float) get_option( 'dw_merchant_fee_value', 5 );
+    }
+
+    // 4. Ambil Sub-Transaksi (Per Toko/Pedagang)
+    $table_sub = $wpdb->prefix . 'dw_transaksi_sub';
+    $sub_orders = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM $table_sub WHERE id_transaksi = %d", $order_id ) );
+
+    $total_admin_revenue_from_commission = 0;
+
+    // Inisialisasi Wallet Class
+    if ( ! class_exists( 'DW_Wallet' ) ) {
+        require_once plugin_dir_path( __FILE__ ) . 'classes/class-dw-wallet.php';
+    }
+    $wallet = new DW_Wallet();
+
+    // 5. LOOPING: Proses Setiap Pedagang
+    foreach ( $sub_orders as $sub ) {
+        $pedagang_id_user = $sub->id_pedagang; // Asumsi: kolom ini menyimpan ID User WP si pedagang
         
-        // Catat ke Ledger
-        $wpdb->insert($ledger_table, [
-            'order_id'        => $transaction_id,
-            'payable_to_type' => 'verifikator',
-            'payable_to_id'   => $verifier_id,
-            'amount'          => $share_verifier,
-            'status'          => 'paid_to_balance',
-        ]);
-    } else if ($share_verifier > 0) {
-        // Jika tidak ada verifikator, jatahnya kembali ke Platform
-        dw_add_user_balance(1, $share_verifier, "Verifier Fee (Admin Fallback) - Trans #$transaction_id");
+        $sub_total_barang = (float) $sub->sub_total; // Harga Barang Saja
+        $ongkir_toko      = (float) $sub->ongkir;    // Ongkos Kirim
+
+        // --- HITUNGAN DUIT ---
+        // Komisi Admin = % dari Harga Barang
+        $potongan_admin = $sub_total_barang * ( $merchant_rate / 100 );
+        
+        // Pendapatan Bersih Pedagang dari Barang
+        $net_barang = $sub_total_barang - $potongan_admin;
+
+        // Total Transfer ke Pedagang = Net Barang + Ongkir Full
+        // (Ongkir diteruskan 100% ke pedagang agar mereka bisa bayar kurir/bensin)
+        $total_transfer_pedagang = $net_barang + $ongkir_toko;
+
+        // --- EKSEKUSI TRANSFER WALLET ---
+        if ( $total_transfer_pedagang > 0 ) {
+            $wallet->add_balance(
+                $pedagang_id_user,
+                $total_transfer_pedagang,
+                sprintf( "Penjualan Order #%s (Toko: %s) - Potongan Admin %s%%", $order->kode_unik, $sub->nama_toko, $merchant_rate )
+            );
+        }
+
+        // Akumulasi pendapatan admin dari sub-transaksi ini
+        $total_admin_revenue_from_commission += $potongan_admin;
+    }
+
+    // 6. CATAT PENDAPATAN PLATFORM
+    // Total Cuan Admin = Fee Pembeli + Total Komisi dari semua pedagang
+    $total_platform_revenue = $buyer_fee + $total_admin_revenue_from_commission;
+
+    if ( $total_platform_revenue > 0 ) {
+        // Simpan ke Wallet Super Admin (User ID 1) sebagai pencatatan
+        // Atau buat tabel log khusus pendapatan platform
+        $wallet->add_balance(
+            1, // ID User Super Admin
+            $total_platform_revenue,
+            sprintf( "Platform Revenue - Order #%s (Fee Pembeli: %s, Komisi: %s)", $order->kode_unik, $buyer_fee, $total_admin_revenue_from_commission )
+        );
+    }
+
+    // 7. FLAG SELESAI
+    // Tandai bahwa order ini sudah diproses komisinya agar tidak double
+    update_post_meta( $order_id, '_dw_commission_distributed', current_time( 'mysql' ) );
+    
+    // Log Activity (Opsional)
+    if ( function_exists( 'dw_log_activity' ) ) {
+        dw_log_activity( 'COMMISSION_DISTRIBUTED', "Order #{$order_id}: Pedagang & Admin telah menerima dana.", $order->id_pembeli );
     }
 }
 
 /**
- * Fungsi lama untuk kompatibilitas jika masih dipanggil di bagian lain
- * Dialihkan ke sistem pemrosesan komisi dinamis yang baru.
+ * Hook untuk menjalankan fungsi di atas.
+ * Anda bisa menempelkan hook ini di tempat Anda mengupdate status order menjadi 'paid'.
+ * Contoh: do_action('dw_order_status_paid', $order_id);
  */
-function dw_record_commission($order_id, $pedagang_id, $total_transaksi) {
-    // Karena sekarang sistem menggunakan potongan biaya layanan (Admin Fee) sebagai dasar pembagian,
-    // Kita asumsikan Admin Fee dihitung di sini atau diambil dari pengaturan global.
-    $admin_fee_pct = get_option('dw_global_admin_fee_percent', 10); // Misal default 10%
-    $total_admin_fee = ($total_transaksi * $admin_fee_pct) / 100;
-    
-    dw_process_transaction_commissions($order_id, $total_admin_fee);
+add_action( 'dw_order_status_paid', 'dw_distribute_order_commissions' );
+
+/**
+ * [LEGACY SUPPORT] 
+ * Fungsi lama dijaga agar tidak error jika dipanggil kode lain, 
+ * tapi dialihkan ke logika baru atau dikosongkan jika tidak relevan.
+ */
+function dw_process_transaction_commissions( $transaction_id, $total_admin_fee_dummy = 0 ) {
+    // Forward ke fungsi baru
+    dw_distribute_order_commissions( $transaction_id );
 }

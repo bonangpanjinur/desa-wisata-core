@@ -1,9 +1,9 @@
 <?php
 /**
  * File: includes/admin-pages/page-settings.php
- * * Admin Page: Pengaturan Sistem
- * * Menggunakan Tab Navigasi modern dan Card wrapper.
- * * UPDATE FASE 4 (Final Fix): Xendit di API Tab, Wallet Settings di Payment Tab.
+ * Admin Page: Pengaturan Sistem
+ * Menggunakan Tab Navigasi modern dan Card wrapper.
+ * UPDATE FASE 5 (Marketplace Fees): Menambahkan pengaturan Fee Pembeli dan Komisi Pedagang.
  */
 
 defined( 'ABSPATH' ) || exit;
@@ -36,6 +36,21 @@ function dw_settings_save_handler() {
         $gen_settings['desa_name'] = sanitize_text_field( $_POST['dw_app_name'] );
         $gen_settings['desa_address'] = sanitize_textarea_field( $_POST['dw_company_address'] );
         update_option( 'dw_settings_general', $gen_settings );
+
+    } elseif ( $tab === 'marketplace' ) {
+        // --- MARKETPLACE FEES ---
+        if ( isset( $_POST['dw_buyer_fee_type'] ) ) {
+            update_option( 'dw_buyer_fee_type', sanitize_text_field( $_POST['dw_buyer_fee_type'] ) );
+        }
+        if ( isset( $_POST['dw_buyer_fee_value'] ) ) {
+            update_option( 'dw_buyer_fee_value', floatval( $_POST['dw_buyer_fee_value'] ) );
+        }
+        if ( isset( $_POST['dw_merchant_fee_type'] ) ) {
+            update_option( 'dw_merchant_fee_type', sanitize_text_field( $_POST['dw_merchant_fee_type'] ) );
+        }
+        if ( isset( $_POST['dw_merchant_fee_value'] ) ) {
+            update_option( 'dw_merchant_fee_value', floatval( $_POST['dw_merchant_fee_value'] ) );
+        }
 
     } elseif ( $tab === 'payment' ) {
         // 1. Simpan Bank Manual (Legacy)
@@ -109,6 +124,12 @@ function dw_admin_settings_page_handler() {
     $settings_gen = get_option( 'dw_settings_general', [] );
     $payment_settings = get_option( 'dw_payment_settings', [] );
     
+    // Marketplace Fees Options
+    $buyer_fee_type     = get_option( 'dw_buyer_fee_type', 'fixed' );
+    $buyer_fee_value    = get_option( 'dw_buyer_fee_value', 0 );
+    $merchant_fee_type  = get_option( 'dw_merchant_fee_type', 'percentage' );
+    $merchant_fee_value = get_option( 'dw_merchant_fee_value', 5 ); // Default 5%
+    
     // Fallback: Jika di payment_settings kosong, coba ambil dari settings_gen (Legacy)
     if ( empty($payment_settings['xendit_secret_key']) && !empty($settings_gen['xendit_secret_key']) ) {
         $payment_settings['xendit_secret_key'] = $settings_gen['xendit_secret_key'];
@@ -132,6 +153,7 @@ function dw_admin_settings_page_handler() {
             <!-- Navigation Tabs -->
             <nav class="nav-tab-wrapper" style="margin-bottom: 20px;">
                 <a href="?page=dw-settings&tab=general" class="nav-tab <?php echo $active_tab == 'general' ? 'nav-tab-active' : ''; ?>">Umum</a>
+                <a href="?page=dw-settings&tab=marketplace" class="nav-tab <?php echo $active_tab == 'marketplace' ? 'nav-tab-active' : ''; ?>">Marketplace Fees</a>
                 <a href="?page=dw-settings&tab=payment" class="nav-tab <?php echo $active_tab == 'payment' ? 'nav-tab-active' : ''; ?>">Pembayaran & Wallet</a>
                 <a href="?page=dw-settings&tab=api" class="nav-tab <?php echo $active_tab == 'api' ? 'nav-tab-active' : ''; ?>">API & Integrasi</a>
                 <a href="?page=dw-settings&tab=whatsapp" class="nav-tab <?php echo $active_tab == 'whatsapp' ? 'nav-tab-active' : ''; ?>">Notifikasi (WA)</a>
@@ -172,6 +194,68 @@ function dw_admin_settings_page_handler() {
                                     </tr>
                                 </tbody>
                             </table>
+                        </div>
+
+                    <?php elseif ($active_tab == 'marketplace'): ?>
+                        <!-- MARKETPLACE FEES TAB -->
+                        <div class="dw-form-section">
+                            <h3><span class="dashicons dashicons-chart-pie"></span> Skema Biaya & Komisi</h3>
+                            <p class="description">
+                                Atur bagaimana platform mengambil keuntungan dari setiap transaksi. 
+                                <br><strong>Tips:</strong> Fee Pembeli menambah total bayar, sedangkan Fee Pedagang memotong pendapatan penjual.
+                            </p>
+                            <hr>
+
+                            <table class="form-table" role="presentation">
+                                <tbody>
+                                    <!-- FEE PEMBELI -->
+                                    <tr>
+                                        <th scope="row">
+                                            <label for="dw_buyer_fee_value">Biaya Layanan Pembeli (Buyer Fee)</label>
+                                            <p class="description">Dibebankan ke customer saat checkout.</p>
+                                        </th>
+                                        <td>
+                                            <fieldset>
+                                                <select name="dw_buyer_fee_type" id="dw_buyer_fee_type" style="vertical-align: top;">
+                                                    <option value="fixed" <?php selected( $buyer_fee_type, 'fixed' ); ?>>Nominal Tetap (Rp)</option>
+                                                    <option value="percentage" <?php selected( $buyer_fee_type, 'percentage' ); ?>>Persentase (%)</option>
+                                                </select>
+                                                <input name="dw_buyer_fee_value" type="number" step="0.01" id="dw_buyer_fee_value" value="<?php echo esc_attr( $buyer_fee_value ); ?>" class="regular-text" style="width: 150px;">
+                                                <p class="description">Contoh: Isi <code>2000</code> untuk Rp 2.000 (Fixed), atau <code>1.5</code> untuk 1.5% (Percentage).</p>
+                                            </fieldset>
+                                        </td>
+                                    </tr>
+
+                                    <!-- FEE PEDAGANG -->
+                                    <tr>
+                                        <th scope="row">
+                                            <label for="dw_merchant_fee_value">Komisi Pedagang (Merchant Fee)</label>
+                                            <p class="description">Potongan dari total penjualan produk.</p>
+                                        </th>
+                                        <td>
+                                            <fieldset>
+                                                <select name="dw_merchant_fee_type" id="dw_merchant_fee_type" style="vertical-align: top;">
+                                                    <option value="fixed" <?php selected( $merchant_fee_type, 'fixed' ); ?>>Nominal Tetap (Rp)</option>
+                                                    <option value="percentage" <?php selected( $merchant_fee_type, 'percentage' ); ?>>Persentase (%)</option>
+                                                </select>
+                                                <input name="dw_merchant_fee_value" type="number" step="0.01" id="dw_merchant_fee_value" value="<?php echo esc_attr( $merchant_fee_value ); ?>" class="regular-text" style="width: 150px;">
+                                                <p class="description">Contoh: Isi <code>5</code> untuk potongan 5% setiap transaksi.</p>
+                                            </fieldset>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <!-- Simulasi Sederhana -->
+                            <div class="notice notice-info inline" style="margin-top: 20px; border-left-color: #0073aa;">
+                                <p><strong><span class="dashicons dashicons-info-outline"></span> Simulasi Transaksi:</strong></p>
+                                <p>Jika barang seharga <strong>Rp 100.000</strong> terjual:</p>
+                                <ul style="list-style: disc; margin-left: 20px;">
+                                    <li><strong>Pembeli Membayar:</strong> Harga Produk + Ongkir + Fee Pembeli.</li>
+                                    <li><strong>Pedagang Menerima:</strong> Harga Produk - Fee Pedagang.</li>
+                                    <li><strong>Keuntungan Platform:</strong> Fee Pembeli + Fee Pedagang.</li>
+                                </ul>
+                            </div>
                         </div>
 
                     <?php elseif ($active_tab == 'payment'): ?>

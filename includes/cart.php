@@ -8,6 +8,9 @@
  * * --- PERBAIKAN (SECURE v3.2.8) ---
  * 1. dw_process_order: Kalkulasi ulang ongkir di server untuk mencegah manipulasi harga dari client.
  * 2. Tetap mendukung Custom Shipping Profiles & Atomic Stock Check.
+ * * --- UPDATE FASE 5 (MARKETPLACE FEES) ---
+ * 3. Menambahkan perhitungan Platform Fee (Biaya Layanan) pada dw_process_order.
+ * 4. Menyimpan meta data fee untuk distribusi komisi.
  *
  * @package DesaWisataCore
  */
@@ -224,6 +227,32 @@ function dw_get_shipping_options_for_seller($seller_id, $product_ids, $dest_addr
     return $options;
 }
 
+// =========================================================================
+// CALCULATE FEES (MARKETPLACE LOGIC)
+// =========================================================================
+
+/**
+ * Menghitung Biaya Layanan (Platform Fee) berdasarkan Subtotal Produk.
+ * Mengambil pengaturan dari page-settings.php.
+ * * @param float $subtotal Total harga produk sebelum ongkir.
+ * @return float Nilai fee.
+ */
+function dw_calculate_platform_fee($subtotal) {
+    $fee_type  = get_option( 'dw_buyer_fee_type', 'fixed' );
+    $fee_value = (float) get_option( 'dw_buyer_fee_value', 0 );
+
+    if ( $fee_value <= 0 ) {
+        return 0;
+    }
+
+    if ( $fee_type === 'percentage' ) {
+        return $subtotal * ( $fee_value / 100 );
+    }
+
+    // Jika fixed, langsung nominal
+    return $fee_value;
+}
+
 
 // =========================================================================
 // PROSES ORDER (CHECKOUT)
@@ -295,6 +324,7 @@ function dw_process_order($user_id, $data) {
         // Kode unik yang lebih aman (Tanggal + Random)
         $kode_unik = 'DW-' . date('Ymd') . '-' . strtoupper(wp_generate_password(4, false, false));
 
+        // Insert awal (Total 0 dulu, akan diupdate setelah loop)
         $wpdb->insert(
             $table_transaksi,
             array_merge(
@@ -421,9 +451,21 @@ function dw_process_order($user_id, $data) {
             $total_ongkir += $sub_ongkir;
         }
 
+        // --- UPDATE FASE 5: CALCULATE PLATFORM FEE & FINAL TOTAL ---
+        $platform_fee = dw_calculate_platform_fee($total_produk);
+        $total_transaksi = $total_produk + $total_ongkir + $platform_fee;
+
         // 8. Update total di Transaksi Utama
-        $total_transaksi = $total_produk + $total_ongkir;
-        $wpdb->update($table_transaksi, ['total_produk' => $total_produk, 'total_ongkir' => $total_ongkir, 'total_transaksi' => $total_transaksi], ['id' => $main_order_id]);
+        $wpdb->update($table_transaksi, [
+            'total_produk' => $total_produk, 
+            'total_ongkir' => $total_ongkir, 
+            'total_transaksi' => $total_transaksi
+        ], ['id' => $main_order_id]);
+
+        // Simpan Metadata Fee untuk Distribusi Komisi
+        update_post_meta($main_order_id, '_dw_fee_buyer_amount', $platform_fee);
+        $merchant_rate = get_option('dw_merchant_fee_value', 5);
+        update_post_meta($main_order_id, '_dw_fee_merchant_rate', $merchant_rate);
         
         $wpdb->query('COMMIT');
         
@@ -515,8 +557,15 @@ function dw_get_order_detail($order_id) {
         'kelurahan' => $main_order['kelurahan'],
         'kode_pos' => $main_order['kode_pos'],
     ];
+    
+    // Ambil Data Fee juga untuk ditampilkan di detail
+    $buyer_fee = get_post_meta($order_id, '_dw_fee_buyer_amount', true);
 
-    return array_merge($main_order, ['alamat_pengiriman' => $shipping_address, 'sub_pesanan' => $formatted_sub_orders]);
+    return array_merge($main_order, [
+        'alamat_pengiriman' => $shipping_address, 
+        'sub_pesanan' => $formatted_sub_orders,
+        'biaya_layanan' => (float) $buyer_fee // Tambahkan field ini ke response API
+    ]);
 }
 
 // =========================================================================

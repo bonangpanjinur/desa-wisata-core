@@ -35,6 +35,11 @@ class DW_Shortcode_Pedagang {
         $table_paket         = $wpdb->prefix . 'dw_paket_transaksi';
         $table_pembelian     = $wpdb->prefix . 'dw_pembelian_paket';
         $table_desa          = $wpdb->prefix . 'dw_desa';
+        
+        // UPDATE FASE 5: Tambahan tabel untuk fitur Keuangan
+        $table_wallet        = $wpdb->prefix . 'dw_wallet';
+        $table_wallet_logs   = $wpdb->prefix . 'dw_wallet_logs';
+        $table_withdrawals   = $wpdb->prefix . 'dw_withdrawals';
 
         // Ambil Data Pedagang
         $pedagang = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_pedagang WHERE id_user = %d", $current_user_id));
@@ -57,7 +62,34 @@ class DW_Shortcode_Pedagang {
         // FORM HANDLERS (LOGIC)
         // ==========================================
 
-        // --- HANDLER 0: VERIFIKASI PEMBAYARAN & UPDATE STATUS ---
+        // --- HANDLER: REQUEST WITHDRAWAL (TARIK SALDO) ---
+        if ( isset($_POST['dw_action']) && $_POST['dw_action'] == 'request_withdrawal' ) {
+            if ( isset($_POST['dw_wd_nonce']) && wp_verify_nonce($_POST['dw_wd_nonce'], 'dw_request_wd') ) {
+                $amount = floatval( str_replace('.', '', $_POST['wd_amount']) ); // Hapus titik ribuan
+                $bank_details = [
+                    'bank_code'      => sanitize_text_field($_POST['bank_code']),
+                    'account_number' => sanitize_text_field($_POST['account_number']),
+                    'account_name'   => sanitize_text_field($_POST['account_name'])
+                ];
+
+                if ( ! class_exists( 'DW_Wallet' ) ) {
+                    require_once plugin_dir_path( dirname(dirname( __FILE__ )) ) . 'classes/class-dw-wallet.php';
+                }
+                
+                $wallet = new DW_Wallet();
+                $result = $wallet->request_withdrawal( $current_user_id, $amount, $bank_details );
+
+                if ( is_wp_error($result) ) {
+                    $msg = $result->get_error_message();
+                    $msg_type = "error";
+                } else {
+                    $msg = "Permintaan penarikan berhasil diajukan. Dana akan masuk ke rekening Anda segera.";
+                    $msg_type = "success";
+                }
+            }
+        }
+
+        // --- HANDLER 0: VERIFIKASI PEMBAYARAN & UPDATE STATUS (EXISTING) ---
         if (isset($_POST['dw_action']) && $_POST['dw_action'] == 'verify_payment_order') {
             if ( isset($_POST['dw_order_nonce']) && wp_verify_nonce($_POST['dw_order_nonce'], 'dw_verify_order') ) {
                 $order_id       = intval($_POST['order_id']); 
@@ -66,8 +98,10 @@ class DW_Shortcode_Pedagang {
                 $current_time   = current_time('mysql');
                 
                 if ($decision === 'accept') {
+                    // Update status pesanan jadi diproses
                     $wpdb->update($table_transaksi_sub, ['status_pesanan' => 'diproses'], ['id' => $order_id, 'id_pedagang' => $pedagang->id]);
-                    // Hanya update global jika status sebelumnya menunggu
+                    // Update status transaksi utama jika belum bayar (untuk kasus transfer manual)
+                    // (Logika ini mungkin perlu disesuaikan jika menggunakan payment gateway otomatis)
                     $wpdb->update($table_transaksi, ['status_transaksi' => 'pembayaran_dikonfirmasi', 'tanggal_pembayaran' => $current_time], ['id' => $parent_trx_id]);
                     $msg = "Pembayaran diterima. Pesanan diproses."; $msg_type = "success";
                 } elseif ($decision === 'reject') {
@@ -79,7 +113,7 @@ class DW_Shortcode_Pedagang {
                     $new_status = sanitize_text_field($_POST['status_pesanan']);
                     $no_resi    = sanitize_text_field($_POST['no_resi']);
                     
-                    // Logic Kuota
+                    // Cek status lama
                     $old_data = $wpdb->get_row($wpdb->prepare("SELECT status_pesanan FROM $table_transaksi_sub WHERE id = %d AND id_pedagang = %d", $order_id, $pedagang->id));
                     $old_status = $old_data ? $old_data->status_pesanan : '';
 
@@ -88,6 +122,7 @@ class DW_Shortcode_Pedagang {
                     
                     $wpdb->update($table_transaksi_sub, $data_update, ['id' => $order_id, 'id_pedagang' => $pedagang->id]);
                     
+                    // Kurangi Kuota Transaksi hanya jika baru selesai
                     if ($new_status === 'selesai' && $old_status !== 'selesai') {
                         $wpdb->query($wpdb->prepare("UPDATE $table_pedagang SET sisa_transaksi = sisa_transaksi - 1 WHERE id = %d", $pedagang->id));
                         $pedagang = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_pedagang WHERE id_user = %d", $current_user_id));
@@ -100,8 +135,7 @@ class DW_Shortcode_Pedagang {
 
         // --- HANDLER 1: SIMPAN PENGATURAN TOKO ---
         if ( isset($_POST['dw_action']) && $_POST['dw_action'] == 'save_store_settings' ) {
-            if ( isset($_POST['dw_settings_nonce']) && wp_verify_nonce($_POST['dw_settings_nonce'], 'dw_save_settings') ) {
-                
+             if ( isset($_POST['dw_settings_nonce']) && wp_verify_nonce($_POST['dw_settings_nonce'], 'dw_save_settings') ) {
                 require_once( ABSPATH . 'wp-admin/includes/file.php' );
                 require_once( ABSPATH . 'wp-admin/includes/image.php' );
                 
@@ -195,10 +229,10 @@ class DW_Shortcode_Pedagang {
                 
                 $msg = "Pengaturan toko berhasil diperbarui."; $msg_type = "success";
                 $pedagang = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_pedagang WHERE id_user = %d", $current_user_id));
-            }
+             }
         }
 
-        // --- HANDLER 2: PRODUK ---
+        // --- HANDLER 2: PRODUK (EXISTING) ---
         if ( isset($_POST['dw_action']) && $_POST['dw_action'] == 'save_product' ) {
             if ( isset($_POST['dw_product_nonce']) && wp_verify_nonce($_POST['dw_product_nonce'], 'dw_save_product') ) {
                 require_once( ABSPATH . 'wp-admin/includes/file.php');
@@ -349,7 +383,7 @@ class DW_Shortcode_Pedagang {
         $existing_cats = $wpdb->get_col("SELECT DISTINCT kategori FROM $table_produk WHERE kategori != ''");
         $kategori_list = array_unique(array_merge($default_cats, $existing_cats ?: [])); sort($kategori_list);
 
-        // Helper Status (Inline replacement for dw_get_status_badge)
+        // Helper Status
         if (!function_exists('dw_local_status_badge')) {
             function dw_local_status_badge($status) {
                 $colors = [
@@ -362,12 +396,30 @@ class DW_Shortcode_Pedagang {
             }
         }
 
+        // UPDATE FASE 5: DATA KEUANGAN (WALLET)
+        // Ambil Saldo
+        $current_balance = 0.00;
+        // Pastikan tabel wallet ada
+        if ( $wpdb->get_var( "SHOW TABLES LIKE '$table_wallet'" ) == $table_wallet ) {
+            $balance = $wpdb->get_var($wpdb->prepare("SELECT balance FROM $table_wallet WHERE user_id = %d", $current_user_id));
+            $current_balance = $balance ? (float) $balance : 0.00;
+        }
+        
+        // Ambil Histori Mutasi (10 Terakhir)
+        $wallet_logs = [];
+        if ($wpdb->get_var("SHOW TABLES LIKE '$table_wallet_logs'") == $table_wallet_logs) {
+            $wallet_id = $wpdb->get_var($wpdb->prepare("SELECT id FROM $table_wallet WHERE user_id = %d", $current_user_id));
+            if ($wallet_id) {
+                $wallet_logs = $wpdb->get_results($wpdb->prepare("SELECT * FROM $table_wallet_logs WHERE wallet_id = %d ORDER BY created_at DESC LIMIT 10", $wallet_id));
+            }
+        }
+
         ob_start();
         ?>
         <!-- Load Dependencies -->
         <script src="https://cdn.tailwindcss.com"></script>
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-        <!-- SweetAlert2 (Tambahan untuk UX lebih baik) -->
+        <!-- SweetAlert2 -->
         <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
         
         <script>
@@ -408,6 +460,8 @@ class DW_Shortcode_Pedagang {
                 </div>
                 <nav class="p-4 space-y-1">
                     <button onclick="switchTab('ringkasan')" id="nav-ringkasan" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 hover:bg-gray-50 hover:text-blue-600 transition active bg-blue-50 text-blue-600 font-bold"><i class="fas fa-home w-5"></i> Ringkasan</button>
+                    <!-- TAB KEUANGAN -->
+                    <button onclick="switchTab('keuangan')" id="nav-keuangan" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 hover:bg-gray-50 hover:text-blue-600 transition"><i class="fas fa-wallet w-5"></i> Keuangan (Saldo)</button>
                     <button onclick="switchTab('produk')" id="nav-produk" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 hover:bg-gray-50 hover:text-blue-600 transition"><i class="fas fa-box w-5"></i> Produk</button>
                     <button onclick="switchTab('pesanan')" id="nav-pesanan" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 hover:bg-gray-50 hover:text-blue-600 transition">
                         <i class="fas fa-receipt w-5"></i> Pesanan
@@ -446,15 +500,19 @@ class DW_Shortcode_Pedagang {
                             <h3 class="text-2xl font-bold text-gray-900">Rp <?php echo number_format($revenue?:0,0,',','.'); ?></h3>
                             <div class="absolute right-4 top-4 w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center"><i class="fas fa-wallet"></i></div>
                         </div>
+                        
+                        <!-- CARD SALDO DOMPET -->
+                        <div class="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm relative overflow-hidden">
+                            <p class="text-sm font-medium text-gray-500 mb-1">Saldo Dompet</p>
+                            <h3 class="text-2xl font-bold text-gray-900">Rp <?php echo number_format($current_balance,0,',','.'); ?></h3>
+                            <button onclick="switchTab('keuangan')" class="text-xs text-blue-600 font-bold mt-2 hover:underline">Tarik Dana &rarr;</button>
+                            <div class="absolute right-4 top-4 w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center"><i class="fas fa-money-bill-wave"></i></div>
+                        </div>
+
                         <div class="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm relative overflow-hidden">
                             <p class="text-sm font-medium text-gray-500 mb-1">Total Produk</p>
                             <h3 class="text-2xl font-bold text-gray-900"><?php echo $count_produk; ?></h3>
-                            <div class="absolute right-4 top-4 w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center"><i class="fas fa-box"></i></div>
-                        </div>
-                        <div class="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm relative overflow-hidden">
-                            <p class="text-sm font-medium text-gray-500 mb-1">Sisa Kuota</p>
-                            <h3 class="text-2xl font-bold text-gray-900"><?php echo $pedagang->sisa_transaksi; ?></h3>
-                            <div class="absolute right-4 top-4 w-10 h-10 rounded-lg bg-orange-50 text-orange-600 flex items-center justify-center"><i class="fas fa-ticket-alt"></i></div>
+                            <div class="absolute right-4 top-4 w-10 h-10 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center"><i class="fas fa-box"></i></div>
                         </div>
                     </div>
                     <!-- Referral Card -->
@@ -467,7 +525,108 @@ class DW_Shortcode_Pedagang {
                     </div>
                 </div>
 
-                <!-- VIEW 2: PRODUK -->
+                <!-- VIEW 2: KEUANGAN (WALLET) - NEW FEATURE -->
+                <div id="view-keuangan" class="tab-content hidden">
+                    <div class="flex flex-col md:flex-row gap-8">
+                        <!-- Kolom Kiri: Info Saldo & Form Withdraw -->
+                        <div class="w-full md:w-1/3 space-y-6">
+                            <div class="bg-gradient-to-br from-gray-900 to-gray-800 text-white p-6 rounded-3xl shadow-xl">
+                                <p class="text-gray-400 text-xs font-bold uppercase mb-2">Saldo Tersedia</p>
+                                <h2 class="text-4xl font-bold mb-4">Rp <?php echo number_format($current_balance, 0, ',', '.'); ?></h2>
+                                <p class="text-xs text-gray-400 mb-6">Saldo bersih dari hasil penjualan setelah dikurangi biaya layanan.</p>
+                                
+                                <button onclick="toggleWithdrawForm()" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 rounded-xl transition shadow-lg shadow-emerald-900/50">
+                                    <i class="fas fa-money-bill-wave mr-2"></i> Tarik Saldo
+                                </button>
+                            </div>
+
+                            <!-- Form Withdrawal (Hidden by default) -->
+                            <div id="withdraw-form-container" class="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm hidden">
+                                <h3 class="font-bold text-gray-900 mb-4 text-lg">Form Penarikan</h3>
+                                <form method="POST">
+                                    <?php wp_nonce_field('dw_request_wd', 'dw_wd_nonce'); ?>
+                                    <input type="hidden" name="dw_action" value="request_withdrawal">
+                                    
+                                    <div class="space-y-4">
+                                        <div>
+                                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Nominal Penarikan</label>
+                                            <div class="relative">
+                                                <span class="absolute left-3 top-2.5 text-gray-400 font-bold">Rp</span>
+                                                <input type="text" name="wd_amount" id="wd_amount" class="w-full pl-10 pr-4 py-2 border rounded-lg font-bold text-lg" placeholder="0" onkeyup="formatInputRupiah(this)" required>
+                                            </div>
+                                            <p class="text-[10px] text-gray-400 mt-1">Min. Rp 10.000</p>
+                                        </div>
+                                        
+                                        <div>
+                                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Bank Tujuan</label>
+                                            <select name="bank_code" class="w-full border rounded-lg p-2 text-sm bg-white" required>
+                                                <option value="">Pilih Bank</option>
+                                                <option value="BCA">BCA</option>
+                                                <option value="BRI">BRI</option>
+                                                <option value="MANDIRI">Mandiri</option>
+                                                <option value="BNI">BNI</option>
+                                                <option value="BSI">BSI</option>
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Nomor Rekening</label>
+                                            <input type="number" name="account_number" class="w-full border rounded-lg p-2" required>
+                                        </div>
+
+                                        <div>
+                                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Atas Nama</label>
+                                            <input type="text" name="account_name" class="w-full border rounded-lg p-2" required>
+                                        </div>
+                                    </div>
+
+                                    <button type="submit" class="w-full bg-gray-900 text-white font-bold py-3 rounded-xl mt-6 hover:bg-black transition">
+                                        Ajukan Penarikan
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+
+                        <!-- Kolom Kanan: Histori Mutasi -->
+                        <div class="w-full md:w-2/3">
+                            <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                                <div class="px-6 py-4 border-b border-gray-100 bg-gray-50">
+                                    <h3 class="font-bold text-gray-800">Riwayat Mutasi Terakhir</h3>
+                                </div>
+                                <table class="w-full text-sm text-left">
+                                    <thead class="text-xs text-gray-500 uppercase bg-gray-50 border-b border-gray-100">
+                                        <tr>
+                                            <th class="px-6 py-3">Tanggal</th>
+                                            <th class="px-6 py-3">Keterangan</th>
+                                            <th class="px-6 py-3 text-right">Jumlah</th>
+                                            <th class="px-6 py-3 text-right">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-100">
+                                        <?php if($wallet_logs): foreach($wallet_logs as $log): ?>
+                                        <tr class="hover:bg-gray-50">
+                                            <td class="px-6 py-4 text-gray-500"><?php echo date('d M Y, H:i', strtotime($log->created_at)); ?></td>
+                                            <td class="px-6 py-4 font-medium text-gray-900"><?php echo esc_html($log->description); ?></td>
+                                            <td class="px-6 py-4 text-right font-bold <?php echo $log->type == 'credit' ? 'text-green-600' : 'text-red-600'; ?>">
+                                                <?php echo $log->type == 'credit' ? '+' : '-'; ?> Rp <?php echo number_format($log->amount, 0, ',', '.'); ?>
+                                            </td>
+                                            <td class="px-6 py-4 text-right">
+                                                <span class="px-2 py-1 rounded-full text-[10px] font-bold bg-green-100 text-green-800">Sukses</span>
+                                            </td>
+                                        </tr>
+                                        <?php endforeach; else: ?>
+                                        <tr>
+                                            <td colspan="4" class="px-6 py-8 text-center text-gray-400">Belum ada riwayat transaksi.</td>
+                                        </tr>
+                                        <?php endif; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VIEW 3: PRODUK -->
                 <div id="view-produk" class="tab-content hidden">
                     <div class="flex justify-between items-center mb-6">
                         <h1 class="text-2xl font-bold text-gray-900">Produk</h1>
@@ -495,7 +654,7 @@ class DW_Shortcode_Pedagang {
                     </div>
                 </div>
 
-                <!-- VIEW 3: PESANAN -->
+                <!-- VIEW 4: PESANAN -->
                 <div id="view-pesanan" class="tab-content hidden">
                     <div class="flex overflow-x-auto gap-2 mb-6 pb-2 border-b border-gray-100">
                         <button onclick="filterOrders('all')" class="order-tab-btn active" data-tab="all">Semua <span class="badge-count"><?php echo $order_counts['all']; ?></span></button>
@@ -540,7 +699,7 @@ class DW_Shortcode_Pedagang {
                     </div>
                 </div>
 
-                <!-- VIEW 4: KASIR (POS Integrated) -->
+                <!-- VIEW 5: KASIR (POS Integrated) -->
                 <div id="view-kasir" class="tab-content hidden h-full">
                      <div class="bg-gray-100 h-full w-full flex flex-col md:flex-row overflow-hidden font-sans text-slate-800 rounded-2xl shadow-sm border border-gray-200">
                         <!-- KIRI: Katalog Produk -->
@@ -620,7 +779,7 @@ class DW_Shortcode_Pedagang {
                     </div>
                 </div>
 
-                <!-- VIEW 5: PAKET -->
+                <!-- VIEW 6: PAKET -->
                 <div id="view-paket" class="tab-content hidden">
                     <h1 class="text-2xl font-bold text-gray-900 mb-6">Paket & Kuota</h1>
                     <div class="bg-gray-900 text-white p-8 rounded-3xl mb-8 flex justify-between items-center shadow-xl">
@@ -642,7 +801,7 @@ class DW_Shortcode_Pedagang {
                     </div>
                 </div>
 
-                <!-- VIEW 6: PENGATURAN -->
+                <!-- VIEW 7: PENGATURAN -->
                 <div id="view-pengaturan" class="tab-content hidden">
                     <h1 class="text-2xl font-bold text-gray-900 mb-6">Pengaturan Toko</h1>
                     <form method="POST" enctype="multipart/form-data" class="space-y-6">
@@ -902,6 +1061,17 @@ class DW_Shortcode_Pedagang {
                 setTimeout(()=>document.getElementById('modal-order-detail').classList.add('hidden'),300);
             }
 
+            // Keuangan Logic
+            function toggleWithdrawForm() {
+                const form = document.getElementById('withdraw-form-container');
+                form.classList.toggle('hidden');
+            }
+
+            function formatInputRupiah(el) {
+                let val = el.value.replace(/[^0-9]/g, '');
+                el.value = new Intl.NumberFormat('id-ID').format(val);
+            }
+
             // --- POS LOGIC START ---
             let posCart = [];
             const posAjaxUrl = '<?php echo admin_url("admin-ajax.php"); ?>';
@@ -1046,11 +1216,6 @@ class DW_Shortcode_Pedagang {
                 }
             }
 
-            function formatInputRupiah(el) {
-                let val = el.value.replace(/[^0-9]/g, '');
-                el.value = new Intl.NumberFormat('id-ID').format(val);
-            }
-
             function setCash(amount) {
                 const total = getPosCartTotal();
                 let val = amount;
@@ -1108,10 +1273,6 @@ class DW_Shortcode_Pedagang {
                     customer: customer
                 };
 
-                // Simulasi AJAX Request (Ganti dengan real call ke ajax-handlers.php)
-                // Karena kita di dalam shortcode, kita bisa buat handler AJAX di dalam plugin core.
-                // Untuk sekarang, kita asumsi handler sudah siap atau kita buat dummy response.
-                
                 // Gunakan jQuery untuk ajax
                 if (typeof jQuery !== 'undefined') {
                     jQuery.post(posAjaxUrl, orderData, function(response) {
