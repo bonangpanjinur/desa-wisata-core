@@ -8,6 +8,21 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+// Define Constants if not already defined (Fixes PHP Warnings)
+if ( ! defined( 'DW_CORE_PATH' ) ) {
+    define( 'DW_CORE_PATH', plugin_dir_path( dirname( __FILE__ ) ) );
+}
+if ( ! defined( 'DW_CORE_URL' ) ) {
+    define( 'DW_CORE_URL', plugin_dir_url( dirname( __FILE__ ) ) );
+}
+if ( ! defined( 'DW_CORE_VERSION' ) ) {
+    define( 'DW_CORE_VERSION', '2.9.1' );
+}
+// Ensure DW_PLUGIN_DIR exists for legacy requires
+if ( ! defined( 'DW_PLUGIN_DIR' ) ) {
+    define( 'DW_PLUGIN_DIR', DW_CORE_PATH );
+}
+
 /**
  * Enqueue scripts and styles
  */
@@ -29,8 +44,6 @@ function dw_enqueue_scripts() {
         'user_id' => get_current_user_id()
     ));
 
-    // --- LEAFLET JS / OPENSTREETMAP (Untuk Fitur Ojek) ---
-    // Hanya load jika ada shortcode ojek atau di halaman tertentu untuk performa
     global $post;
     if ( (is_a($post, 'WP_Post') && has_shortcode($post->post_content, 'dw_ojek_order')) || 
          (is_a($post, 'WP_Post') && has_shortcode($post->post_content, 'dw_ojek_driver')) ) {
@@ -46,7 +59,7 @@ function dw_enqueue_scripts() {
         wp_localize_script('dw-ojek-maps', 'dw_ojek_settings', array(
             'ajax_url' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('dw_ojek_nonce'),
-            'icon_origin' => DW_CORE_URL . 'assets/img/marker-origin.png', // Pastikan icon ada atau gunakan default leaflet
+            'icon_origin' => DW_CORE_URL . 'assets/img/marker-origin.png',
             'icon_dest' => DW_CORE_URL . 'assets/img/marker-dest.png',
             'icon_driver' => DW_CORE_URL . 'assets/img/marker-driver.png'
         ));
@@ -54,19 +67,23 @@ function dw_enqueue_scripts() {
 }
 add_action('wp_enqueue_scripts', 'dw_enqueue_scripts');
 
-/**
- * Enqueue Admin Scripts
- */
-function dw_admin_enqueue_scripts($hook) {
-    wp_enqueue_style('dw-admin-style', DW_CORE_URL . 'assets/css/admin-style.css', array(), DW_CORE_VERSION);
-    wp_enqueue_script('dw-admin-script', DW_CORE_URL . 'assets/js/admin-scripts.js', array('jquery'), DW_CORE_VERSION, true);
+// REMOVED: dw_admin_enqueue_scripts definition to avoid fatal error (redeclaration).
+// It is handled in includes/admin-assets.php
 
-    // Jika di halaman Ojek Management, mungkin butuh maps juga
-    if (strpos($hook, 'page_dw-ojek') !== false) {
-         // Load Leaflet di Admin jika perlu tracking posisi driver
+// 4. Admin Interfaces
+if ( is_admin() ) {
+    require_once DW_PLUGIN_DIR . 'includes/admin-menus.php';
+    require_once DW_PLUGIN_DIR . 'includes/admin-assets.php';
+    require_once DW_PLUGIN_DIR . 'includes/meta-boxes.php';
+    require_once DW_PLUGIN_DIR . 'includes/ajax-handlers.php';
+    
+    // [FIX] Load Settings Page Logic Here (agar hooks admin_init & save settings jalan)
+    if ( file_exists( DW_PLUGIN_DIR . 'includes/admin-pages/page-settings.php' ) ) {
+        require_once DW_PLUGIN_DIR . 'includes/admin-pages/page-settings.php';
     }
+} else {
+    require_once DW_PLUGIN_DIR . 'includes/ajax-handlers.php';
 }
-add_action('admin_enqueue_scripts', 'dw_admin_enqueue_scripts');
 
 /**
  * Initialize Ojek Handler

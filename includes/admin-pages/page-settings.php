@@ -21,7 +21,12 @@ function dw_handle_ojek_actions() {
     // 1. Handle Save/Update Rate
     if (isset($_POST['dw_save_rate']) && check_admin_referer('dw_save_rate_nonce')) {
         if ( ! class_exists( 'DW_Ojek_Handler' ) ) {
-            require_once DW_CORE_PATH . 'includes/classes/class-dw-ojek-handler.php';
+            // Pastikan path ini benar sesuai struktur plugin Anda
+            if ( defined('DW_CORE_PATH') ) {
+                require_once DW_CORE_PATH . 'includes/classes/class-dw-ojek-handler.php';
+            } elseif ( file_exists( plugin_dir_path( dirname( dirname( __FILE__ ) ) ) . 'classes/class-dw-ojek-handler.php' ) ) {
+                require_once plugin_dir_path( dirname( dirname( __FILE__ ) ) ) . 'classes/class-dw-ojek-handler.php';
+            }
         }
         
         $rate_data = [
@@ -34,21 +39,33 @@ function dw_handle_ojek_actions() {
             'is_active' => isset($_POST['is_active']) ? 1 : 0
         ];
 
-        $result = DW_Ojek_Handler::save_rate($rate_data);
-        if ($result !== false) {
-            add_settings_error('dw_settings_notices', 'rate_saved', 'Tarif wilayah berhasil disimpan.', 'success');
+        // Pastikan Class Ada sebelum dipanggil
+        if ( class_exists('DW_Ojek_Handler') ) {
+            $result = DW_Ojek_Handler::save_rate($rate_data);
+            if ($result !== false) {
+                add_settings_error('dw_settings_notices', 'rate_saved', 'Tarif wilayah berhasil disimpan.', 'success');
+            } else {
+                add_settings_error('dw_settings_notices', 'rate_failed', 'Gagal menyimpan tarif. Cek Database.', 'error');
+            }
         } else {
-            add_settings_error('dw_settings_notices', 'rate_failed', 'Gagal menyimpan tarif.', 'error');
+            add_settings_error('dw_settings_notices', 'class_missing', 'Class DW_Ojek_Handler tidak ditemukan.', 'error');
         }
     }
 
     // 2. Handle Delete Rate
     if (isset($_GET['action']) && $_GET['action'] == 'delete_rate' && isset($_GET['id']) && isset($_GET['tab']) && $_GET['tab'] == 'ojek') {
         if ( ! class_exists( 'DW_Ojek_Handler' ) ) {
-            require_once DW_CORE_PATH . 'includes/classes/class-dw-ojek-handler.php';
+             if ( defined('DW_CORE_PATH') ) {
+                require_once DW_CORE_PATH . 'includes/classes/class-dw-ojek-handler.php';
+            } elseif ( file_exists( plugin_dir_path( dirname( dirname( __FILE__ ) ) ) . 'classes/class-dw-ojek-handler.php' ) ) {
+                require_once plugin_dir_path( dirname( dirname( __FILE__ ) ) ) . 'classes/class-dw-ojek-handler.php';
+            }
         }
-        DW_Ojek_Handler::delete_rate(intval($_GET['id']));
-        add_settings_error('dw_settings_notices', 'rate_deleted', 'Tarif berhasil dihapus.', 'success');
+        
+        if ( class_exists('DW_Ojek_Handler') ) {
+            DW_Ojek_Handler::delete_rate(intval($_GET['id']));
+            add_settings_error('dw_settings_notices', 'rate_deleted', 'Tarif berhasil dihapus.', 'success');
+        }
     }
 }
 add_action('admin_init', 'dw_handle_ojek_actions');
@@ -73,6 +90,7 @@ function dw_settings_save_handler() {
         update_option( 'dw_app_name', sanitize_text_field( $_POST['dw_app_name'] ) );
         update_option( 'dw_admin_phone', sanitize_text_field( $_POST['dw_admin_phone'] ) );
         update_option( 'dw_company_address', sanitize_textarea_field( $_POST['dw_company_address'] ) );
+        update_option( 'dw_maps_api_key', sanitize_text_field( $_POST['dw_maps_api_key'] ) );
 
         // Sync ke dw_settings_general
         $gen_settings['desa_name'] = sanitize_text_field( $_POST['dw_app_name'] );
@@ -99,6 +117,11 @@ function dw_settings_save_handler() {
         update_option('dw_ojek_min_balance', sanitize_text_field($_POST['dw_ojek_min_balance']));
         update_option('dw_ojek_global_commission', sanitize_text_field($_POST['dw_ojek_global_commission']));
         update_option('dw_ojek_welcome_balance', sanitize_text_field($_POST['dw_ojek_welcome_balance']));
+        
+        // Simpan Global Fallback Tarif
+        if(isset($_POST['dw_ojek_global_base_fare'])) update_option('dw_ojek_global_base_fare', sanitize_text_field($_POST['dw_ojek_global_base_fare']));
+        if(isset($_POST['dw_ojek_global_price_km'])) update_option('dw_ojek_global_price_km', sanitize_text_field($_POST['dw_ojek_global_price_km']));
+        if(isset($_POST['dw_ojek_global_min_km'])) update_option('dw_ojek_global_min_km', sanitize_text_field($_POST['dw_ojek_global_min_km']));
 
     } elseif ( $tab === 'payment' ) {
         // 1. Simpan Bank Manual (Legacy)
@@ -225,9 +248,7 @@ function dw_admin_settings_page_handler() {
                                 <tbody>
                                     <tr>
                                         <th scope="row"><label for="dw_app_name">Nama Aplikasi / Platform</label></th>
-                                        <td>
-                                            <input name="dw_app_name" type="text" id="dw_app_name" value="<?php echo esc_attr(get_option('dw_app_name', 'Desa Wisata')); ?>" class="regular-text">
-                                        </td>
+                                        <td><input name="dw_app_name" type="text" id="dw_app_name" value="<?php echo esc_attr(get_option('dw_app_name', 'Desa Wisata')); ?>" class="regular-text"></td>
                                     </tr>
                                     <tr>
                                         <th scope="row"><label for="dw_admin_phone">Nomor WhatsApp Admin Utama</label></th>
@@ -241,6 +262,10 @@ function dw_admin_settings_page_handler() {
                                         <td>
                                             <textarea name="dw_company_address" id="dw_company_address" rows="3" class="large-text code"><?php echo esc_textarea(get_option('dw_company_address')); ?></textarea>
                                         </td>
+                                    </tr>
+                                    <tr>
+                                        <th scope="row"><label for="dw_maps_api_key">Google Maps API Key</label></th>
+                                        <td><input name="dw_maps_api_key" type="text" id="dw_maps_api_key" value="<?php echo esc_attr(get_option('dw_maps_api_key')); ?>" class="regular-text"></td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -301,6 +326,17 @@ function dw_admin_settings_page_handler() {
                         <!-- OJEK TAB -->
                         <div class="dw-form-section">
                             <h3><span class="dashicons dashicons-car"></span> Konfigurasi Bisnis Ojek</h3>
+                            
+                            <!-- TARIF DEFAULT GLOBAL -->
+                            <div style="background: #e5f6fd; border: 1px solid #cceeff; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+                                <h4 style="margin-top:0; color: #0073aa;">Tarif Dasar (Global Fallback)</h4>
+                                <div style="display:flex; gap: 15px; flex-wrap: wrap;">
+                                    <div><label style="display:block; font-size:12px;">Tarif Buka Pintu (Rp)</label><input type="number" name="dw_ojek_global_base_fare" value="<?php echo esc_attr(get_option('dw_ojek_global_base_fare', 7000)); ?>" class="regular-text" style="width: 120px;"></div>
+                                    <div><label style="display:block; font-size:12px;">Harga per KM (Rp)</label><input type="number" name="dw_ojek_global_price_km" value="<?php echo esc_attr(get_option('dw_ojek_global_price_km', 2500)); ?>" class="regular-text" style="width: 120px;"></div>
+                                    <div><label style="display:block; font-size:12px;">Jarak Minimum (KM)</label><input type="number" name="dw_ojek_global_min_km" value="<?php echo esc_attr(get_option('dw_ojek_global_min_km', 2)); ?>" class="small-text" step="0.1" style="width: 80px;"></div>
+                                </div>
+                            </div>
+
                             <table class="form-table">
                                 <tr>
                                     <th scope="row">Saldo Minimum Driver (Rp)</th>
@@ -641,6 +677,9 @@ function dw_admin_settings_page_handler() {
                             
                             if ($rates) {
                                 foreach ($rates as $rate) {
+                                    // Generate Delete Link with Nonce
+                                    $delete_url = wp_nonce_url( admin_url('admin.php?page=dw-settings&tab=ojek&action=delete_rate&id=' . $rate->id), 'dw_delete_rate_' . $rate->id );
+
                                     echo '<tr>';
                                     echo '<td>' . esc_html($rate->api_kabupaten_id) . '</td>';
                                     echo '<td>' . esc_html($rate->nama_kabupaten) . '</td>';
