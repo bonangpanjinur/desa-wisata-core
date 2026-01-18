@@ -1,126 +1,86 @@
 <?php
 /**
- * Initialization File
+ * Core Initialization
  * Path: includes/init.php
- * Description: Memuat semua dependensi, class, dan fungsi yang diperlukan plugin.
- * Version: 2.9.1
- * @package DesaWisataCore
  */
 
-if ( ! defined( 'ABSPATH' ) ) {
+if (!defined('ABSPATH')) {
     exit;
 }
 
-// Safety check: Ensure constant is defined
-if ( ! defined( 'DW_PLUGIN_DIR' ) ) {
-    return;
-}
+/**
+ * Enqueue scripts and styles
+ */
+function dw_enqueue_scripts() {
+    // CSS Utama
+    wp_enqueue_style('dw-frontend-style', DW_CORE_URL . 'assets/css/dw-frontend.css', array(), DW_CORE_VERSION);
 
-// 1. Core Constants & Helpers
-require_once DW_PLUGIN_DIR . 'includes/helpers.php';
-require_once DW_PLUGIN_DIR . 'includes/data-integrity.php';
+    // Font Awesome (jika belum ada di tema)
+    wp_enqueue_style('font-awesome', 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css', array(), '6.4.0');
 
-// 2. Post Types & Taxonomies
-require_once DW_PLUGIN_DIR . 'includes/post-types.php';
-require_once DW_PLUGIN_DIR . 'includes/taxonomies.php';
+    // JS Utama
+    wp_enqueue_script('dw-frontend-script', DW_CORE_URL . 'assets/js/dw-frontend.js', array('jquery'), DW_CORE_VERSION, true);
 
-// 3. User & Roles
-require_once DW_PLUGIN_DIR . 'includes/roles-capabilities.php';
-require_once DW_PLUGIN_DIR . 'includes/user-profiles.php';
-require_once DW_PLUGIN_DIR . 'includes/access-control.php';
+    // Localize Script (Data dari PHP ke JS)
+    wp_localize_script('dw-frontend-script', 'dw_data', array(
+        'ajax_url' => admin_url('admin-ajax.php'),
+        'nonce'    => wp_create_nonce('dw_nonce'),
+        'is_logged_in' => is_user_logged_in(),
+        'user_id' => get_current_user_id()
+    ));
 
-// 4. Admin Interfaces
-if ( is_admin() ) {
-    require_once DW_PLUGIN_DIR . 'includes/admin-menus.php';
-    require_once DW_PLUGIN_DIR . 'includes/admin-assets.php';
-    require_once DW_PLUGIN_DIR . 'includes/meta-boxes.php';
-    require_once DW_PLUGIN_DIR . 'includes/ajax-handlers.php'; 
-} else {
-    // Frontend AJAX Handlers
-    require_once DW_PLUGIN_DIR . 'includes/ajax-handlers.php';
-}
+    // --- LEAFLET JS / OPENSTREETMAP (Untuk Fitur Ojek) ---
+    // Hanya load jika ada shortcode ojek atau di halaman tertentu untuk performa
+    global $post;
+    if ( (is_a($post, 'WP_Post') && has_shortcode($post->post_content, 'dw_ojek_order')) || 
+         (is_a($post, 'WP_Post') && has_shortcode($post->post_content, 'dw_ojek_driver')) ) {
+        
+        // Load Leaflet CSS & JS (CDN Gratis)
+        wp_enqueue_style('leaflet-css', 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css', array(), '1.9.4');
+        wp_enqueue_script('leaflet-js', 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js', array(), '1.9.4', true);
 
-// 5. Frontend Logic (Shortcodes & Public Views)
-require_once DW_PLUGIN_DIR . 'includes/shortcodes/class-dw-shortcodes.php';
-
-// 6. Business Logic Modules
-require_once DW_PLUGIN_DIR . 'includes/commission-handler.php';
-require_once DW_PLUGIN_DIR . 'includes/cart.php';
-require_once DW_PLUGIN_DIR . 'includes/reviews.php';
-require_once DW_PLUGIN_DIR . 'includes/promotions.php';
-require_once DW_PLUGIN_DIR . 'includes/logs.php';
-require_once DW_PLUGIN_DIR . 'includes/whatsapp-templates.php';
-require_once DW_PLUGIN_DIR . 'includes/address-api.php';
-require_once DW_PLUGIN_DIR . 'includes/relasi-handler.php';
-
-// 7. Classes
-require_once DW_PLUGIN_DIR . 'includes/class-dw-favorites.php';
-require_once DW_PLUGIN_DIR . 'includes/class-dw-seeder.php';
-
-// Ojek Handler (Refactored to includes/classes/)
-if ( file_exists( DW_PLUGIN_DIR . 'includes/classes/class-dw-ojek-handler.php' ) ) {
-    require_once DW_PLUGIN_DIR . 'includes/classes/class-dw-ojek-handler.php';
-} elseif ( file_exists( DW_PLUGIN_DIR . 'includes/class-dw-ojek-handler.php' ) ) {
-    require_once DW_PLUGIN_DIR . 'includes/class-dw-ojek-handler.php';
-}
-
-// POS Handler (Jika ada)
-if ( file_exists( DW_PLUGIN_DIR . 'includes/classes/class-dw-pos-handler.php' ) ) {
-    require_once DW_PLUGIN_DIR . 'includes/classes/class-dw-pos-handler.php';
-}
-
-// Referral System
-require_once DW_PLUGIN_DIR . 'includes/class-dw-referral-logic.php';
-require_once DW_PLUGIN_DIR . 'includes/class-dw-referral-handler.php';
-require_once DW_PLUGIN_DIR . 'includes/class-dw-referral-hooks.php';
-
-// 8. REST API (Payment only - General REST API disabled per Phase 4.2)
-add_action( 'rest_api_init', function() {
-    if ( file_exists( DW_PLUGIN_DIR . 'includes/rest-api/api-payment.php' ) ) {
-        require_once DW_PLUGIN_DIR . 'includes/rest-api/api-payment.php';
-        if ( class_exists( 'DW_Payment_API' ) ) {
-            $payment_api = new DW_Payment_API();
-            $payment_api->register_routes();
-        }
+        // Load Ojek Maps Handler
+        wp_enqueue_script('dw-ojek-maps', DW_CORE_URL . 'assets/js/dw-ojek-maps.js', array('jquery', 'leaflet-js'), DW_CORE_VERSION, true);
+        
+        // Kirim data setting ke JS Maps
+        wp_localize_script('dw-ojek-maps', 'dw_ojek_settings', array(
+            'ajax_url' => admin_url('admin-ajax.php'),
+            'nonce' => wp_create_nonce('dw_ojek_nonce'),
+            'icon_origin' => DW_CORE_URL . 'assets/img/marker-origin.png', // Pastikan icon ada atau gunakan default leaflet
+            'icon_dest' => DW_CORE_URL . 'assets/img/marker-dest.png',
+            'icon_driver' => DW_CORE_URL . 'assets/img/marker-driver.png'
+        ));
     }
-});
-
-// 9. Scheduled Tasks (Cron)
-require_once DW_PLUGIN_DIR . 'includes/cron-jobs.php';
+}
+add_action('wp_enqueue_scripts', 'dw_enqueue_scripts');
 
 /**
- * Inisialisasi Komponen Utama
- * Dijalankan saat 'plugins_loaded'
+ * Enqueue Admin Scripts
  */
-function dw_init_plugin_components() {
-    // Init Roles
-    if ( class_exists( 'DW_Roles_Capabilities' ) ) {
-        $roles = new DW_Roles_Capabilities();
-        $roles->init();
+function dw_admin_enqueue_scripts($hook) {
+    wp_enqueue_style('dw-admin-style', DW_CORE_URL . 'assets/css/admin-style.css', array(), DW_CORE_VERSION);
+    wp_enqueue_script('dw-admin-script', DW_CORE_URL . 'assets/js/admin-scripts.js', array('jquery'), DW_CORE_VERSION, true);
+
+    // Jika di halaman Ojek Management, mungkin butuh maps juga
+    if (strpos($hook, 'page_dw-ojek') !== false) {
+         // Load Leaflet di Admin jika perlu tracking posisi driver
+    }
+}
+add_action('admin_enqueue_scripts', 'dw_admin_enqueue_scripts');
+
+/**
+ * Initialize Ojek Handler
+ * Ensure class is loaded if available
+ */
+function dw_init_ojek_handler() {
+    if ( file_exists( DW_CORE_PATH . 'includes/classes/class-dw-ojek-handler.php' ) ) {
+        require_once DW_CORE_PATH . 'includes/classes/class-dw-ojek-handler.php';
+    } elseif ( file_exists( DW_CORE_PATH . 'includes/class-dw-ojek-handler.php' ) ) {
+        require_once DW_CORE_PATH . 'includes/class-dw-ojek-handler.php';
     }
 
-    // Init Shortcodes (Dashboard & POS)
-    if ( class_exists( 'DW_Shortcodes' ) ) {
-        new DW_Shortcodes();
-    }
-    
-    // Init Ojek Handler (Backend Logic)
     if ( class_exists( 'DW_Ojek_Handler' ) ) {
         DW_Ojek_Handler::init();
     }
 }
-add_action( 'plugins_loaded', 'dw_init_plugin_components' );
-
-/**
- * Registrasi Post Types & Taxonomies
- * Dijalankan saat 'init'
- */
-function dw_register_types_taxonomies() {
-    if ( function_exists( 'dw_register_post_types' ) ) {
-        dw_register_post_types();
-    }
-    if ( function_exists( 'dw_register_taxonomies' ) ) {
-        dw_register_taxonomies();
-    }
-}
-add_action( 'init', 'dw_register_types_taxonomies' );
+add_action( 'plugins_loaded', 'dw_init_ojek_handler' );
