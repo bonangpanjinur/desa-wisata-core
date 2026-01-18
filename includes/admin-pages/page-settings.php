@@ -14,47 +14,51 @@ if ( file_exists( plugin_dir_path( dirname( __FILE__ ) ) . 'admin-ui-components.
 
 /**
  * --- [LOGIC 1] HANDLER AJAX INTERNAL UNTUK FETCH KOTA ---
- * Fix: Perbaikan path include agar address-api.php terbaca dengan benar
+ * Fix: Logika ini dipindah ke dalam hook 'admin_init' untuk mencegah error 
+ * 'Call to undefined function wp_verify_nonce' saat file dimuat terlalu awal.
  */
-if ( isset( $_POST['dw_action'] ) && $_POST['dw_action'] === 'dw_get_cities_internal' ) {
-    // Bersihkan output buffer agar JSON valid (mencegah error syntax token <)
-    if (ob_get_length()) ob_clean();
+function dw_handle_city_ajax_request() {
+    if ( isset( $_POST['dw_action'] ) && $_POST['dw_action'] === 'dw_get_cities_internal' ) {
+        // Bersihkan output buffer agar JSON valid (mencegah error syntax token <)
+        if (ob_get_length()) ob_clean();
 
-    if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( $_POST['nonce'], 'dw_region_nonce' ) ) {
-        wp_send_json_error( 'Invalid nonce' );
-        exit;
-    }
+        if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( $_POST['nonce'], 'dw_region_nonce' ) ) {
+            wp_send_json_error( 'Invalid nonce' );
+            exit;
+        }
 
-    $prov_id = sanitize_text_field( $_POST['prov_id'] );
-    
-    // LOAD FILE API WILAYAH (FIXED PATH)
-    if ( ! class_exists( 'DW_Address_API' ) && ! function_exists('dw_get_cities') ) {
-        if ( defined('DW_CORE_PATH') && file_exists( DW_CORE_PATH . 'includes/address-api.php' ) ) {
-            require_once DW_CORE_PATH . 'includes/address-api.php';
-        } else {
-            // Fallback: Naik satu level dari 'admin-pages' ke 'includes'
-            $manual_path = dirname( dirname( __FILE__ ) ) . '/address-api.php';
-            if ( file_exists( $manual_path ) ) {
-                require_once $manual_path;
+        $prov_id = sanitize_text_field( $_POST['prov_id'] );
+        
+        // LOAD FILE API WILAYAH (FIXED PATH)
+        if ( ! class_exists( 'DW_Address_API' ) && ! function_exists('dw_get_cities') ) {
+            if ( defined('DW_CORE_PATH') && file_exists( DW_CORE_PATH . 'includes/address-api.php' ) ) {
+                require_once DW_CORE_PATH . 'includes/address-api.php';
+            } else {
+                // Fallback: Naik satu level dari 'admin-pages' ke 'includes'
+                $manual_path = dirname( dirname( __FILE__ ) ) . '/address-api.php';
+                if ( file_exists( $manual_path ) ) {
+                    require_once $manual_path;
+                }
             }
         }
-    }
 
-    $cities = [];
-    // Prioritaskan Class, lalu Function
-    if ( class_exists( 'DW_Address_API' ) && method_exists( 'DW_Address_API', 'get_cities' ) ) {
-        $cities = DW_Address_API::get_cities( $prov_id );
-    } elseif ( function_exists( 'dw_get_cities' ) ) {
-        $cities = dw_get_cities( $prov_id );
-    }
+        $cities = [];
+        // Prioritaskan Class, lalu Function
+        if ( class_exists( 'DW_Address_API' ) && method_exists( 'DW_Address_API', 'get_cities' ) ) {
+            $cities = DW_Address_API::get_cities( $prov_id );
+        } elseif ( function_exists( 'dw_get_cities' ) ) {
+            $cities = dw_get_cities( $prov_id );
+        }
 
-    if ( ! empty($cities) ) {
-        wp_send_json_success( $cities );
-    } else {
-        wp_send_json_error( 'Data kota tidak ditemukan atau API file belum dimuat.' );
+        if ( ! empty($cities) ) {
+            wp_send_json_success( $cities );
+        } else {
+            wp_send_json_error( 'Data kota tidak ditemukan atau API file belum dimuat.' );
+        }
+        exit; 
     }
-    exit; 
 }
+add_action( 'admin_init', 'dw_handle_city_ajax_request' );
 
 /**
  * LOGIC HANDLER: CRUD TARIF OJEK
