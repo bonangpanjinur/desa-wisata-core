@@ -5,6 +5,41 @@ if (!defined('ABSPATH')) {
 
 class DW_Ojek_Handler {
 
+    /**
+     * The single instance of the class.
+     *
+     * @var DW_Ojek_Handler
+     * @since 1.0.0
+     */
+    protected static $_instance = null;
+
+    /**
+     * Main DW_Ojek_Handler Instance.
+     *
+     * Ensures only one instance of DW_Ojek_Handler is loaded or can be loaded.
+     *
+     * @since 1.0.0
+     * @static
+     * @return DW_Ojek_Handler - Main instance.
+     */
+    public static function instance() {
+        if (is_null(self::$_instance)) {
+            self::$_instance = new self();
+        }
+        return self::$_instance;
+    }
+
+    /**
+     * Initialize the Ojek Handler.
+     * This method is called from includes/init.php
+     */
+    public static function init() {
+        self::instance();
+    }
+
+    /**
+     * Constructor
+     */
     public function __construct() {
         // Hook for driver status toggle (via AJAX)
         add_action('wp_ajax_dw_toggle_ojek_status', array($this, 'toggle_driver_status'));
@@ -164,5 +199,3 @@ class DW_Ojek_Handler {
         ]);
     }
 }
-
-new DW_Ojek_Handler();
