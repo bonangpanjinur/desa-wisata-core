@@ -1,5 +1,9 @@
 <?php
-// includes/shortcodes/class-dw-shortcode-verifikator.php
+/**
+ * Shortcode: [dw_dashboard_verifikator]
+ * Path: includes/shortcodes/class-dw-shortcode-verifikator.php
+ * Description: Dashboard frontend untuk Verifikator UMKM (Approval, Binaan, Withdraw).
+ */
 
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
@@ -7,19 +11,24 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class DW_Shortcode_Verifikator {
 
-    public function __construct() {
-        add_shortcode( 'dw_dashboard_verifikator', array( $this, 'render' ) );
+    /**
+     * Integrasi dengan loader utama (init.php & class-dw-shortcodes.php)
+     */
+    public static function init() {
+        $instance = new self();
+        add_shortcode( 'dw_dashboard_verifikator', array( $instance, 'render' ) );
     }
 
     public function render( $atts ) {
         // 1. Cek Login & Role
         if ( ! is_user_logged_in() ) {
-            return '<div class="dw-alert dw-alert-warning p-4 bg-yellow-50 text-yellow-800 rounded border border-yellow-200">Silakan <a href="' . wp_login_url( get_permalink() ) . '" class="font-bold underline">login</a> terlebih dahulu.</div>';
+            return '<div class="dw-alert dw-alert-warning p-4 bg-yellow-50 text-yellow-800 rounded border border-yellow-200">Silakan <a href="' . wp_login_url( get_permalink() ) . '" class="font-bold underline">login</a> terlebih dahulu untuk mengakses Dashboard Verifikator.</div>';
         }
 
         $current_user = wp_get_current_user();
         if ( ! in_array( 'verifikator_umkm', (array) $current_user->roles ) && ! in_array( 'administrator', (array) $current_user->roles ) ) {
-             return '<script>window.location.href="' . home_url('/akun-saya/') . '";</script><div class="p-4 text-center">Akses Ditolak. Mengalihkan...</div>';
+             // Jika bukan verifikator, redirect atau tolak
+             return '<div class="p-4 bg-red-50 text-red-800 border border-red-200 rounded">Akses Ditolak. Halaman ini khusus untuk Verifikator UMKM.</div>';
         }
 
         global $wpdb;
@@ -29,7 +38,7 @@ class DW_Shortcode_Verifikator {
         $msg_type = '';
 
         // --- 2. GET / CREATE VERIFICATOR DATA (INIT) ---
-        // Kita ambil data awal untuk memastikan ID tersedia
+        // Pastikan data verifikator ada di tabel khusus
         $verifikator = $wpdb->get_row( $wpdb->prepare("SELECT * FROM $table_verifikator WHERE id_user = %d", $current_user->ID) );
 
         if ( ! $verifikator ) {
@@ -127,11 +136,27 @@ class DW_Shortcode_Verifikator {
             } elseif ( empty($bank_acc) ) {
                 $msg = "Lengkapi data bank di menu Pengaturan Akun."; $msg_type = "error";
             } else {
-                $wpdb->query($wpdb->prepare("UPDATE $table_verifikator SET saldo_saat_ini = saldo_saat_ini - %f WHERE id = %d", $amount, $verifikator_id));
-                // Kirim notif admin disini (kode mail disederhanakan)
-                $msg = "Permintaan penarikan Rp " . number_format($amount,0,',','.') . " berhasil dikirim.";
-                $msg_type = "success";
-                $verifikator->saldo_saat_ini -= $amount; // Update view
+                // Buat record withdrawal (Integrasi dengan class DW_Wallet jika ada, atau manual update DB)
+                // Untuk saat ini kita update manual saldo verifikator dan buat log withdrawal
+                // (Idealnya menggunakan tabel dw_withdrawals yang dibuat di fase 4)
+                
+                if (class_exists('DW_Wallet')) {
+                    // Gunakan sistem wallet terpusat jika ada
+                    $res = DW_Wallet::create_withdrawal_request($current_user->ID, $amount, "Bank: $bank_acc");
+                    if (is_wp_error($res)) {
+                        $msg = $res->get_error_message(); $msg_type = "error";
+                    } else {
+                        // Kurangi saldo lokal verifikator (sinkronisasi)
+                        $wpdb->query($wpdb->prepare("UPDATE $table_verifikator SET saldo_saat_ini = saldo_saat_ini - %f WHERE id = %d", $amount, $verifikator_id));
+                        $msg = "Permintaan penarikan berhasil dikirim."; $msg_type = "success";
+                        $verifikator->saldo_saat_ini -= $amount;
+                    }
+                } else {
+                    // Fallback manual jika Class Wallet belum ready
+                    $wpdb->query($wpdb->prepare("UPDATE $table_verifikator SET saldo_saat_ini = saldo_saat_ini - %f WHERE id = %d", $amount, $verifikator_id));
+                    $msg = "Permintaan penarikan berhasil (Mode Manual)."; $msg_type = "success";
+                    $verifikator->saldo_saat_ini -= $amount;
+                }
             }
         }
 
@@ -150,7 +175,7 @@ class DW_Shortcode_Verifikator {
 
         // Statistik
         $stats_pending  = count($pending_list);
-        $stats_binaan   = count($binaan_list); // Hitung array hasil query
+        $stats_binaan   = count($binaan_list); 
         $stats_komisi   = $verifikator->total_pendapatan_komisi;
         $stats_saldo    = $verifikator->saldo_saat_ini;
 
@@ -160,15 +185,16 @@ class DW_Shortcode_Verifikator {
         $bank_user = get_user_meta($current_user->ID, 'dw_bank_user', true);
 
         ob_start();
-        if ( ! did_action( 'get_header' ) ) get_header();
+        // Hapus get_header() jika shortcode dipasang di dalam page content yang sudah punya header
+        // if ( ! did_action( 'get_header' ) ) get_header(); 
         ?>
         
-        <!-- CDN Assets -->
+        <!-- CDN Assets (Load only if not present) -->
         <script src="https://cdn.tailwindcss.com"></script>
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
         <script>tailwind.config = { theme: { extend: { colors: { primary: '#4f46e5', secondary: '#1e293b' } } } }</script>
 
-        <div class="bg-gray-50 min-h-screen font-sans flex flex-col md:flex-row pt-16 md:pt-0 relative">
+        <div class="dw-verifikator-wrapper bg-gray-50 min-h-screen font-sans flex flex-col md:flex-row pt-4 md:pt-0 relative">
 
             <!-- SIDEBAR -->
             <aside id="dashboard-sidebar" class="fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 transform -translate-x-full md:translate-x-0 md:relative md:block transition-transform duration-300 pt-0 h-screen overflow-y-auto">
@@ -213,7 +239,7 @@ class DW_Shortcode_Verifikator {
             </aside>
 
             <!-- MOBILE HEADER -->
-            <div class="md:hidden fixed top-0 left-0 right-0 h-16 bg-white border-b border-gray-200 z-[100] flex items-center justify-between px-4 shadow-sm">
+            <div class="md:hidden fixed top-0 left-0 right-0 h-16 bg-white border-b border-gray-200 z-[40] flex items-center justify-between px-4 shadow-sm">
                 <div class="flex items-center gap-3">
                     <button onclick="toggleMobileSidebar()" class="text-gray-600 p-2 rounded hover:bg-gray-100"><i class="fas fa-bars text-xl"></i></button>
                     <span class="font-bold text-gray-800">Verifikator Panel</span>
@@ -222,10 +248,10 @@ class DW_Shortcode_Verifikator {
                     <img src="<?php echo get_avatar_url($current_user->ID); ?>" class="w-full h-full object-cover">
                 </div>
             </div>
-             <div id="sidebar-backdrop" onclick="toggleMobileSidebar()" class="fixed inset-0 bg-black/50 z-40 hidden md:hidden"></div>
+             <div id="sidebar-backdrop" onclick="toggleMobileSidebar()" class="fixed inset-0 bg-black/50 z-30 hidden md:hidden"></div>
 
             <!-- MAIN CONTENT -->
-            <main class="flex-1 p-6 md:p-8 overflow-y-auto h-screen bg-gray-50 md:ml-64 transition-all duration-300 pt-20 md:pt-8">
+            <main class="flex-1 p-6 md:p-8 overflow-y-auto h-screen bg-gray-50 md:ml-0 transition-all duration-300 pt-20 md:pt-8">
                 
                 <?php if($msg): ?>
                     <div class="mb-6 p-4 rounded-xl border <?php echo ($msg_type=='warning' || $msg_type=='error')?'bg-red-50 text-red-800 border-red-200':'bg-green-50 text-green-800 border-green-200'; ?> flex items-center gap-3 shadow-sm animate-fade-in">
@@ -770,7 +796,7 @@ class DW_Shortcode_Verifikator {
 
             function processItem(id, name) {
                 document.getElementById('proc-id').value = id;
-                document.getElementById('proc-name').textContent = name;
+                // document.getElementById('proc-name').textContent = name; // Element not found in HTML, removing
                 toggleReason(false);
                 document.querySelector('input[name="keputusan"][value="disetujui"]').checked = true;
                 document.getElementById('modal-process').classList.remove('hidden');
@@ -802,7 +828,8 @@ class DW_Shortcode_Verifikator {
         </script>
 
         <?php
-        if ( ! did_action( 'get_footer' ) ) get_footer();
+        // Hapus get_footer() jika shortcode dipasang di dalam page content
+        // if ( ! did_action( 'get_footer' ) ) get_footer();
         return ob_get_clean();
     }
 }

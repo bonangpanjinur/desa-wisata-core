@@ -2,7 +2,7 @@
 /**
  * File Name: includes/admin-pages/page-produk.php
  * Description: Manajemen Produk Lengkap (Modern UI/UX Enhanced).
- * Features: Stats Dashboard, Tabbed Form, Modern Table, Gallery & Variation Management.
+ * Features: Stats Dashboard, Tabbed Form, Modern Table, Gallery, Variation Management & Flash Sale.
  * @package DesaWisataCore
  */
 
@@ -91,21 +91,32 @@ function dw_produk_form_handler() {
     $raw_harga = wp_unslash($_POST['harga']);
     $harga_db = preg_replace('/[^0-9.]/', '', $raw_harga); 
 
+    // Sanitasi Harga Promo
+    $raw_promo = isset($_POST['promo_price']) ? wp_unslash($_POST['promo_price']) : 0;
+    $promo_db = preg_replace('/[^0-9.]/', '', $raw_promo);
+
     // 5. Data Utama Produk (Sanitasi Lengkap Sesuai Schema)
     $data = [
-        'id_pedagang'  => $id_pedagang_input,
-        'nama_produk'  => sanitize_text_field(wp_unslash($_POST['nama_produk'])),
-        'slug'         => sanitize_title(wp_unslash($_POST['nama_produk'])),
-        'deskripsi'    => wp_kses_post(wp_unslash($_POST['deskripsi'])),
-        'harga'        => $harga_db, // DECIMAL(15,2)
-        'stok'         => intval(wp_unslash($_POST['stok'])),
-        'berat_gram'   => intval(wp_unslash($_POST['berat_gram'])),
-        'kondisi'      => sanitize_key(wp_unslash($_POST['kondisi'])), // ENUM('baru','bekas')
-        'kategori'     => sanitize_text_field(wp_unslash($_POST['kategori'])),
-        'foto_utama'   => esc_url_raw(wp_unslash($_POST['foto_utama'])),
-        'galeri'       => $galeri_json, // JSON
-        'status'       => sanitize_text_field(wp_unslash($_POST['status'])), // ENUM
-        'updated_at'   => current_time('mysql')
+        'id_pedagang'   => $id_pedagang_input,
+        'nama_produk'   => sanitize_text_field(wp_unslash($_POST['nama_produk'])),
+        'slug'          => sanitize_title(wp_unslash($_POST['nama_produk'])),
+        'deskripsi'     => wp_kses_post(wp_unslash($_POST['deskripsi'])),
+        'harga'         => $harga_db, // DECIMAL(15,2)
+        'stok'          => intval(wp_unslash($_POST['stok'])),
+        'berat_gram'    => intval(wp_unslash($_POST['berat_gram'])),
+        'kondisi'       => sanitize_key(wp_unslash($_POST['kondisi'])), // ENUM('baru','bekas')
+        'kategori'      => sanitize_text_field(wp_unslash($_POST['kategori'])),
+        'foto_utama'    => esc_url_raw(wp_unslash($_POST['foto_utama'])),
+        'galeri'        => $galeri_json, // JSON
+        'status'        => sanitize_text_field(wp_unslash($_POST['status'])), // ENUM
+        
+        // FASE 1: FLASH SALE FIELDS
+        'is_promo'      => isset($_POST['is_promo']) ? 1 : 0,
+        'promo_price'   => $promo_db,
+        'promo_start'   => sanitize_text_field(wp_unslash($_POST['promo_start'])),
+        'promo_end'     => sanitize_text_field(wp_unslash($_POST['promo_end'])),
+        
+        'updated_at'    => current_time('mysql')
     ];
 
     $produk_id = isset($_POST['produk_id']) ? intval($_POST['produk_id']) : 0;
@@ -279,7 +290,7 @@ function dw_produk_page_info_render() {
         <div class="dw-page-header">
             <div class="dw-header-title">
                 <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
-                <p class="dw-subtitle">Kelola katalog produk, stok, variasi, dan harga.</p>
+                <p class="dw-subtitle">Kelola katalog produk, stok, variasi, dan promo.</p>
             </div>
             <div class="dw-header-actions">
                 <?php if (!$is_edit): ?>
@@ -345,6 +356,37 @@ function dw_produk_page_info_render() {
                                         <div class="dw-form-group">
                                             <label class="dw-label">Stok Tersedia <span style="color:var(--dw-danger)">*</span></label>
                                             <input type="number" name="stok" class="dw-input" value="<?php echo esc_attr($edit_data->stok ?? 0); ?>" required>
+                                        </div>
+                                    </div>
+
+                                    <!-- FASE 1: FLASH SALE / PROMO -->
+                                    <div class="dw-form-group" style="margin-top: 20px;">
+                                        <label class="dw-label">Promo Flash Sale</label>
+                                        <div style="background: #eef2ff; padding: 15px; border-radius: 8px; border: 1px solid #c7d2fe;">
+                                            <label style="display:flex; align-items:center; gap:10px; margin-bottom:15px; font-weight:600; cursor:pointer;">
+                                                <input type="checkbox" name="is_promo" id="toggle_promo" value="1" <?php checked($edit_data->is_promo ?? 0, 1); ?>>
+                                                Aktifkan Harga Coret / Flash Sale
+                                            </label>
+                                            
+                                            <div id="dw-promo-fields" style="display: <?php echo ($edit_data->is_promo ?? 0) ? 'block' : 'none'; ?>;">
+                                                <div class="dw-form-group">
+                                                    <label class="dw-label">Harga Promo (Rp)</label>
+                                                    <div style="position:relative;">
+                                                        <span style="position:absolute; left:12px; top:10px; color:#94a3b8; font-weight:600;">Rp</span>
+                                                        <input type="number" name="promo_price" class="dw-input" style="padding-left:40px; background:white;" value="<?php echo esc_attr($edit_data->promo_price ?? 0); ?>" placeholder="Harga setelah diskon">
+                                                    </div>
+                                                </div>
+                                                <div class="dw-grid-2-col">
+                                                    <div class="dw-form-group">
+                                                        <label class="dw-label">Mulai Promo</label>
+                                                        <input type="datetime-local" name="promo_start" class="dw-input" style="background:white;" value="<?php echo esc_attr($edit_data->promo_start ?? ''); ?>">
+                                                    </div>
+                                                    <div class="dw-form-group">
+                                                        <label class="dw-label">Selesai Promo</label>
+                                                        <input type="datetime-local" name="promo_end" class="dw-input" style="background:white;" value="<?php echo esc_attr($edit_data->promo_end ?? ''); ?>">
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -535,6 +577,15 @@ function dw_produk_page_info_render() {
                 // Set default active tab styles
                 $('.dw-form-tab.active').css('border-bottom', '2px solid var(--dw-brand-blue)');
 
+                // Toggle Promo
+                $('#toggle_promo').change(function(){
+                    if($(this).is(':checked')) {
+                        $('#dw-promo-fields').slideDown();
+                    } else {
+                        $('#dw-promo-fields').slideUp();
+                    }
+                });
+
                 // Single Image
                 $('#btn_upl').click(function(e){
                     e.preventDefault(); var frame = wp.media({title:'Foto Produk', multiple:false});
@@ -655,6 +706,15 @@ function dw_produk_page_info_render() {
                                 $edit_url = "?page=dw-produk&action=edit&id={$r->id}";
                                 $del_url = wp_nonce_url("?page=dw-produk&action=delete&id={$r->id}", 'dw_del_prod_nonce');
                                 $img = !empty($r->foto_utama) ? $r->foto_utama : 'https://via.placeholder.com/60?text=IMG';
+                                
+                                // Logic Harga Promo di List
+                                $display_price = number_format($r->harga, 0, ',', '.');
+                                if (isset($r->is_promo) && $r->is_promo == 1) {
+                                    $now = current_time('mysql');
+                                    if ($now >= $r->promo_start && $now <= $r->promo_end) {
+                                        $display_price = '<s style="color:#999; font-size:0.9em;">' . $display_price . '</s> <strong style="color:#e74c3c;">' . number_format($r->promo_price, 0, ',', '.') . '</strong>';
+                                    }
+                                }
                             ?>
                             <tr>
                                 <td>
@@ -665,7 +725,7 @@ function dw_produk_page_info_render() {
                                     <?php if($is_super_admin): ?><span style="font-size:12px; color:var(--dw-text-grey);">Toko: <?php echo esc_html($r->nama_toko); ?></span><?php endif; ?>
                                 </td>
                                 <td><span class="dw-badge status-neutral"><?php echo esc_html($r->kategori); ?></span></td>
-                                <td style="font-weight:700; color:var(--dw-text-dark);">Rp <?php echo number_format($r->harga, 0, ',', '.'); ?></td>
+                                <td style="font-weight:700; color:var(--dw-text-dark);">Rp <?php echo $display_price; ?></td>
                                 <td>
                                     <?php if($r->stok <= 0): ?>
                                         <span style="color:var(--dw-danger); font-weight:700;">0 (Habis)</span>
@@ -677,6 +737,10 @@ function dw_produk_page_info_render() {
                                     <?php if($r->status == 'aktif'): ?><span class="dw-badge status-success">Aktif</span>
                                     <?php elseif($r->status == 'habis'): ?><span class="dw-badge status-warning">Habis</span>
                                     <?php else: ?><span class="dw-badge status-neutral">Arsip</span><?php endif; ?>
+                                    
+                                    <?php if(isset($r->is_promo) && $r->is_promo == 1): ?>
+                                        <br><span class="dw-badge status-warning" style="font-size:10px; margin-top:4px;">FLASH SALE</span>
+                                    <?php endif; ?>
                                 </td>
                                 <td style="text-align:right;">
                                     <div style="display:flex; gap:6px; justify-content:flex-end;">

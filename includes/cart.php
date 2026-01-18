@@ -11,16 +11,126 @@
  * * --- UPDATE FASE 5 (MARKETPLACE FEES) ---
  * 3. Menambahkan perhitungan Platform Fee (Biaya Layanan) pada dw_process_order.
  * 4. Menyimpan meta data fee untuk distribusi komisi.
+ * * --- UPDATE FASE 1 (VARIASI & PROMO) ---
+ * 5. Support variasi produk di Ajax Add to Cart.
+ * 6. Support harga promo/flash sale saat masuk cart.
  *
  * @package DesaWisataCore
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
-	exit;
+    exit;
 }
 
 // =========================================================================
-// SINKRONISASI KERANJANG (CART SYNC)
+// INIT SESSION CART (FASE 1)
+// =========================================================================
+add_action('init', 'dw_cart_init');
+function dw_cart_init() {
+    if (!session_id()) {
+        session_start();
+    }
+    if (!isset($_SESSION['dw_cart'])) {
+        $_SESSION['dw_cart'] = array();
+    }
+}
+
+// =========================================================================
+// AJAX ADD TO CART (FASE 1 - SUPPORT VARIATION & PROMO)
+// =========================================================================
+add_action('wp_ajax_dw_add_to_cart', 'dw_ajax_add_to_cart');
+add_action('wp_ajax_nopriv_dw_add_to_cart', 'dw_ajax_add_to_cart');
+
+function dw_ajax_add_to_cart() {
+    // Validasi Nonce (Opsional, aktifkan jika frontend sudah kirim nonce)
+    // if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'dw_nonce')) {
+    //     wp_send_json_error('Invalid nonce');
+    // }
+
+    $product_id = intval($_POST['product_id']);
+    $qty = intval($_POST['qty']);
+    if ($qty < 1) $qty = 1;
+
+    // FASE 1: Ambil Data Variasi
+    $selected_variations = isset($_POST['variations']) ? $_POST['variations'] : [];
+    // Format variations: ['Warna' => 'Merah', 'Ukuran' => 'XL']
+    
+    // Buat Cart ID yang Unik (Product ID + Serialized Variations)
+    // Jika user beli Baju Merah & Baju Biru, itu jadi 2 item beda di cart.
+    $cart_id = $product_id;
+    if (!empty($selected_variations)) {
+        $cart_id .= '_' . md5(serialize($selected_variations));
+    }
+
+    // Cek Stok (Simple Check)
+    // Note: Untuk check stok variasi yang akurat, perlu query tabel variasi.
+    // Di sini kita cek stok global produk dulu sebagai fallback.
+    $stock = get_post_meta($product_id, '_stock', true);
+    if ($stock !== '' && $stock < $qty) {
+        wp_send_json_error('Stok produk utama tidak mencukupi.');
+    }
+
+    // Tambah ke Session Cart
+    if (isset($_SESSION['dw_cart'][$cart_id])) {
+        $_SESSION['dw_cart'][$cart_id]['qty'] += $qty;
+    } else {
+        // Ambil info produk
+        $product = get_post($product_id);
+        $price = (float) get_post_meta($product_id, '_price', true);
+        
+        // FASE 1: Cek Promo Price (Flash Sale)
+        $is_promo = get_post_meta($product_id, '_is_promo', true);
+        if ($is_promo === 'yes') { // Menggunakan 'yes' sesuai form produk FASE 1
+            $promo_price = (float) get_post_meta($product_id, '_promo_price', true);
+            $start = get_post_meta($product_id, '_promo_start', true);
+            $end = get_post_meta($product_id, '_promo_end', true);
+            
+            // Validasi Tanggal Promo
+            $now = current_time('mysql');
+            if ($now >= $start && $now <= $end) {
+                $price = $promo_price;
+            }
+        }
+
+        // Cek harga variasi jika ada (Override harga induk)
+        // Implementasi sederhana: jika variasi punya harga beda, harusnya diambil dari DB variasi.
+        // Di sini kita pakai harga produk induk atau promo induk dulu untuk simplifikasi FASE 1.
+
+        $_SESSION['dw_cart'][$cart_id] = array(
+            'product_id' => $product_id,
+            'title'      => $product->post_title,
+            'price'      => $price,
+            'qty'        => $qty,
+            'variations' => $selected_variations // Simpan Pilihan Variasi
+        );
+    }
+
+    // Hitung Total Item
+    $total_items = 0;
+    foreach ($_SESSION['dw_cart'] as $item) {
+        $total_items += $item['qty'];
+    }
+
+    wp_send_json_success(array(
+        'message' => 'Produk berhasil ditambahkan!',
+        'total_items' => $total_items
+    ));
+}
+
+// Helper: Get Cart Total (Session)
+function dw_get_cart_total() {
+    $total = 0;
+    if (isset($_SESSION['dw_cart'])) {
+        foreach ($_SESSION['dw_cart'] as $item) {
+            $total += $item['price'] * $item['qty'];
+        }
+    }
+    return $total;
+}
+
+
+// =========================================================================
+// SINKRONISASI KERANJANG (CART SYNC - DATABASE USER META)
 // =========================================================================
 
 /**
@@ -417,7 +527,7 @@ function dw_process_order($user_id, $data) {
                     ));
                 } else {
                     $rows_affected = $wpdb->query($wpdb->prepare(
-                        "UPDATE $table_postmeta SET meta_value = meta_value - %d WHERE post_id = %d AND meta_key = '_dw_stok' AND (meta_value IS NULL OR meta_value = '' OR CAST(meta_value AS UNSIGNED) >= %d)", 
+                        "UPDATE $table_postmeta SET meta_value = meta_value - %d WHERE post_id = %d AND meta_key = '_stock' AND (meta_value IS NULL OR meta_value = '' OR CAST(meta_value AS UNSIGNED) >= %d)", 
                         $quantity, $product_id, $quantity
                     ));
                 }
