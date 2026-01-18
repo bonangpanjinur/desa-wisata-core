@@ -3,16 +3,58 @@
  * File: includes/admin-pages/page-settings.php
  * Admin Page: Pengaturan Sistem
  * Menggunakan Tab Navigasi modern dan Card wrapper.
- * UPDATE FASE 5 (Marketplace Fees): Menambahkan pengaturan Fee Pembeli dan Komisi Pedagang.
+ * UPDATE: Integrasi Fitur Ojek & Transportasi (Fase 3) + Marketplace Fees (Fase 5).
  */
 
 defined( 'ABSPATH' ) || exit;
 
-// Include UI components
-require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin-ui-components.php';
+// Include UI components if exists
+if ( file_exists( plugin_dir_path( dirname( __FILE__ ) ) . 'admin-ui-components.php' ) ) {
+    require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin-ui-components.php';
+}
 
 /**
- * Handler Simpan Pengaturan
+ * LOGIC HANDLER: CRUD TARIF OJEK (Specific Action)
+ * Diletakkan di atas agar diproses sebelum render halaman
+ */
+function dw_handle_ojek_actions() {
+    // 1. Handle Save/Update Rate
+    if (isset($_POST['dw_save_rate']) && check_admin_referer('dw_save_rate_nonce')) {
+        if ( ! class_exists( 'DW_Ojek_Handler' ) ) {
+            require_once DW_CORE_PATH . 'includes/classes/class-dw-ojek-handler.php';
+        }
+        
+        $rate_data = [
+            'api_kabupaten_id' => sanitize_text_field($_POST['api_kabupaten_id']),
+            'nama_kabupaten' => sanitize_text_field($_POST['nama_kabupaten']),
+            'base_fare' => floatval($_POST['base_fare']),
+            'price_per_km' => floatval($_POST['price_per_km']),
+            'min_distance_km' => floatval($_POST['min_distance_km']),
+            'commission_percent' => floatval($_POST['commission_percent']),
+            'is_active' => isset($_POST['is_active']) ? 1 : 0
+        ];
+
+        $result = DW_Ojek_Handler::save_rate($rate_data);
+        if ($result !== false) {
+            add_settings_error('dw_settings_notices', 'rate_saved', 'Tarif wilayah berhasil disimpan.', 'success');
+        } else {
+            add_settings_error('dw_settings_notices', 'rate_failed', 'Gagal menyimpan tarif.', 'error');
+        }
+    }
+
+    // 2. Handle Delete Rate
+    if (isset($_GET['action']) && $_GET['action'] == 'delete_rate' && isset($_GET['id']) && isset($_GET['tab']) && $_GET['tab'] == 'ojek') {
+        if ( ! class_exists( 'DW_Ojek_Handler' ) ) {
+            require_once DW_CORE_PATH . 'includes/classes/class-dw-ojek-handler.php';
+        }
+        DW_Ojek_Handler::delete_rate(intval($_GET['id']));
+        add_settings_error('dw_settings_notices', 'rate_deleted', 'Tarif berhasil dihapus.', 'success');
+    }
+}
+add_action('admin_init', 'dw_handle_ojek_actions');
+
+/**
+ * Handler Simpan Pengaturan Utama (Tab Based)
  */
 function dw_settings_save_handler() {
     if ( ! isset( $_POST['dw_settings_submit'] ) ) return;
@@ -51,6 +93,12 @@ function dw_settings_save_handler() {
         if ( isset( $_POST['dw_merchant_fee_value'] ) ) {
             update_option( 'dw_merchant_fee_value', floatval( $_POST['dw_merchant_fee_value'] ) );
         }
+
+    } elseif ( $tab === 'ojek' ) {
+        // --- OJEK SETTINGS (GLOBAL) ---
+        update_option('dw_ojek_min_balance', sanitize_text_field($_POST['dw_ojek_min_balance']));
+        update_option('dw_ojek_global_commission', sanitize_text_field($_POST['dw_ojek_global_commission']));
+        update_option('dw_ojek_welcome_balance', sanitize_text_field($_POST['dw_ojek_welcome_balance']));
 
     } elseif ( $tab === 'payment' ) {
         // 1. Simpan Bank Manual (Legacy)
@@ -130,7 +178,7 @@ function dw_admin_settings_page_handler() {
     $merchant_fee_type  = get_option( 'dw_merchant_fee_type', 'percentage' );
     $merchant_fee_value = get_option( 'dw_merchant_fee_value', 5 ); // Default 5%
     
-    // Fallback: Jika di payment_settings kosong, coba ambil dari settings_gen (Legacy)
+    // Fallback Legacy
     if ( empty($payment_settings['xendit_secret_key']) && !empty($settings_gen['xendit_secret_key']) ) {
         $payment_settings['xendit_secret_key'] = $settings_gen['xendit_secret_key'];
         $payment_settings['xendit_callback_token'] = $settings_gen['xendit_callback_token'];
@@ -153,16 +201,18 @@ function dw_admin_settings_page_handler() {
             <!-- Navigation Tabs -->
             <nav class="nav-tab-wrapper" style="margin-bottom: 20px;">
                 <a href="?page=dw-settings&tab=general" class="nav-tab <?php echo $active_tab == 'general' ? 'nav-tab-active' : ''; ?>">Umum</a>
-                <a href="?page=dw-settings&tab=marketplace" class="nav-tab <?php echo $active_tab == 'marketplace' ? 'nav-tab-active' : ''; ?>">Marketplace Fees</a>
-                <a href="?page=dw-settings&tab=payment" class="nav-tab <?php echo $active_tab == 'payment' ? 'nav-tab-active' : ''; ?>">Pembayaran & Wallet</a>
-                <a href="?page=dw-settings&tab=api" class="nav-tab <?php echo $active_tab == 'api' ? 'nav-tab-active' : ''; ?>">API & Integrasi</a>
-                <a href="?page=dw-settings&tab=whatsapp" class="nav-tab <?php echo $active_tab == 'whatsapp' ? 'nav-tab-active' : ''; ?>">Notifikasi (WA)</a>
-                <a href="?page=dw-settings&tab=referral" class="nav-tab <?php echo $active_tab == 'referral' ? 'nav-tab-active' : ''; ?>">Referral & Reward</a>
-                <a href="?page=dw-settings&tab=notification" class="nav-tab <?php echo $active_tab == 'notification' ? 'nav-tab-active' : ''; ?>">Nada Pesanan</a>
+                <a href="?page=dw-settings&tab=marketplace" class="nav-tab <?php echo $active_tab == 'marketplace' ? 'nav-tab-active' : ''; ?>">Marketplace</a>
+                <a href="?page=dw-settings&tab=ojek" class="nav-tab <?php echo $active_tab == 'ojek' ? 'nav-tab-active' : ''; ?>">Ojek & Transport</a>
+                <a href="?page=dw-settings&tab=payment" class="nav-tab <?php echo $active_tab == 'payment' ? 'nav-tab-active' : ''; ?>">Keuangan</a>
+                <a href="?page=dw-settings&tab=api" class="nav-tab <?php echo $active_tab == 'api' ? 'nav-tab-active' : ''; ?>">API</a>
+                <a href="?page=dw-settings&tab=whatsapp" class="nav-tab <?php echo $active_tab == 'whatsapp' ? 'nav-tab-active' : ''; ?>">Notifikasi</a>
+                <a href="?page=dw-settings&tab=referral" class="nav-tab <?php echo $active_tab == 'referral' ? 'nav-tab-active' : ''; ?>">Referral</a>
+                <a href="?page=dw-settings&tab=notification" class="nav-tab <?php echo $active_tab == 'notification' ? 'nav-tab-active' : ''; ?>">Sound</a>
             </nav>
 
-            <!-- Settings Form in Card -->
+            <!-- Settings Form Container -->
             <div class="dw-card">
+                <!-- FORM UTAMA UNTUK SETTINGS GLOBAL -->
                 <form method="post">
                     <input type="hidden" name="active_tab" value="<?php echo esc_attr($active_tab); ?>">
                     <?php wp_nonce_field( 'dw_save_settings_action', 'dw_save_settings_nonce_field' ); ?>
@@ -245,23 +295,39 @@ function dw_admin_settings_page_handler() {
                                     </tr>
                                 </tbody>
                             </table>
+                        </div>
 
-                            <!-- Simulasi Sederhana -->
-                            <div class="notice notice-info inline" style="margin-top: 20px; border-left-color: #0073aa;">
-                                <p><strong><span class="dashicons dashicons-info-outline"></span> Simulasi Transaksi:</strong></p>
-                                <p>Jika barang seharga <strong>Rp 100.000</strong> terjual:</p>
-                                <ul style="list-style: disc; margin-left: 20px;">
-                                    <li><strong>Pembeli Membayar:</strong> Harga Produk + Ongkir + Fee Pembeli.</li>
-                                    <li><strong>Pedagang Menerima:</strong> Harga Produk - Fee Pedagang.</li>
-                                    <li><strong>Keuntungan Platform:</strong> Fee Pembeli + Fee Pedagang.</li>
-                                </ul>
-                            </div>
+                    <?php elseif ($active_tab == 'ojek'): ?>
+                        <!-- OJEK TAB -->
+                        <div class="dw-form-section">
+                            <h3><span class="dashicons dashicons-car"></span> Konfigurasi Bisnis Ojek</h3>
+                            <table class="form-table">
+                                <tr>
+                                    <th scope="row">Saldo Minimum Driver (Rp)</th>
+                                    <td>
+                                        <input type="number" name="dw_ojek_min_balance" value="<?php echo esc_attr(get_option('dw_ojek_min_balance', 20000)); ?>" class="regular-text">
+                                        <p class="description">Saldo minimal yang harus dimiliki driver untuk bisa status "Online" (Terima Order).</p>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th scope="row">Komisi Global (%)</th>
+                                    <td>
+                                        <input type="number" name="dw_ojek_global_commission" value="<?php echo esc_attr(get_option('dw_ojek_global_commission', 10)); ?>" class="regular-text" step="0.1">
+                                        <p class="description">Potongan bagi hasil untuk Desa/Aplikasi dari setiap transaksi ojek.</p>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th scope="row">Saldo Awal Bonus (Rp)</th>
+                                    <td>
+                                        <input type="number" name="dw_ojek_welcome_balance" value="<?php echo esc_attr(get_option('dw_ojek_welcome_balance', 10000)); ?>" class="regular-text">
+                                        <p class="description">Modal gratis yang diberikan kepada Driver baru saat disetujui.</p>
+                                    </td>
+                                </tr>
+                            </table>
                         </div>
 
                     <?php elseif ($active_tab == 'payment'): ?>
                         <!-- PAYMENT TAB (Wallet & Manual Bank Only) -->
-                        
-                        <!-- 1. WALLET SETTINGS SECTION -->
                         <div class="dw-form-section" style="background: #fdfdfd; border-bottom: 1px solid #eee; margin-bottom: 20px; padding-bottom: 20px;">
                             <h3 style="color: #d63638;"><span class="dashicons dashicons-wallet"></span> Pengaturan Penarikan (Wallet)</h3>
                             <p class="description">Atur batasan penarikan saldo komisi untuk Mitra (Desa/Verifikator).</p>
@@ -326,11 +392,9 @@ function dw_admin_settings_page_handler() {
                         </script>
 
                     <?php elseif ($active_tab == 'api'): ?>
-                        <!-- API & INTEGRASI TAB (XENDIT CONFIGURATION IS HERE) -->
+                        <!-- API & INTEGRASI TAB (XENDIT) -->
                         <div class="dw-form-section">
                             <h3 style="color: #0073aa;"><span class="dashicons dashicons-rest-api"></span> Payment Gateway (Xendit)</h3>
-                            <p class="description">Hubungkan aplikasi dengan Xendit untuk pembayaran otomatis (Topup Paket) dan pencairan dana (Wallet Withdrawal).</p>
-                            
                             <table class="form-table" role="presentation">
                                 <tbody>
                                     <tr>
@@ -367,20 +431,10 @@ function dw_admin_settings_page_handler() {
                             </table>
                         </div>
 
-                        <!-- OTHER API SETTINGS -->
-                        <div class="dw-form-section" style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
-                            <h3><span class="dashicons dashicons-location"></span> Layanan Lainnya</h3>
-                            <p class="description">Integrasi layanan pihak ketiga lainnya (Google Maps, Firebase, dll).</p>
-                            <!-- Placeholder for future API keys -->
-                            <p><i>(Belum ada integrasi lain)</i></p>
-                        </div>
-
                     <?php elseif ($active_tab == 'referral'): ?>
                         <!-- REFERRAL TAB -->
                         <div class="dw-form-section">
                             <h3><span class="dashicons dashicons-awards"></span> Referral & Reward Kuota</h3>
-                            <p class="description" style="margin-bottom: 25px;">Atur hadiah otomatis untuk pedagang yang berhasil mengajak pembeli baru bergabung.</p>
-                            
                             <table class="form-table" role="presentation">
                                 <tbody>
                                     <tr>
@@ -438,7 +492,6 @@ function dw_admin_settings_page_handler() {
                                     </tr>
                                 </tbody>
                             </table>
-
                             <h3 style="margin-top: 30px; border-top: 1px solid #f1f5f9; padding-top: 25px;">Notifikasi Pesanan</h3>
                             <table class="form-table" role="presentation">
                                 <tbody>
@@ -457,8 +510,6 @@ function dw_admin_settings_page_handler() {
                         <!-- NOTIFICATION TAB -->
                         <div class="dw-form-section">
                             <h3><span class="dashicons dashicons-megaphone"></span> Pengaturan Nada Pesanan Masuk (Default)</h3>
-                            <p class="description">Atur nada default yang akan digunakan oleh semua toko jika mereka belum mengatur nada sendiri.</p>
-                            
                             <table class="form-table" role="presentation">
                                 <tbody>
                                     <tr>
@@ -479,14 +530,12 @@ function dw_admin_settings_page_handler() {
                                                 <input type="text" name="dw_default_order_sound_url" id="dw_sound_url_field" value="<?php echo esc_attr(get_option('dw_default_order_sound_url')); ?>" class="regular-text" placeholder="URL File MP3/MP4">
                                                 <button type="button" class="button" id="btn_upl_sound_default">Pilih File</button>
                                             </div>
-                                            <p class="description">Upload file MP3 atau MP4 untuk digunakan sebagai nada pesanan.</p>
                                         </td>
                                     </tr>
                                     <tr id="group_sound_youtube" style="<?php echo $current_type != 'youtube' ? 'display:none;' : ''; ?>">
                                         <th scope="row"><label for="dw_sound_url_yt_field">Link YouTube</label></th>
                                         <td>
                                             <input type="text" name="dw_default_order_sound_url_yt" id="dw_sound_url_yt_field" value="<?php echo $current_type == 'youtube' ? esc_attr(get_option('dw_default_order_sound_url')) : ''; ?>" class="regular-text" placeholder="https://www.youtube.com/watch?v=xxxx">
-                                            <p class="description">Masukkan link YouTube untuk nada peringatan.</p>
                                         </td>
                                     </tr>
                                 </tbody>
@@ -496,44 +545,124 @@ function dw_admin_settings_page_handler() {
                         jQuery(document).ready(function($){
                             $('#dw_sound_type').change(function(){
                                 var val = $(this).val();
-                                if(val == 'upload') {
-                                    $('#group_sound_upload').show();
-                                    $('#group_sound_youtube').hide();
-                                } else if(val == 'youtube') {
-                                    $('#group_sound_upload').hide();
-                                    $('#group_sound_youtube').show();
-                                } else {
-                                    $('#group_sound_upload').hide();
-                                    $('#group_sound_youtube').hide();
-                                }
+                                if(val == 'upload') { $('#group_sound_upload').show(); $('#group_sound_youtube').hide(); } 
+                                else if(val == 'youtube') { $('#group_sound_upload').hide(); $('#group_sound_youtube').show(); } 
+                                else { $('#group_sound_upload').hide(); $('#group_sound_youtube').hide(); }
                             });
-
                             $('#btn_upl_sound_default').click(function(e){
                                 e.preventDefault();
                                 var frame = wp.media({title:'Pilih Nada Pesanan', multiple:false, library:{type:['audio', 'video']}});
-                                frame.on('select', function(){ 
-                                    var url = frame.state().get('selection').first().toJSON().url; 
-                                    $('#dw_sound_url_field').val(url); 
-                                });
+                                frame.on('select', function(){ var url = frame.state().get('selection').first().toJSON().url; $('#dw_sound_url_field').val(url); });
                                 frame.open();
                             });
-
-                            // Sync YouTube field to main URL field on submit
                             $('form').submit(function(){
-                                if($('#dw_sound_type').val() == 'youtube') {
-                                    $('#dw_sound_url_field').val($('#dw_sound_url_yt_field').val());
-                                }
+                                if($('#dw_sound_type').val() == 'youtube') { $('#dw_sound_url_field').val($('#dw_sound_url_yt_field').val()); }
                             });
                         });
                         </script>
                     <?php endif; ?>
                     
                     <?php 
-                    // Tombol Submit
+                    // Tombol Submit Global
                     submit_button( 'Simpan Perubahan', 'primary large', 'dw_settings_submit' );
                     ?>
                 </form>
             </div>
+
+            <!-- SECTION KHUSUS: MANAJEMEN TARIF OJEK (Hanya muncul di tab Ojek) -->
+            <?php if ($active_tab == 'ojek'): ?>
+                <hr style="margin: 30px 0; border: 0; border-top: 1px solid #ccc;">
+                
+                <h3>Tarif Per Wilayah (Kabupaten)</h3>
+                <p class="description">Atur harga spesifik untuk setiap daerah. Jika tidak diatur, ojek tidak akan bisa dipesan di daerah tersebut.</p>
+
+                <div class="dw-card" style="background: #f0f0f1; border: 1px solid #ddd;">
+                    <strong><span class="dashicons dashicons-plus-alt2"></span> Tambah / Edit Tarif</strong>
+                    <form method="post" action="" style="margin-top: 15px;">
+                        <?php wp_nonce_field('dw_save_rate_nonce'); ?>
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end;">
+                            <div style="flex: 1;">
+                                <label style="display:block; margin-bottom: 5px; font-size: 12px; font-weight: 600;">ID Kabupaten (Kode Wilayah)</label>
+                                <input type="text" name="api_kabupaten_id" placeholder="Contoh: 32.04" required style="width: 100%;">
+                            </div>
+                            <div style="flex: 2;">
+                                <label style="display:block; margin-bottom: 5px; font-size: 12px; font-weight: 600;">Nama Kabupaten</label>
+                                <input type="text" name="nama_kabupaten" placeholder="Contoh: Kab. Bandung" required style="width: 100%;">
+                            </div>
+                            <div style="flex: 1;">
+                                <label style="display:block; margin-bottom: 5px; font-size: 12px; font-weight: 600;">Tarif Dasar (Rp)</label>
+                                <input type="number" name="base_fare" value="5000" required style="width: 100%;">
+                            </div>
+                            <div style="flex: 1;">
+                                <label style="display:block; margin-bottom: 5px; font-size: 12px; font-weight: 600;">Harga / KM (Rp)</label>
+                                <input type="number" name="price_per_km" value="2000" required style="width: 100%;">
+                            </div>
+                            <div style="flex: 1;">
+                                <label style="display:block; margin-bottom: 5px; font-size: 12px; font-weight: 600;">Jarak Min (KM)</label>
+                                <input type="number" name="min_distance_km" value="1" step="0.1" required style="width: 100%;">
+                            </div>
+                            <div style="flex: 1;">
+                                <label style="display:block; margin-bottom: 5px; font-size: 12px; font-weight: 600;">Komisi Lokal (%)</label>
+                                <input type="number" name="commission_percent" value="10" step="0.1" style="width: 100%;">
+                            </div>
+                             <div style="flex: 0.5;">
+                                <label style="display:block; margin-bottom: 5px; font-size: 12px; font-weight: 600;">Aktif</label>
+                                <input type="checkbox" name="is_active" value="1" checked>
+                            </div>
+                            <div style="flex: 0;">
+                                 <input type="submit" name="dw_save_rate" class="button button-secondary" value="Simpan Tarif">
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Tabel List Tarif -->
+                <table class="wp-list-table widefat fixed striped" style="margin-top: 20px;">
+                    <thead>
+                        <tr>
+                            <th>ID Kab</th>
+                            <th>Nama Kabupaten</th>
+                            <th>Tarif Dasar</th>
+                            <th>Harga / KM</th>
+                            <th>Min. Jarak</th>
+                            <th>Komisi</th>
+                            <th>Status</th>
+                            <th>Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php
+                        global $wpdb;
+                        $table_name = $wpdb->prefix . 'dw_ojek_rates';
+                        
+                        // Cek tabel ada
+                        if ($wpdb->get_var("SHOW TABLES LIKE '$table_name'") == $table_name) {
+                            $rates = $wpdb->get_results("SELECT * FROM $table_name ORDER BY created_at DESC");
+                            
+                            if ($rates) {
+                                foreach ($rates as $rate) {
+                                    echo '<tr>';
+                                    echo '<td>' . esc_html($rate->api_kabupaten_id) . '</td>';
+                                    echo '<td>' . esc_html($rate->nama_kabupaten) . '</td>';
+                                    echo '<td>Rp ' . number_format($rate->base_fare, 0, ',', '.') . '</td>';
+                                    echo '<td>Rp ' . number_format($rate->price_per_km, 0, ',', '.') . '</td>';
+                                    echo '<td>' . esc_html($rate->min_distance_km) . ' KM</td>';
+                                    echo '<td>' . esc_html($rate->commission_percent) . '%</td>';
+                                    echo '<td>' . ($rate->is_active ? '<span style="color:green; font-weight:bold;">Aktif</span>' : '<span style="color:red;">Nonaktif</span>') . '</td>';
+                                    echo '<td><a href="?page=dw-settings&tab=ojek&action=delete_rate&id=' . $rate->id . '" class="button button-small button-link-delete" onclick="return confirm(\'Hapus tarif ini?\')">Hapus</a></td>';
+                                    echo '</tr>';
+                                }
+                            } else {
+                                echo '<tr><td colspan="8" style="text-align:center;">Belum ada data tarif wilayah. Silakan tambah di atas.</td></tr>';
+                            }
+                        } else {
+                            echo '<tr><td colspan="8" style="text-align:center; color:red;">Tabel dw_ojek_rates belum dibuat. Silakan update database.</td></tr>';
+                        }
+                        ?>
+                    </tbody>
+                </table>
+            <?php endif; ?>
+
         </div>
     </div>
     <?php

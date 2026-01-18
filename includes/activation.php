@@ -3,7 +3,7 @@
  * Activation Handler
  * Path: includes/activation.php
  * Description: Menangani pembuatan dan update struktur tabel database (Full Enterprise Schema).
- * Version: 2.8.0 (Ojek Rates & Driver Logic Added)
+ * Version: 2.9.1 (Fix dbDelta syntax for Ojek Rates)
  * @package DesaWisataCore
  */
 
@@ -255,10 +255,10 @@ function dw_activation_run() {
         id bigint(20) NOT NULL AUTO_INCREMENT,
         api_kabupaten_id varchar(20) NOT NULL,
         nama_kabupaten varchar(100) NOT NULL,
-        base_fare decimal(15,2) DEFAULT 5000, -- Tarif dasar (buka pintu)
-        price_per_km decimal(15,2) NOT NULL, -- Tarif per KM
-        min_distance_km decimal(5,2) DEFAULT 1, -- Jarak minimum kena tarif dasar
-        commission_percent decimal(5,2) DEFAULT 10, -- Persentase bagi hasil khusus daerah ini (opsional)
+        base_fare decimal(15,2) DEFAULT 5000,
+        price_per_km decimal(15,2) NOT NULL,
+        min_distance_km decimal(5,2) DEFAULT 1,
+        commission_percent decimal(5,2) DEFAULT 10,
         is_active tinyint(1) DEFAULT 1,
         created_at datetime DEFAULT CURRENT_TIMESTAMP,
         updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -849,7 +849,7 @@ function dw_activation_run() {
        5. FINALISASI
        ========================================= */
 
-    update_option('dw_core_db_version', '2.8.0'); // Update version to trigger dbDelta
+    update_option('dw_core_db_version', '2.9.1'); // Update version to trigger dbDelta
     
     // Log kesuksesan
     if (defined('WP_DEBUG') && WP_DEBUG) {
