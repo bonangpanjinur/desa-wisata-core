@@ -14,6 +14,41 @@ if ( file_exists( plugin_dir_path( dirname( __FILE__ ) ) . 'admin-ui-components.
 }
 
 /**
+ * --- [LOGIC 1] HANDLER AJAX INTERNAL UNTUK FETCH KOTA ---
+ * Ditambahkan di sini agar bisa diakses via admin-ajax atau self-post
+ */
+if ( isset( $_POST['dw_action'] ) && $_POST['dw_action'] === 'dw_get_cities_internal' ) {
+    // Bersihkan output buffer agar JSON valid
+    if (ob_get_length()) ob_clean();
+
+    if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( $_POST['nonce'], 'dw_region_nonce' ) ) {
+        wp_send_json_error( 'Invalid nonce' );
+        exit;
+    }
+
+    $prov_id = sanitize_text_field( $_POST['prov_id'] );
+    
+    // Load file API Wilayah jika belum ada
+    if ( ! class_exists( 'DW_Address_API' ) ) {
+        if ( defined('DW_CORE_PATH') && file_exists( DW_CORE_PATH . 'includes/address-api.php' ) ) {
+            require_once DW_CORE_PATH . 'includes/address-api.php';
+        } elseif ( file_exists( plugin_dir_path( dirname( __FILE__ ) ) . 'address-api.php' ) ) {
+            require_once plugin_dir_path( dirname( __FILE__ ) ) . 'address-api.php';
+        }
+    }
+
+    $cities = [];
+    if ( class_exists( 'DW_Address_API' ) && method_exists( 'DW_Address_API', 'get_cities' ) ) {
+        $cities = DW_Address_API::get_cities( $prov_id );
+    } elseif ( function_exists( 'dw_get_cities' ) ) {
+        $cities = dw_get_cities( $prov_id );
+    }
+
+    wp_send_json_success( $cities );
+    exit; 
+}
+
+/**
  * LOGIC HANDLER: CRUD TARIF OJEK (Specific Action)
  * Diletakkan di atas agar diproses sebelum render halaman
  */
@@ -29,9 +64,12 @@ function dw_handle_ojek_actions() {
             }
         }
         
+        // Ambil nama kabupaten dari hidden input (diisi via JS saat select berubah)
+        $nama_kabupaten = isset($_POST['nama_kabupaten']) ? sanitize_text_field($_POST['nama_kabupaten']) : '';
+
         $rate_data = [
             'api_kabupaten_id' => sanitize_text_field($_POST['api_kabupaten_id']),
-            'nama_kabupaten' => sanitize_text_field($_POST['nama_kabupaten']),
+            'nama_kabupaten' => $nama_kabupaten,
             'base_fare' => floatval($_POST['base_fare']),
             'price_per_km' => floatval($_POST['price_per_km']),
             'min_distance_km' => floatval($_POST['min_distance_km']),
@@ -43,9 +81,9 @@ function dw_handle_ojek_actions() {
         if ( class_exists('DW_Ojek_Handler') ) {
             $result = DW_Ojek_Handler::save_rate($rate_data);
             if ($result !== false) {
-                add_settings_error('dw_settings_notices', 'rate_saved', 'Tarif wilayah berhasil disimpan.', 'success');
+                add_settings_error('dw_settings_notices', 'rate_saved', 'Tarif wilayah ' . $nama_kabupaten . ' berhasil disimpan.', 'success');
             } else {
-                add_settings_error('dw_settings_notices', 'rate_failed', 'Gagal menyimpan tarif. Cek Database.', 'error');
+                add_settings_error('dw_settings_notices', 'rate_failed', 'Gagal menyimpan tarif. Cek Database atau data duplikat.', 'error');
             }
         } else {
             add_settings_error('dw_settings_notices', 'class_missing', 'Class DW_Ojek_Handler tidak ditemukan.', 'error');
@@ -614,17 +652,59 @@ function dw_admin_settings_page_handler() {
 
                 <div class="dw-card" style="background: #f0f0f1; border: 1px solid #ddd;">
                     <strong><span class="dashicons dashicons-plus-alt2"></span> Tambah / Edit Tarif</strong>
+                    
                     <form method="post" action="" style="margin-top: 15px;">
                         <?php wp_nonce_field('dw_save_rate_nonce'); ?>
-                        <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end;">
+                        
+                        <!-- BARIS 1: PEMILIHAN WILAYAH (DROPDOWN DINAMIS) -->
+                        <div style="display: flex; gap: 10px; margin-bottom: 15px; background: #fff; padding: 10px; border: 1px solid #e5e5e5; border-radius: 4px;">
                             <div style="flex: 1;">
-                                <label style="display:block; margin-bottom: 5px; font-size: 12px; font-weight: 600;">ID Kabupaten (Kode Wilayah)</label>
-                                <input type="text" name="api_kabupaten_id" placeholder="Contoh: 32.04" required style="width: 100%;">
+                                <label style="display:block; margin-bottom: 5px; font-size: 12px; font-weight: 600;">1. Pilih Provinsi</label>
+                                <select id="dw_select_provinsi" style="width: 100%;">
+                                    <option value="">-- Pilih Provinsi --</option>
+                                    <?php 
+                                    // Ambil data provinsi dari API internal/helper
+                                    $provinces = [];
+                                    if ( class_exists('DW_Address_API') && method_exists('DW_Address_API', 'get_provinces') ) {
+                                        $provinces = DW_Address_API::get_provinces();
+                                    } elseif ( function_exists('dw_get_provinces') ) {
+                                        $provinces = dw_get_provinces();
+                                    } else {
+                                        // Fallback manual load jika function belum tersedia di scope ini
+                                        if ( defined('DW_CORE_PATH') && file_exists( DW_CORE_PATH . 'includes/address-api.php' ) ) {
+                                            require_once DW_CORE_PATH . 'includes/address-api.php';
+                                            if ( class_exists('DW_Address_API') ) {
+                                                $provinces = DW_Address_API::get_provinces();
+                                            }
+                                        }
+                                    }
+
+                                    if ( ! empty( $provinces ) && is_array( $provinces ) ) {
+                                        foreach ($provinces as $prov) {
+                                            $id = isset($prov['id']) ? $prov['id'] : '';
+                                            $name = isset($prov['name']) ? $prov['name'] : '';
+                                            if ($id && $name) {
+                                                echo '<option value="' . esc_attr($id) . '">' . esc_html($name) . '</option>';
+                                            }
+                                        }
+                                    } else {
+                                        echo '<option disabled>Data Wilayah Tidak Ditemukan</option>';
+                                    }
+                                    ?>
+                                </select>
                             </div>
-                            <div style="flex: 2;">
-                                <label style="display:block; margin-bottom: 5px; font-size: 12px; font-weight: 600;">Nama Kabupaten</label>
-                                <input type="text" name="nama_kabupaten" placeholder="Contoh: Kab. Bandung" required style="width: 100%;">
+                            <div style="flex: 1;">
+                                <label style="display:block; margin-bottom: 5px; font-size: 12px; font-weight: 600;">2. Pilih Kabupaten/Kota</label>
+                                <select id="dw_select_kabupaten" name="api_kabupaten_id" style="width: 100%;" disabled>
+                                    <option value="">-- Pilih Provinsi Dulu --</option>
+                                </select>
+                                <!-- Hidden input untuk menyimpan nama kabupaten secara otomatis -->
+                                <input type="hidden" name="nama_kabupaten" id="dw_input_nama_kabupaten">
                             </div>
+                        </div>
+
+                        <!-- BARIS 2: INPUT HARGA -->
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end;">
                             <div style="flex: 1;">
                                 <label style="display:block; margin-bottom: 5px; font-size: 12px; font-weight: 600;">Tarif Dasar (Rp)</label>
                                 <input type="number" name="base_fare" value="5000" required style="width: 100%;">
@@ -652,6 +732,60 @@ function dw_admin_settings_page_handler() {
                     </form>
                 </div>
 
+                <!-- SCRIPT AJAX DROPDOWN WILAYAH -->
+                <script type="text/javascript">
+                jQuery(document).ready(function($) {
+                    // Ketika Provinsi Berubah
+                    $('#dw_select_provinsi').change(function() {
+                        var provId = $(this).val();
+                        var $citySelect = $('#dw_select_kabupaten');
+                        
+                        // Reset Kota
+                        $citySelect.empty().append('<option value="">Loading...</option>').prop('disabled', true);
+                        $('#dw_input_nama_kabupaten').val('');
+
+                        if (provId) {
+                            $.ajax({
+                                url: window.location.href, // Post ke halaman ini sendiri
+                                type: 'POST',
+                                data: {
+                                    dw_action: 'dw_get_cities_internal', // Trigger handler PHP di atas
+                                    prov_id: provId,
+                                    nonce: '<?php echo wp_create_nonce("dw_region_nonce"); ?>'
+                                },
+                                success: function(response) {
+                                    if (response.success) {
+                                        $citySelect.empty().append('<option value="">-- Pilih Kabupaten --</option>');
+                                        $.each(response.data, function(index, item) {
+                                            $citySelect.append('<option value="' + item.id + '">' + item.name + '</option>');
+                                        });
+                                        $citySelect.prop('disabled', false);
+                                    } else {
+                                        $citySelect.empty().append('<option value="">Gagal memuat data</option>');
+                                    }
+                                },
+                                error: function() {
+                                    $citySelect.empty().append('<option value="">Error Koneksi API</option>');
+                                }
+                            });
+                        } else {
+                            $citySelect.empty().append('<option value="">-- Pilih Provinsi Dulu --</option>');
+                        }
+                    });
+
+                    // Ketika Kabupaten Dipilih -> Simpan Namanya ke Hidden Input
+                    $('#dw_select_kabupaten').change(function() {
+                        var cityName = $(this).find('option:selected').text();
+                        var cityId = $(this).val();
+                        if (cityId) {
+                            $('#dw_input_nama_kabupaten').val(cityName);
+                        } else {
+                            $('#dw_input_nama_kabupaten').val('');
+                        }
+                    });
+                });
+                </script>
+
                 <!-- Tabel List Tarif -->
                 <table class="wp-list-table widefat fixed striped" style="margin-top: 20px;">
                     <thead>
@@ -678,7 +812,7 @@ function dw_admin_settings_page_handler() {
                             if ($rates) {
                                 foreach ($rates as $rate) {
                                     // Generate Delete Link with Nonce
-                                    $delete_url = wp_nonce_url( admin_url('admin.php?page=dw-settings&tab=ojek&action=delete_rate&id=' . $rate->id), 'dw_delete_rate_' . $rate->id );
+                                    $delete_url = wp_nonce_url( admin_url('admin.php?page=dw-settings&tab=ojek&action=delete_rate&id=' . $rate->id), 'dw_delete_rate_' . $rate->id ); // Note: nonce logic handled in handler function, simplifed url here for clarity but best practice is wp_nonce_url
 
                                     echo '<tr>';
                                     echo '<td>' . esc_html($rate->api_kabupaten_id) . '</td>';
