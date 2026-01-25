@@ -3,7 +3,7 @@
  * Plugin Name: Desa Wisata Core
  * Description: Plugin inti untuk manajemen Desa Wisata, Marketplace UMKM, dan Sistem Ojek Lokal.
  * Version: 2.9.0
- * Author: Bonang Panji Nur
+ * Author: Bonang Panji Nur ganteng
  * Text Domain: desa-wisata-core
  */
 
